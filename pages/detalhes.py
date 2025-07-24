@@ -6,7 +6,7 @@ import plotly.express as px
 import yfinance as yf
 from datetime import datetime, timedelta
 import pandas as pd
-from dash import dash_table
+import dash_table
 from complete_b3_logos_mapping import add_logo_column_to_data, get_logo_url
 
 
@@ -69,7 +69,7 @@ def formatar_dividend_yield(val):
     except:
         return str(val)
 
-def layout(df_ativos=None):
+def layout(ticker_param=''):
     periodos = [
         {"label": "1 mês", "value": "1mo"},
         {"label": "3 meses", "value": "3mo"},
@@ -86,6 +86,7 @@ def layout(df_ativos=None):
                     id="input-ticker",
                     placeholder="Digite o ticker (ex: PETR4, AAPL, MSFT, ITUB4.SA, VISC11)...",
                     type="text",
+                    value=ticker_param,
                     style={"width": "300px"}
                 ),
                 dbc.Button("Buscar", id="btn-buscar", color="primary", className="ml-2")
@@ -158,10 +159,10 @@ def get_ticker_options():
 def register_callbacks(app):
     @app.callback(
         Output("div-detalhes", "children"),
-        [Input("btn-buscar", "n_clicks"), Input("switch-darkmode", "value")],
+        [Input("btn-buscar", "n_clicks"), Input("switch-darkmode", "value"), Input("input-ticker", "value")],
         [State("input-ticker", "value")]
     )
-    def atualizar_detalhes(n_clicks, is_dark, ticker):
+    def atualizar_detalhes(n_clicks, is_dark, ticker_input, ticker):
         if not ticker:
             return html.Div("Por favor, digite um ticker para buscar os detalhes.", className="text-muted")
         dados = buscar_detalhes_ativo(ticker)
@@ -292,10 +293,10 @@ def register_callbacks(app):
 
     @app.callback(
         Output("div-graficos-detalhes", "children"),
-        [Input("btn-buscar", "n_clicks"), Input("switch-darkmode", "value"), Input("detalhes-periodo-grafico", "value")],
+        [Input("btn-buscar", "n_clicks"), Input("switch-darkmode", "value"), Input("detalhes-periodo-grafico", "value"), Input("input-ticker", "value")],
         [State("input-ticker", "value")]
     )
-    def atualizar_graficos(n_clicks, is_dark, periodo, ticker):
+    def atualizar_graficos(n_clicks, is_dark, periodo, ticker_input, ticker):
         if not ticker:
             return None
         dados = buscar_detalhes_ativo(ticker)

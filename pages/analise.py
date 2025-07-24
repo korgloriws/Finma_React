@@ -4,7 +4,6 @@ import pandas as pd
 
 from . import lista
 from . import graficos
-from . import rankers
 from models import carregar_ativos
 
 def cards_resumo(df_ativos):
@@ -16,10 +15,10 @@ def cards_resumo(df_ativos):
     menor_pl = df_ativos.loc[df_ativos['pl'].idxmin(), 'pl'] if 'pl' in df_ativos and not df_ativos['pl'].isnull().all() else 0
     melhor_roe = df_ativos.loc[df_ativos['roe'].idxmax(), 'roe'] if 'roe' in df_ativos and not df_ativos['roe'].isnull().all() else 0
     
-    # Extrair ticker original (sem HTML) dos dados processados
+
     def extract_ticker(ticker_value):
         if isinstance(ticker_value, str) and '<div' in ticker_value:
-            # Se contém HTML, extrair o ticker do span
+
             import re
             match = re.search(r'<span[^>]*>([^<]+)</span>', ticker_value)
             if match:
@@ -88,7 +87,6 @@ def layout():
             children=[
                 dbc.Tab(label="📋 Lista", tab_id="aba-lista"),
                 dbc.Tab(label="📊 Gráficos", tab_id="aba-graficos"),
-                dbc.Tab(label="🏆 Ranking", tab_id="aba-ranking"),
             ]
         ),
         html.Div(id="conteudo-aba-selecionada", className="mt-4")
@@ -105,15 +103,11 @@ def register_callbacks(app):
         df_ativos = pd.DataFrame(dados) if dados else None
         cards = cards_resumo(df_ativos) if df_ativos is not None else None
         if aba_selecionada == "aba-lista":
-            # Sempre mostra os filtros/lista, mesmo sem dados
+
             return lista.layout(df_ativos), cards
         elif aba_selecionada == "aba-graficos":
             if not dados:
                 return dbc.Alert("Aplique um filtro para ver os ativos.", color="info"), None
             return graficos.layout(df_ativos), cards
-        elif aba_selecionada == "aba-ranking":
-            if not dados:
-                return dbc.Alert("Aplique um filtro para ver os ativos.", color="info"), None
-            return rankers.layout(df_ativos), cards
         else:
             return dbc.Alert("Aba desconhecida", color="danger"), cards

@@ -4,19 +4,20 @@ import pandas as pd
 import plotly.express as px
 from dash.dependencies import Input, Output
 from complete_b3_logos_mapping import get_logo_url
+from utils import create_clickable_ticker
 import re
 
 def extract_ticker_clean(ticker_value):
-    """Extrai o ticker limpo de dados que podem conter HTML"""
+
     if isinstance(ticker_value, str) and '<div' in ticker_value:
-        # Se contém HTML, extrair o ticker do span
+
         match = re.search(r'<span[^>]*>([^<]+)</span>', ticker_value)
         if match:
             return match.group(1)
     return ticker_value
 
 def clean_ticker_column(df):
-    """Limpa a coluna ticker removendo HTML se necessário"""
+
     if 'ticker' in df.columns:
         df['ticker_clean'] = df['ticker'].apply(extract_ticker_clean)
     return df
@@ -132,40 +133,16 @@ def register_callbacks(app):
             else:
                 formatted = f"{value:.2f}".replace('.', ',')
             
-            # Obter logo do ticker
-            ticker = item['ticker_clean']
-            logo_url = get_logo_url(ticker)
-            
-            if logo_url:
-                logo_element = html.Img(
-                    src=logo_url, 
-                    alt=ticker, 
-                    style={
-                        "width": "30px", "height": "30px", "borderRadius": "6px",
-                        "objectFit": "contain", "border": "1px solid #e0e0e0",
-                        "background": "white", "marginRight": "10px"
-                    }
-                )
-            else:
-                # Placeholder se não houver logo
-                ticker_short = ticker.replace('.SA', '').replace('.sa', '')[:3]
-                logo_element = html.Div(
-                    ticker_short,
-                    style={
-                        "width": "30px", "height": "30px", "background": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                        "borderRadius": "6px", "display": "flex", "alignItems": "center", "justifyContent": "center",
-                        "fontSize": "10px", "fontWeight": "bold", "color": "white", "marginRight": "10px"
-                    }
-                )
+            # Criar link clicável para o ticker
+            ticker_link = create_clickable_ticker(
+                item['ticker_clean'], 
+                item['nome_completo'], 
+                show_logo=True, 
+                size="small"
+            )
             
             return dbc.ListGroupItem([
-                html.Div([
-                    logo_element,
-                    html.Div([
-                        html.Strong(item['nome_completo']),
-                        html.Span(f" ({item['ticker_clean']})", className="text-muted ms-2"),
-                    ])
-                ], style={"display": "flex", "alignItems": "center"}),
+                ticker_link,
                 dbc.Badge(formatted, color=badge_color or "primary", className="ms-2 fw-bold", style={"fontSize": "1.1rem"})
             ], className="d-flex justify-content-between align-items-center animate__animated animate__fadeInUp")
         # Listas

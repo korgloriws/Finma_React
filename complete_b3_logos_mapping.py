@@ -14,7 +14,7 @@ COMPLETE_B3_LOGOS_MAPPING = {
     "AGRO3.sa": "https://img.logo.dev/ticker/AGRO3.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "AGXY3.sa": "https://img.logo.dev/ticker/AGXY3.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "AHEB5.sa": "https://img.logo.dev/ticker/AHEB5.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
-    "ALLD3.sa": "https://img.logo.dev/ticker/ALLD3.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
+    "ALLD3.sa": "https://img.logo.dev/alliedbrasil.com.br?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "ALOS3.sa": "https://img.logo.dev/ticker/ALOS3.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "ALPA3.sa": "https://img.logo.dev/ticker/ALPA3.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "ALPA4.sa": "https://img.logo.dev/ticker/ALPA4.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
@@ -1001,11 +1001,11 @@ def add_logo_column_to_data(data, ticker_column='ticker'):
         
         if logo_url:
 
-            row['ticker'] = f'<div style="display: flex; align-items: center; gap: 8px;"><img src="{logo_url}" alt="{ticker}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: contain; border: 1px solid #e0e0e0; background: white; padding: 3px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><span style="font-weight: bold; font-size: 14px;">{ticker}</span></div>'
+            row['ticker'] = f'<a href="/detalhes?ticker={ticker}" style="text-decoration: none; color: inherit;"><div style="display: flex; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s ease; padding: 4px; border-radius: 6px;" onmouseover="this.style.backgroundColor=\'#f8f9fa\'" onmouseout="this.style.backgroundColor=\'transparent\'"><img src="{logo_url}" alt="{ticker}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: contain; border: 1px solid #e0e0e0; background: white; padding: 3px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><span style="font-weight: bold; font-size: 14px;">{ticker}</span></div></a>'
         else:
 
             ticker_short = ticker.replace('.SA', '').replace('.sa', '')[:4]
-            row['ticker'] = f'<div style="display: flex; align-items: center; gap: 8px;"><div style="width: 50px; height: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">{ticker_short}</div><span style="font-weight: bold; font-size: 14px;">{ticker}</span></div>'
+            row['ticker'] = f'<a href="/detalhes?ticker={ticker}" style="text-decoration: none; color: inherit;"><div style="display: flex; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s ease; padding: 4px; border-radius: 6px;" onmouseover="this.style.backgroundColor=\'#f8f9fa\'" onmouseout="this.style.backgroundColor=\'transparent\'"><div style="width: 50px; height: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">{ticker_short}</div><span style="font-weight: bold; font-size: 14px;">{ticker}</span></div></a>'
     
     return data
 

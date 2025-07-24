@@ -1,6 +1,5 @@
 import dash
 import dash_bootstrap_components as dbc
-import os
 
 app = dash.Dash(
     __name__,
@@ -21,21 +20,8 @@ import pages.carteira as carteira_mod
 
 pio.templates.default = "simple_white"
 
-# Inicializar dados apenas se não estiver em ambiente de produção
-try:
-    if not os.environ.get('RAILWAY_ENVIRONMENT'):
-        print("Inicializando dados em ambiente de desenvolvimento...")
-        try:
-            carteira_mod.atualizar_precos_carteira()
-        except Exception as e:
-            print(f"Erro ao atualizar preços da carteira: {e}")
-        
-        try:
-            carteira_mod.salvar_historico()
-        except Exception as e:
-            print(f"Erro ao salvar histórico: {e}")
-except Exception as e:
-    print(f"Erro geral na inicialização: {e}")
+carteira_mod.atualizar_precos_carteira()
+carteira_mod.salvar_historico()
 
 
 @app.server.route("/start_load", methods=["POST"])
@@ -73,11 +59,19 @@ content = html.Div([
 
 app.layout = html.Div([sidebar, content])
 
-@app.callback(Output("page-content", "children"), [Input("url", "pathname")])
-def render_page_content(pathname):
+@app.callback(Output("page-content", "children"), [Input("url", "pathname"), Input("url", "search")])
+def render_page_content(pathname, search):
+    # Extrair parâmetros da URL
+    params = {}
+    if search:
+        from urllib.parse import parse_qs
+        params = parse_qs(search.lstrip('?'))
+        # Converter listas de um item para strings
+        params = {k: v[0] if v else '' for k, v in params.items()}
+    
     telas_independentes = {
         "/": assistente_ia.layout(),
-        "/detalhes": detalhes.layout(),
+        "/detalhes": detalhes.layout(params.get('ticker', '')),
         "/marmitas": marmitas.layout(),
         "/carteira": carteira.layout(),
         "/controle": controle.layout(),
@@ -140,7 +134,4 @@ controle.registrar_callbacks(app)
 assistente_ia.registrar_callbacks(app)
 
 if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('DEBUG', 'False').lower() == 'true'
-    print(f"Iniciando servidor na porta {port} com debug={debug}")
-    app.run_server(debug=debug, port=port, host='0.0.0.0')
+    app.run_server(debug=False, port=5000, host='0.0.0.0')

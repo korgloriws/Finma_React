@@ -3,6 +3,7 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 from models import processar_ativos_acoes_com_filtros, processar_ativos_bdrs_com_filtros, processar_ativos_fiis_com_filtros
 from complete_b3_logos_mapping import add_logo_column_to_data
+from utils import create_clickable_ticker
 
 def layout(df_ativos=None):
 

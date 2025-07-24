@@ -2,12 +2,13 @@ import sqlite3
 import pandas as pd
 import yfinance as yf
 from datetime import date, datetime
-from dash import dcc, html, Input, Output, State
+from dash import dcc, html, Input, Output, State, no_update
 import dash_bootstrap_components as dbc
 from dash import dash_table  
 import plotly.express as px
 from dash_table.Format import Format, Symbol
 from complete_b3_logos_mapping import add_logo_column_to_data, get_table_columns_with_logo
+from utils import create_clickable_ticker
 
 def init_db():
     conn = sqlite3.connect('carteira.db', check_same_thread=False)
@@ -248,6 +249,7 @@ def layout():
             children=[
                 dbc.Tab(label="📋 Ativos", tab_id="carteira-aba-ativos"),
                 dbc.Tab(label="📈 Gráficos", tab_id="carteira-aba-graficos"),
+                dbc.Tab(label="🏆 Ranking", tab_id="carteira-aba-ranking"),
                 dbc.Tab(label="💰 Proventos", tab_id="carteira-aba-proventos"),
                 dbc.Tab(label="🤖 Insights", tab_id="carteira-aba-ia"),
                 dbc.Tab(label="🔄 Movimentações", tab_id="carteira-aba-movimentacoes"),
@@ -337,9 +339,23 @@ def registrar_callbacks(app):
                 html.H4("Gerenciamento de Ativos", className="mb-2 text-center"),
                 html.H5(id="carteira-valor-total", className="text-success text-center mb-3"),
                 dbc.Row([
-                    dbc.Col(dcc.Input(id='carteira-input-ticker', type='text', placeholder='Ticker...', className='form-control'), xs=12, sm=6, md=4),
-                    dbc.Col(dcc.Input(id='carteira-input-quantidade', type='number', placeholder='Quantidade', className='form-control'), xs=12, sm=6, md=4),
-                    dbc.Col(html.Button('Adicionar', id='carteira-botao-adicionar', className='btn btn-primary w-100'), xs=12, sm=12, md=4),
+                    dbc.Col(dcc.Input(id='carteira-input-ticker', type='text', placeholder='Ticker...', className='form-control'), xs=12, sm=6, md=3),
+                    dbc.Col(dcc.Input(id='carteira-input-quantidade', type='number', placeholder='Quantidade', className='form-control'), xs=12, sm=6, md=3),
+                    dbc.Col(dcc.Dropdown(
+                        id='carteira-input-tipo',
+                        options=[
+                            {'label': 'Ação', 'value': 'Ação'},
+                            {'label': 'FII', 'value': 'FII'},
+                            {'label': 'ETF', 'value': 'ETF'},
+                            {'label': 'Criptomoeda', 'value': 'Criptomoeda'},
+                            {'label': 'BDR', 'value': 'BDR'},
+                            {'label': 'Fixa', 'value': 'Fixa'}
+                        ],
+                        value='Ação',
+                        placeholder='Tipo do ativo...',
+                        className='form-control'
+                    ), xs=12, sm=6, md=3),
+                    dbc.Col(html.Button('Adicionar', id='carteira-botao-adicionar', className='btn btn-primary w-100'), xs=12, sm=12, md=3),
                 ], className="mb-4"),
                 html.Div(id='carteira-mensagem-status', className='text-danger mt-2 text-center'),
                 dbc.Accordion(accordions, always_open=True, id="carteira-lista-ativos")
@@ -365,6 +381,65 @@ def registrar_callbacks(app):
                 dcc.Graph(id="grafico-por-ativo"),
                 dcc.Graph(id="grafico-top-posicoes"),
                 dcc.Graph(id="grafico-positivo-negativo"),
+            ])
+
+        elif aba == "carteira-aba-ranking":
+            return html.Div([
+                html.H2("🏆 Rankings da Carteira", className="text-center my-4 fw-bold text-primary"),
+                html.Div([
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Card([
+                                dbc.CardHeader([
+                                    html.I(className="bi bi-bar-chart-fill me-2", style={"color": "#6610f2", "fontSize": "1.5rem"}),
+                                    "Top 7 ROE"
+                                ], className="card-header-rankers fw-bold text-primary"),
+                                dbc.CardBody([
+                                    dcc.Graph(id='carteira-rankers-bar-roe', config={'displayModeBar': False}),
+                                    dbc.ListGroup(id='carteira-top-roe', className="mt-2")
+                                ])
+                            ], className="mb-4 shadow-sm animate__animated animate__fadeInUp")
+                        ], width=6),
+                        dbc.Col([
+                            dbc.Card([
+                                dbc.CardHeader([
+                                    html.I(className="bi bi-cash-coin me-2", style={"color": "#198754", "fontSize": "1.5rem"}),
+                                    "Top 7 Dividend Yield"
+                                ], className="card-header-rankers fw-bold text-success"),
+                                dbc.CardBody([
+                                    dcc.Graph(id='carteira-rankers-bar-dy', config={'displayModeBar': False}),
+                                    dbc.ListGroup(id='carteira-top-dividend-yield', className="mt-2")
+                                ])
+                            ], className="mb-4 shadow-sm animate__animated animate__fadeInUp")
+                        ], width=6)
+                    ]),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Card([
+                                dbc.CardHeader([
+                                    html.I(className="bi bi-graph-up-arrow me-2", style={"color": "#ffc107", "fontSize": "1.5rem"}),
+                                    "Top 7 P/L"
+                                ], className="card-header-rankers fw-bold text-warning"),
+                                dbc.CardBody([
+                                    dcc.Graph(id='carteira-rankers-bar-pl', config={'displayModeBar': False}),
+                                    dbc.ListGroup(id='carteira-top-pl', className="mt-2")
+                                ])
+                            ], className="mb-4 shadow-sm animate__animated animate__fadeInUp")
+                        ], width=6),
+                        dbc.Col([
+                            dbc.Card([
+                                dbc.CardHeader([
+                                    html.I(className="bi bi-pie-chart-fill me-2", style={"color": "#fd7e14", "fontSize": "1.5rem"}),
+                                    "Top 7 P/VP"
+                                ], className="card-header-rankers fw-bold text-danger"),
+                                dbc.CardBody([
+                                    dcc.Graph(id='carteira-rankers-bar-pvp', config={'displayModeBar': False}),
+                                    dbc.ListGroup(id='carteira-top-pvp', className="mt-2")
+                                ])
+                            ], className="mb-4 shadow-sm animate__animated animate__fadeInUp")
+                        ], width=6)
+                    ])
+                ], className="container-fluid animate__animated animate__fadeIn")
             ])
 
         elif aba == "carteira-aba-ia":
@@ -676,6 +751,7 @@ def registrar_callbacks(app):
             Input('tabela-carteira-fixa', 'data_previous')],
         [State("carteira-input-ticker", "value"),
          State("carteira-input-quantidade", "value"),
+         State("carteira-input-tipo", "value"),
          State('tabela-carteira-ação', 'data'),
          State('tabela-carteira-fii', 'data'),
          State('tabela-carteira-criptomoeda', 'data'),
@@ -683,16 +759,18 @@ def registrar_callbacks(app):
          State('tabela-carteira-fixa', 'data')]
     )
     def carteira_adicionar_ou_remover_ativo(n_clicks, data_prev_acao, data_prev_fii, data_prev_cripto, data_prev_bdr, data_prev_fixa,
-                                            ticker, quantidade,
+                                            ticker, quantidade, tipo_selecionado,
                                             data_acao, data_fii, data_cripto, data_bdr, data_fixa):
         mensagem = ""
 
         if n_clicks and ticker and quantidade:
             info = obter_informacoes_ativo(ticker)
             if info:
+                # Usa o tipo selecionado pelo usuário em vez do tipo detectado pela API
+                tipo_final = tipo_selecionado if tipo_selecionado else info['tipo']
                 adicionar_ou_atualizar_ativo(
                     info['ticker'], info['nome_completo'], float(quantidade),
-                    info['preco_atual'], info['tipo'], info['dy'], info['pl'],
+                    info['preco_atual'], tipo_final, info['dy'], info['pl'],
                     info['pvp'], info['roe']
                 )
                 mensagem = "✅ Ativo adicionado com sucesso."
@@ -713,16 +791,39 @@ def registrar_callbacks(app):
             'bdr': data_bdr,
             'fixa': data_fixa
         }
+        
+        # Verifica mudanças nas tabelas (remoção e edição)
         for tipo, prev in tipo_map.items():
             atual = data_map[tipo]
             if prev is not None and atual is not None:
                 prev_ids = {row['id'] for row in prev if 'id' in row}
                 atual_ids = {row['id'] for row in atual if 'id' in row}
+                
+                # Detecta remoções
                 removidos = prev_ids - atual_ids
                 for id_removido in removidos:
                     remover_ativo(id_removido)
                 if removidos:
                     mensagem = "🗑️ Ativo(s) removido(s)."
+                
+                # Detecta edições de quantidade
+                for row_atual in atual:
+                    if 'id' in row_atual:
+                        id_ativo = row_atual['id']
+                        # Encontra a linha anterior correspondente
+                        row_anterior = next((row for row in prev if row.get('id') == id_ativo), None)
+                        if row_anterior:
+                            qtd_anterior = row_anterior.get('quantidade', 0)
+                            qtd_atual = row_atual.get('quantidade', 0)
+                            # Se a quantidade mudou, atualiza o ativo
+                            if qtd_anterior != qtd_atual and qtd_atual is not None:
+                                try:
+                                    nova_qtd = float(qtd_atual)
+                                    atualizar_ativo(id_ativo, nova_qtd)
+                                    if not mensagem:
+                                        mensagem = "📝 Quantidade atualizada."
+                                except (ValueError, TypeError):
+                                    pass  # Ignora valores inválidos
  
         df_carteira = pd.DataFrame(consultar_carteira())
         tipos_ativos = ['Ação', 'FII', 'Criptomoeda', 'BDR', 'Fixa']
@@ -770,10 +871,65 @@ def registrar_callbacks(app):
         return mensagem, dbc.Accordion(accordions, always_open=True)
     
     @app.callback(
-    Output("carteira-lista-ativos2", "children"),
-    Input("carteira-atualizador2", "n_intervals")
-)
-    def carteira_atualizar_tabelas_automaticamente(n_intervals):
+        [
+            Output("carteira-lista-ativos2", "children"),
+            Output("carteira-mensagem-status", "children", allow_duplicate=True)
+        ],
+        [
+            Input("carteira-atualizador2", "n_intervals"),
+            Input('tabela-carteira-ação', 'data_timestamp'),
+            Input('tabela-carteira-fii', 'data_timestamp'),
+            Input('tabela-carteira-criptomoeda', 'data_timestamp'),
+            Input('tabela-carteira-bdr', 'data_timestamp'),
+            Input('tabela-carteira-fixa', 'data_timestamp')
+        ],
+        [
+            State('tabela-carteira-ação', 'data'),
+            State('tabela-carteira-fii', 'data'),
+            State('tabela-carteira-criptomoeda', 'data'),
+            State('tabela-carteira-bdr', 'data'),
+            State('tabela-carteira-fixa', 'data')
+        ],
+        prevent_initial_call=True
+    )
+    def carteira_atualizar_tabelas_automaticamente(n_intervals, ts_acao, ts_fii, ts_cripto, ts_bdr, ts_fixa,
+                                                  data_acao, data_fii, data_cripto, data_bdr, data_fixa):
+        mensagem = ""
+        
+        # Detecta mudanças nas tabelas e atualiza automaticamente
+        tabelas_data = {
+            'ação': data_acao,
+            'fii': data_fii,
+            'criptomoeda': data_cripto,
+            'bdr': data_bdr,
+            'fixa': data_fixa
+        }
+        
+        # Busca dados atuais do banco para comparar
+        df_carteira_atual = pd.DataFrame(consultar_carteira())
+        
+        for tipo, data_tabela in tabelas_data.items():
+            if data_tabela:
+                for row in data_tabela:
+                    if 'id' in row and 'quantidade' in row:
+                        id_ativo = row['id']
+                        qtd_tabela = row['quantidade']
+                        
+                        # Busca dados atuais do banco
+                        ativo_banco = df_carteira_atual[df_carteira_atual['id'] == id_ativo]
+                        if not ativo_banco.empty:
+                            qtd_banco = ativo_banco.iloc[0]['quantidade']
+                            
+                            # Se a quantidade na tabela é diferente do banco, atualiza
+                            if qtd_tabela != qtd_banco and qtd_tabela is not None:
+                                try:
+                                    nova_qtd = float(qtd_tabela)
+                                    atualizar_ativo(id_ativo, nova_qtd)
+                                    if not mensagem:
+                                        mensagem = "📝 Quantidade atualizada automaticamente."
+                                except (ValueError, TypeError):
+                                    pass
+        
         df_carteira = pd.DataFrame(consultar_carteira())
         tipos_ativos = ['Ação', 'FII', 'Criptomoeda', 'BDR', 'Fixa']
         accordions = []
@@ -820,19 +976,32 @@ def registrar_callbacks(app):
                 )
             )
 
-        return dbc.Accordion(accordions, always_open=True)
-
+        return dbc.Accordion(accordions, always_open=True), mensagem
 
     @app.callback(
-    [
-        Output("grafico-evolucao", "figure"),
-        Output("grafico-por-tipo", "figure"),
-        Output("grafico-por-ativo", "figure"),
-        Output("grafico-top-posicoes", "figure"),
-        Output("grafico-positivo-negativo", "figure")
-    ],
-    [Input("carteira-filtro-periodo", "value"), Input("switch-darkmode", "value")]
-)
+        [
+            Output("carteira-input-ticker", "value"),
+            Output("carteira-input-quantidade", "value"),
+            Output("carteira-input-tipo", "value")
+        ],
+        Input("carteira-botao-adicionar", "n_clicks"),
+        prevent_initial_call=True
+    )
+    def limpar_formulario_apos_adicionar(n_clicks):
+        if n_clicks:
+            return "", "", "Ação"
+        return no_update, no_update, no_update
+
+    @app.callback(
+        [
+            Output("grafico-evolucao", "figure"),
+            Output("grafico-por-tipo", "figure"),
+            Output("grafico-por-ativo", "figure"),
+            Output("grafico-top-posicoes", "figure"),
+            Output("grafico-positivo-negativo", "figure")
+        ],
+        [Input("carteira-filtro-periodo", "value"), Input("switch-darkmode", "value")]
+    )
     def carteira_atualizar_graficos(periodo, is_dark):
         df_hist = consultar_historico(periodo)
         df_carteira = pd.DataFrame(consultar_carteira())
@@ -906,6 +1075,117 @@ def registrar_callbacks(app):
         
         return data_with_logos
 
+    # Callbacks para os rankings da carteira
+    @app.callback(
+        [
+            Output('carteira-top-roe', 'children'),
+            Output('carteira-top-dividend-yield', 'children'),
+            Output('carteira-top-pl', 'children'),
+            Output('carteira-top-pvp', 'children'),
+            Output('carteira-rankers-bar-roe', 'figure'),
+            Output('carteira-rankers-bar-dy', 'figure'),
+            Output('carteira-rankers-bar-pl', 'figure'),
+            Output('carteira-rankers-bar-pvp', 'figure'),
+        ],
+        [Input("carteira-atualizador", "n_intervals"), Input('switch-darkmode', 'value')]
+    )
+    def atualizar_rankers_carteira(n_intervals, is_dark):
+        df_carteira = pd.DataFrame(consultar_carteira())
+        
+        if df_carteira.empty:
+            alert = dbc.Alert("Nenhum ativo na carteira para ranking.", color="info")
+            fig = px.bar(title="Nenhum ativo na carteira")
+            return alert, alert, alert, alert, fig, fig, fig, fig
+        
+        # Limpa a coluna ticker se necessário
+        def extract_ticker_clean(ticker_value):
+            if isinstance(ticker_value, str) and '<div' in ticker_value:
+                import re
+                match = re.search(r'<span[^>]*>([^<]+)</span>', ticker_value)
+                if match:
+                    return match.group(1)
+            return ticker_value
+        
+        df_carteira['ticker_clean'] = df_carteira['ticker'].apply(extract_ticker_clean)
+        
+        # Conversão para numérico
+        for col in ['roe', 'dy', 'pl', 'pvp']:
+            if col in df_carteira.columns:
+                df_carteira[col] = pd.to_numeric(df_carteira[col], errors='coerce')
+        
+        template = 'plotly_dark' if is_dark else 'simple_white'
+        
+        # ROE
+        top_roe = df_carteira.nlargest(7, 'roe')[['ticker_clean', 'nome_completo', 'roe']].dropna().to_dict('records')
+        # DY
+        top_dividend_yield = df_carteira.nlargest(7, 'dy')[['ticker_clean', 'nome_completo', 'dy']].dropna().to_dict('records')
+        # P/L
+        top_pl = df_carteira.nsmallest(7, 'pl')[['ticker_clean', 'nome_completo', 'pl']].dropna().to_dict('records')
+        # P/VP
+        top_pvp = df_carteira.nsmallest(7, 'pvp')[['ticker_clean', 'nome_completo', 'pvp']].dropna().to_dict('records')
+        
+        def format_item(item, value_key, is_percentage=False, badge_color=None):
+            value = item[value_key]
+            if is_percentage:
+                formatted = f"{value:.2f}%".replace('.', ',')
+            else:
+                formatted = f"{value:.2f}".replace('.', ',')
+            
+            # Criar link clicável para o ticker
+            ticker_link = create_clickable_ticker(
+                item['ticker_clean'], 
+                item['nome_completo'], 
+                show_logo=True, 
+                size="small"
+            )
+            
+            return dbc.ListGroupItem([
+                ticker_link,
+                dbc.Badge(formatted, color=badge_color or "primary", className="ms-2 fw-bold", style={"fontSize": "1.1rem"})
+            ], className="d-flex justify-content-between align-items-center animate__animated animate__fadeInUp")
+        
+        # Listas
+        top_roe_items = [format_item(item, 'roe', is_percentage=True, badge_color="primary" if i==0 else "secondary") for i, item in enumerate(top_roe)]
+        top_dividend_items = [format_item(item, 'dy', is_percentage=True, badge_color="success" if i==0 else "secondary") for i, item in enumerate(top_dividend_yield)]
+        top_pl_items = [format_item(item, 'pl', badge_color="warning" if i==0 else "secondary") for i, item in enumerate(top_pl)]
+        top_pvp_items = [format_item(item, 'pvp', badge_color="danger" if i==0 else "secondary") for i, item in enumerate(top_pvp)]
+        
+        # Gráficos de barras horizontais
+        fig_roe = px.bar(
+            top_roe, y='nome_completo', x='roe', orientation='h', text='roe',
+            color='roe', color_continuous_scale=px.colors.sequential.Blues, title='Top 7 ROE (%)', template=template
+        ) if top_roe else px.bar(title='Top 7 ROE', template=template)
+        fig_roe.update_layout(margin=dict(l=10, r=10, t=40, b=10), height=260, font=dict(family='Segoe UI'))
+        fig_roe.update_traces(texttemplate='%{x:.2f}%', textposition='outside')
+        
+        fig_dy = px.bar(
+            top_dividend_yield, y='nome_completo', x='dy', orientation='h', text='dy',
+            color='dy', color_continuous_scale=px.colors.sequential.Greens, title='Top 7 Dividend Yield (%)', template=template
+        ) if top_dividend_yield else px.bar(title='Top 7 Dividend Yield', template=template)
+        fig_dy.update_layout(margin=dict(l=10, r=10, t=40, b=10), height=260, font=dict(family='Segoe UI'))
+        fig_dy.update_traces(texttemplate='%{x:.2f}%', textposition='outside')
+        
+        fig_pl = px.bar(
+            top_pl, y='nome_completo', x='pl', orientation='h', text='pl',
+            color='pl', color_continuous_scale=px.colors.sequential.Oranges, title='Top 7 Menor P/L', template=template
+        ) if top_pl else px.bar(title='Top 7 Menor P/L', template=template)
+        fig_pl.update_layout(margin=dict(l=10, r=10, t=40, b=10), height=260, font=dict(family='Segoe UI'))
+        fig_pl.update_traces(texttemplate='%{x:.2f}', textposition='outside')
+        
+        fig_pvp = px.bar(
+            top_pvp, y='nome_completo', x='pvp', orientation='h', text='pvp',
+            color='pvp', color_continuous_scale=px.colors.sequential.Reds, title='Top 7 Menor P/VP', template=template
+        ) if top_pvp else px.bar(title='Top 7 Menor P/VP', template=template)
+        fig_pvp.update_layout(margin=dict(l=10, r=10, t=40, b=10), height=260, font=dict(family='Segoe UI'))
+        fig_pvp.update_traces(texttemplate='%{x:.2f}', textposition='outside')
+        
+        return (
+            dbc.ListGroup(top_roe_items),
+            dbc.ListGroup(top_dividend_items),
+            dbc.ListGroup(top_pl_items),
+            dbc.ListGroup(top_pvp_items),
+            fig_roe, fig_dy, fig_pl, fig_pvp
+        )
 
     
 
