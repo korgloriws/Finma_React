@@ -1,4 +1,7 @@
 pandas
 yfinance
-llama-cpp-python 
-flask-cors 
+Flask
+flask-cors
+flask-caching
+bcrypt
+gunicorn

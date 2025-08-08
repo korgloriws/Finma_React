@@ -27,7 +27,26 @@ from models import (
 )
 
 server = Flask(__name__)
-CORS(server)
+
+# Configurar CORS para SaaS (frontend e backend em domínios distintos)
+try:
+    FRONTEND_ORIGIN = os.getenv('FRONTEND_ORIGIN')
+    allowed_origins = set()
+    if FRONTEND_ORIGIN:
+        allowed_origins.add(FRONTEND_ORIGIN)
+    # Origens comuns em desenvolvimento
+    allowed_origins.update({
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    })
+    CORS(
+        server,
+        supports_credentials=True,
+        resources={r"/api/*": {"origins": list(allowed_origins)}},
+    )
+except Exception:
+    # Fallback seguro
+    CORS(server, supports_credentials=True)
 
 # Inicializar tabela de usuários
 criar_tabela_usuarios()
@@ -105,9 +124,20 @@ def api_login():
                 "message": "Login realizado com sucesso",
                 "username": username
             }), 200)
-            
-            # Definir cookie com o username
-            response.set_cookie('current_user', username, max_age=3600, httponly=True, samesite='Lax')
+
+            # Definir cookie com o username (cross-site em produção)
+            is_production = bool(os.getenv('FLY_APP_NAME')) or os.getenv('ENVIRONMENT') == 'production'
+            cookie_samesite = 'None' if is_production else 'Lax'
+            cookie_secure = True if is_production else False
+
+            response.set_cookie(
+                'current_user',
+                username,
+                max_age=3600,
+                httponly=True,
+                samesite=cookie_samesite,
+                secure=cookie_secure
+            )
             
             return response
         else:

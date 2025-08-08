@@ -151,6 +151,28 @@ npm run build
 
 - Backend: executar `app.py` (WSGI/ASGI conforme infra desejada). Ajustar CORS/host/porta se necessário.
 
+### Deploy gratuito (SaaS) mantendo SQLite
+
+Recomendação: Frontend em Vercel/Netlify e Backend (Flask + SQLite) no Fly.io com volume persistente.
+
+Backend (Fly.io):
+1) Instalar Fly CLI e logar: `flyctl auth login`
+2) Na raiz do repo: `flyctl launch --no-deploy`
+3) Criar volume para os bancos: `fly volumes create bancos --size 1 --region gru`
+4) Opcional: definir origem do frontend (CORS):
+   - `flyctl secrets set FRONTEND_ORIGIN=https://SEU-FRONT.vercel.app`
+5) Deploy: `flyctl deploy`
+
+Observações:
+- O volume monta em `/app/backend/bancos_usuarios` (veja `fly.toml`).
+- Cookies de sessão: `SameSite=None` e `Secure=True` em produção (configurados no `api_login`).
+- O Axios usa `VITE_API_BASE_URL` e `withCredentials: true`.
+
+Frontend (Vercel/Netlify/Cloudflare Pages):
+1) Build: `cd frontend && npm i && npm run build`
+2) Publicar `frontend/dist`
+3) Definir env `VITE_API_BASE_URL` para a URL do backend (ex.: `https://SEU-BACK.fly.dev/api`).
+
 ## Licença
 
 Projeto pessoal do autor. Ajuste conforme necessidade antes de uso comercial.

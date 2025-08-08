@@ -1,0 +1,23 @@
+# fly.toml app configuration file generated for finma-backend on 2025-01-01
+app = "finma-backend"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+[[mounts]]
+  source = "bancos"
+  destination = "/app/backend/bancos_usuarios"
+
+[env]
+  ENVIRONMENT = "production"
+
+

@@ -21,10 +21,17 @@ def set_usuario_atual(username):
         USUARIO_ATUAL = username
 
 def get_usuario_atual():
-   
+    """Retorna usuário da sessão em memória; se ausente, tenta cookie 'current_user'."""
     global USUARIO_ATUAL
     with SESSION_LOCK:
-       
+        if USUARIO_ATUAL is None:
+            try:
+                from flask import request
+                cookie_user = request.cookies.get('current_user')
+                if cookie_user:
+                    USUARIO_ATUAL = cookie_user
+            except Exception:
+                pass
         return USUARIO_ATUAL
 
 def limpar_sessoes_expiradas():

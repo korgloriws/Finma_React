@@ -727,12 +727,12 @@ export default function CarteiraPage() {
                       </ResponsiveContainer>
                     </>
                   ) : (
-                    <div className="h-64 flex items-center justify-center text-muted-foreground">
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">
                       <div className="text-center">
                         <div className="text-lg font-semibold mb-2">Nenhum dado histórico disponível</div>
                         <div className="text-sm text-muted-foreground mb-4">
                           Adicione movimentações à sua carteira para ver a evolução patrimonial
-                        </div>
+                  </div>
                         <div className="text-xs text-muted-foreground">
                           Dados de exemplo serão mostrados para demonstração
                         </div>
@@ -1053,7 +1053,7 @@ export default function CarteiraPage() {
             ) : (
               <div className="space-y-6">
                 {/* Seção 1: Proventos Pagos (Histórico) */}
-                <div className="bg-muted/30 rounded-lg p-6">
+                  <div className="bg-muted/30 rounded-lg p-6">
                   <h3 className="text-lg font-semibold mb-4">📊 Proventos Pagos (Histórico)</h3>
                   
                   {loadingProventos ? (
@@ -1068,85 +1068,85 @@ export default function CarteiraPage() {
                     <div className="space-y-4">
                       {/* Resumo do histórico */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-primary">
-                            {proventos.filter(p => p.proventos && p.proventos.length > 0).length}
-                          </div>
-                          <div className="text-sm text-muted-foreground">Ativos com Proventos</div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-primary">
+                          {proventos.filter(p => p.proventos && p.proventos.length > 0).length}
                         </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-primary">
-                            {proventos.reduce((total, p) => total + (p.proventos?.length || 0), 0)}
-                          </div>
-                          <div className="text-sm text-muted-foreground">Total de Proventos</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-primary">
-                            {formatCurrency(proventos.reduce((total, p) => 
-                              total + (p.proventos?.reduce((sum, prov) => sum + prov.valor, 0) || 0), 0
-                            ))}
-                          </div>
-                          <div className="text-sm text-muted-foreground">Valor Total</div>
-                        </div>
+                        <div className="text-sm text-muted-foreground">Ativos com Proventos</div>
                       </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-primary">
+                          {proventos.reduce((total, p) => total + (p.proventos?.length || 0), 0)}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Total de Proventos</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-primary">
+                          {formatCurrency(proventos.reduce((total, p) => 
+                            total + (p.proventos?.reduce((sum, prov) => sum + prov.valor, 0) || 0), 0
+                          ))}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Valor Total</div>
+                      </div>
+                    </div>
 
                       {/* Lista de proventos pagos */}
-                      <div className="space-y-4">
+                <div className="space-y-4">
                         {proventos.map((ativo) => (
                           <div key={ativo.ticker} className="bg-background rounded-lg p-4 border border-border">
                             <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-3">
-                                <TickerWithLogo ticker={ativo.ticker} nome={ativo.nome} size="md" />
-                                {ativo.erro && (
-                                  <span className="text-sm text-red-500 bg-red-100 px-2 py-1 rounded">
-                                    {ativo.erro}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-right">
-                                <div className="text-lg font-bold">
-                                  {formatCurrency(ativo.proventos?.reduce((sum, prov) => sum + prov.valor, 0) || 0)}
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {ativo.proventos?.length || 0} provento{ativo.proventos?.length !== 1 ? 's' : ''}
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {ativo.proventos && ativo.proventos.length > 0 ? (
-                              <div className="overflow-x-auto">
-                                <table className="w-full">
-                                  <thead className="bg-muted/30">
-                                    <tr>
-                                      <th className="px-4 py-2 text-left font-medium">Data</th>
-                                      <th className="px-4 py-2 text-left font-medium">Tipo</th>
-                                      <th className="px-4 py-2 text-left font-medium">Valor (R$)</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {ativo.proventos.map((provento, index) => (
-                                      <tr key={index} className="hover:bg-muted/40 transition-colors">
-                                        <td className="px-4 py-2">
-                                          {new Date(provento.data).toLocaleDateString('pt-BR')}
-                                        </td>
-                                        <td className="px-4 py-2">
-                                          <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
-                                            {provento.tipo}
-                                          </span>
-                                        </td>
-                                        <td className="px-4 py-2 font-semibold">
-                                          {formatCurrency(provento.valor)}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            ) : !ativo.erro ? (
-                              <div className="text-center text-muted-foreground py-4">
+                        <div className="flex items-center gap-3">
+                          <TickerWithLogo ticker={ativo.ticker} nome={ativo.nome} size="md" />
+                          {ativo.erro && (
+                            <span className="text-sm text-red-500 bg-red-100 px-2 py-1 rounded">
+                              {ativo.erro}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold">
+                            {formatCurrency(ativo.proventos?.reduce((sum, prov) => sum + prov.valor, 0) || 0)}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {ativo.proventos?.length || 0} provento{ativo.proventos?.length !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {ativo.proventos && ativo.proventos.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead className="bg-muted/30">
+                              <tr>
+                                <th className="px-4 py-2 text-left font-medium">Data</th>
+                                <th className="px-4 py-2 text-left font-medium">Tipo</th>
+                                <th className="px-4 py-2 text-left font-medium">Valor (R$)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {ativo.proventos.map((provento, index) => (
+                                <tr key={index} className="hover:bg-muted/40 transition-colors">
+                                  <td className="px-4 py-2">
+                                    {new Date(provento.data).toLocaleDateString('pt-BR')}
+                                  </td>
+                                  <td className="px-4 py-2">
+                                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                                      {provento.tipo}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2 font-semibold">
+                                    {formatCurrency(provento.valor)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : !ativo.erro ? (
+                        <div className="text-center text-muted-foreground py-4">
                                 Nenhum provento encontrado para este ativo no período selecionado.
-                              </div>
-                            ) : null}
+                        </div>
+                      ) : null}
                           </div>
                         ))}
                       </div>
@@ -1255,13 +1255,13 @@ export default function CarteiraPage() {
                             Nenhum provento recebido para este ativo no período selecionado.
                           </div>
                         )}
-                      </div>
-                    ))}
-                      </div>
+                    </div>
+                  ))}
+                </div>
 
-                      {/* Gráfico de Proventos */}
-                      <div className="bg-muted/30 rounded-lg p-6">
-                        <h3 className="text-lg font-semibold mb-4">Proventos por Mês</h3>
+                {/* Gráfico de Proventos */}
+                <div className="bg-muted/30 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4">Proventos por Mês</h3>
                         {dadosGraficoProventos.length > 0 ? (
                           <div className="h-64">
                             <ResponsiveContainer width="100%" height="100%">
@@ -1289,11 +1289,11 @@ export default function CarteiraPage() {
                             </ResponsiveContainer>
                           </div>
                         ) : (
-                          <div className="h-64 flex items-center justify-center text-muted-foreground">
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">
                             Nenhum provento recebido no período selecionado para gerar o gráfico.
-                          </div>
+                  </div>
                         )}
-                      </div>
+                </div>
                     </div>
                   ) : (
                     <div className="text-center text-muted-foreground py-8">
@@ -1424,34 +1424,34 @@ export default function CarteiraPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">🔄 Movimentações</h2>
               <div className="flex items-center gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Mês</label>
-                  <select
-                    value={filtroMes}
-                    onChange={(e) => setFiltroMes(parseInt(e.target.value))}
+              <div>
+                <label className="block text-sm font-medium mb-2">Mês</label>
+                <select
+                  value={filtroMes}
+                  onChange={(e) => setFiltroMes(parseInt(e.target.value))}
                     className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
-                    aria-label="Selecionar mês"
-                  >
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(mes => (
-                      <option key={mes} value={mes}>
-                        {new Date(2024, mes - 1).toLocaleDateString('pt-BR', { month: 'long' })}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-2">Ano</label>
-                  <select
-                    value={filtroAno}
-                    onChange={(e) => setFiltroAno(parseInt(e.target.value))}
+                  aria-label="Selecionar mês"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(mes => (
+                    <option key={mes} value={mes}>
+                      {new Date(2024, mes - 1).toLocaleDateString('pt-BR', { month: 'long' })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">Ano</label>
+                <select
+                  value={filtroAno}
+                  onChange={(e) => setFiltroAno(parseInt(e.target.value))}
                     className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
-                    aria-label="Selecionar ano"
-                  >
-                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(ano => (
-                      <option key={ano} value={ano}>{ano}</option>
-                    ))}
-                  </select>
+                  aria-label="Selecionar ano"
+                >
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(ano => (
+                    <option key={ano} value={ano}>{ano}</option>
+                  ))}
+                </select>
                 </div>
               </div>
             </div>
@@ -1504,47 +1504,47 @@ export default function CarteiraPage() {
             {movimentacoes && movimentacoes.length > 0 ? (
               <div className="bg-muted/30 rounded-lg p-6">
                 <h3 className="text-lg font-semibold mb-4">Histórico de Movimentações</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-muted/30">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-medium">Data</th>
-                        <th className="px-4 py-3 text-left font-medium">Ticker</th>
-                        <th className="px-4 py-3 text-left font-medium">Nome</th>
-                        <th className="px-4 py-3 text-left font-medium">Quantidade</th>
-                        <th className="px-4 py-3 text-left font-medium">Preço</th>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-muted/30">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium">Data</th>
+                      <th className="px-4 py-3 text-left font-medium">Ticker</th>
+                      <th className="px-4 py-3 text-left font-medium">Nome</th>
+                      <th className="px-4 py-3 text-left font-medium">Quantidade</th>
+                      <th className="px-4 py-3 text-left font-medium">Preço</th>
                         <th className="px-4 py-3 text-left font-medium">Valor Total</th>
-                        <th className="px-4 py-3 text-left font-medium">Tipo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {movimentacoes.map((mov) => (
-                        <tr key={mov?.id} className="hover:bg-muted/40 transition-colors">
+                      <th className="px-4 py-3 text-left font-medium">Tipo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {movimentacoes.map((mov) => (
+                      <tr key={mov?.id} className="hover:bg-muted/40 transition-colors">
                           <td className="px-4 py-3">
                             {new Date(mov?.data || '').toLocaleDateString('pt-BR')}
                           </td>
-                          <td className="px-4 py-3">
-                            <TickerWithLogo ticker={mov?.ticker || ''} size="sm" />
-                          </td>
-                          <td className="px-4 py-3">{mov?.nome_completo}</td>
-                          <td className="px-4 py-3">{mov?.quantidade}</td>
-                          <td className="px-4 py-3 font-semibold">{formatCurrency(mov?.preco)}</td>
+                        <td className="px-4 py-3">
+                          <TickerWithLogo ticker={mov?.ticker || ''} size="sm" />
+                        </td>
+                        <td className="px-4 py-3">{mov?.nome_completo}</td>
+                        <td className="px-4 py-3">{mov?.quantidade}</td>
+                        <td className="px-4 py-3 font-semibold">{formatCurrency(mov?.preco)}</td>
                           <td className="px-4 py-3 font-semibold">
                             {formatCurrency((mov?.quantidade || 0) * (mov?.preco || 0))}
                           </td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              mov?.tipo === 'compra' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {mov?.tipo === 'compra' ? 'Compra' : 'Venda'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            mov?.tipo === 'compra' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {mov?.tipo === 'compra' ? 'Compra' : 'Venda'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
                 </div>
               </div>
             ) : (
