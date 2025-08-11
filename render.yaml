@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: finma
+    env: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: FRONTEND_ORIGIN
+        # Em deploy único, o front e back são servidos juntos, então não é necessário;
+        # deixe em branco ou a própria URL do serviço se quiser usar do front externo
+        value: ""
+    disk:
+      name: bancos
+      mountPath: /app/backend/bancos_usuarios
+      sizeGB: 1
+

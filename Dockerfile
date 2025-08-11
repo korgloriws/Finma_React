@@ -1,3 +1,16 @@
+###########################
+# Frontend build stage    #
+###########################
+FROM node:20-alpine AS frontend-build
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend .
+RUN npm run build
+
+###########################
+# Backend runtime stage    #
+###########################
 FROM python:3.11-slim
 
 # Evitar .pyc e forçar logs em stdout
@@ -19,6 +32,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copiar backend
 COPY backend /app/backend
+
+# Copiar frontend build para ser servido pelo Flask
+COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
 EXPOSE 8080
 

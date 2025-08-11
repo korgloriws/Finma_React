@@ -173,6 +173,21 @@ Frontend (Vercel/Netlify/Cloudflare Pages):
 2) Publicar `frontend/dist`
 3) Definir env `VITE_API_BASE_URL` para a URL do backend (ex.: `https://SEU-BACK.fly.dev/api`).
 
+### Deploy único (frontend + backend juntos) no Render.com
+
+Este repositório já contém `Dockerfile` multi-stage que builda o frontend e o servidor Flask passa a servir os arquivos do `frontend/dist`. Assim, você pode publicar tudo em um único serviço Web no Render e anexar um disco persistente para o SQLite.
+
+Passos:
+1) Acesse Render.com > New + > Blueprint (YAML) e aponte para seu GitHub contendo este repo
+2) Confirme o `render.yaml`
+3) Crie o serviço web `finma` (plano free) e anexe um disco:
+   - name: `bancos`, mountPath: `/app/backend/bancos_usuarios`, size: `1GB`
+4) Deployará automaticamente a cada push na branch padrão (main)
+
+Observações:
+- O backend expõe a API em `/api/*` e o Flask também serve o React build como SPA (fallback `index.html`), então não precisa configurar proxy.
+- Em deploy único, não é necessário setar `VITE_API_BASE_URL` (o front consome `/api`).
+
 ## Licença
 
 Projeto pessoal do autor. Ajuste conforme necessidade antes de uso comercial.

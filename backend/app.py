@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response, send_from_directory
 from flask_cors import CORS
 import pandas as pd
 import yfinance as yf
@@ -26,7 +26,13 @@ from models import (
     obter_historico_carteira_comparado
 )
 
-server = Flask(__name__)
+FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist'))
+
+server = Flask(
+    __name__,
+    static_folder=FRONTEND_DIST,
+    static_url_path=''
+)
 
 # Configurar CORS para SaaS (frontend e backend em domínios distintos)
 try:
@@ -691,12 +697,24 @@ def api_get_logo_url(ticker):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ==================== ROTA PRINCIPAL ====================
+# ==================== SERVE FRONTEND (SPA) ====================
 
-@server.route("/")
-def index():
-    """Rota principal - redireciona para o frontend React"""
-    return jsonify({"message": "API REST do FINMA", "status": "running"})
+@server.route('/', defaults={'path': ''})
+@server.route('/<path:path>')
+def serve_frontend(path):
+    # Evitar capturar rotas de API
+    if path.startswith('api/'):
+        return jsonify({"error": "Not Found"}), 404
+
+    # Servir arquivos estáticos gerados pelo Vite
+    if path and os.path.exists(os.path.join(server.static_folder, path)):
+        return send_from_directory(server.static_folder, path)
+
+    # Fallback para index.html (React Router)
+    index_path = os.path.join(server.static_folder, 'index.html')
+    if os.path.exists(index_path):
+        return send_from_directory(server.static_folder, 'index.html')
+    return jsonify({"message": "Frontend não construído. Rode npm run build em frontend/"}), 200
 
 # ==================== APIs DE CARTEIRA ====================
 
