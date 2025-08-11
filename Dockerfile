@@ -6,8 +6,7 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install --no-audit --no-fund
 COPY frontend .
-# Rebuild esbuild to ensure correct binary on Debian
-RUN npm rebuild esbuild && npm run build
+RUN npm run build
 
 ###########################
 # Backend runtime stage    #
