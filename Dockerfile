@@ -6,7 +6,7 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install --no-audit --no-fund
 COPY frontend .
-RUN node node_modules/typescript/bin/tsc && node node_modules/vite/bin/vite.js build
+RUN node node_modules/vite/bin/vite.js build
 
 ###########################
 # Backend runtime stage    #
