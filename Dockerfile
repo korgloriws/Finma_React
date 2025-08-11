@@ -4,7 +4,7 @@
 FROM node:20-bullseye-slim AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm install --no-audit --no-fund
 COPY frontend .
 # Rebuild esbuild to ensure correct binary on Debian
 RUN npm rebuild esbuild && npm run build
