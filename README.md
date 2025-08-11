@@ -184,6 +184,9 @@ Passos:
    - name: `bancos`, mountPath: `/app/backend/bancos_usuarios`, size: `1GB`
 4) Deployará automaticamente a cada push na branch padrão (main)
 
+Se aparecer erro no Docker build do front (npm run build exit code 126), já incluí no Dockerfile:
+- Uso de imagem Debian (`node:20-bullseye-slim`) e `npm rebuild esbuild` antes do build para garantir o binário correto.
+
 Observações:
 - O backend expõe a API em `/api/*` e o Flask também serve o React build como SPA (fallback `index.html`), então não precisa configurar proxy.
 - Em deploy único, não é necessário setar `VITE_API_BASE_URL` (o front consome `/api`).

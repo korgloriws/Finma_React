@@ -1,12 +1,13 @@
 ###########################
 # Frontend build stage    #
 ###########################
-FROM node:20-alpine AS frontend-build
+FROM node:20-bullseye-slim AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY frontend .
-RUN npm run build
+# Rebuild esbuild to ensure correct binary on Debian
+RUN npm rebuild esbuild && npm run build
 
 ###########################
 # Backend runtime stage    #
@@ -21,7 +22,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Dependências básicas (bcrypt/pandas wheels costumam funcionar sem build, mas deixamos build-essential se necessário)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
+    && apt-get install -y --no-install-recommends build-essential curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
