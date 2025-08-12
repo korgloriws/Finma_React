@@ -302,7 +302,7 @@ export default function CarteiraPage() {
           className="bg-gradient-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border cursor-pointer hover:bg-primary/20 transition-colors"
           onClick={() => setExpandedTipos(prev => ({ ...prev, [tipo]: !prev[tipo] }))}
         >
-          <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <button className="p-1 hover:bg-white/20 rounded transition-colors">
                 {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
@@ -333,7 +333,7 @@ export default function CarteiraPage() {
           <>
             {ativosDoTipo.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[900px]">
                   <thead className="bg-muted/30">
                     <tr>
                       <th className="px-4 py-3 text-left font-medium">Ticker</th>
@@ -354,7 +354,7 @@ export default function CarteiraPage() {
                       const porcentagemAtivo = valorTotal > 0 ? ((ativo?.valor_total || 0) / valorTotal * 100).toFixed(1) : '0.0'
                       return (
                         <tr key={ativo?.id} className="hover:bg-muted/40 transition-colors">
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 min-w-[160px]">
                             <TickerWithLogo ticker={ativo?.ticker || ''} nome={ativo?.nome_completo || ''} />
                           </td>
                           <td className="px-4 py-3">{ativo?.nome_completo}</td>
@@ -441,7 +441,7 @@ export default function CarteiraPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-3xl font-bold">Minha Carteira</h1>
         <button
           onClick={() => setOcultarValor(!ocultarValor)}
@@ -544,7 +544,7 @@ export default function CarteiraPage() {
                   <button
                     onClick={handleAdicionar}
                     disabled={adicionarMutation.isPending}
-                    className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                    className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 whitespace-nowrap"
                   >
                     {adicionarMutation.isPending ? 'Adicionando...' : 'Adicionar'}
                   </button>
@@ -934,7 +934,7 @@ export default function CarteiraPage() {
                       .slice(0, 7)
                       .map((ativo) => (
                         <div key={ativo?.id} className="flex justify-between items-center p-2 bg-background rounded">
-                          <TickerWithLogo ticker={ativo?.ticker || ''} size="sm" />
+                          <div className="min-w-[120px]"><TickerWithLogo ticker={ativo?.ticker || ''} size="sm" /></div>
                           <span className="text-blue-600 font-bold">
                             {(ativo?.roe || 0).toFixed(2)}%
                           </span>
@@ -956,7 +956,7 @@ export default function CarteiraPage() {
                       .slice(0, 7)
                       .map((ativo) => (
                         <div key={ativo?.id} className="flex justify-between items-center p-2 bg-background rounded">
-                          <TickerWithLogo ticker={ativo?.ticker || ''} size="sm" />
+                          <div className="min-w-[120px]"><TickerWithLogo ticker={ativo?.ticker || ''} size="sm" /></div>
                           <span className="text-green-600 font-bold">
                             {formatDividendYield(ativo?.dy)}
                           </span>
@@ -978,7 +978,7 @@ export default function CarteiraPage() {
                       .slice(0, 7)
                       .map((ativo) => (
                         <div key={ativo?.id} className="flex justify-between items-center p-2 bg-background rounded">
-                          <TickerWithLogo ticker={ativo?.ticker || ''} size="sm" />
+                          <div className="min-w-[120px]"><TickerWithLogo ticker={ativo?.ticker || ''} size="sm" /></div>
                           <span className="text-yellow-600 font-bold">
                             {(ativo?.pl || 0).toFixed(2)}
                           </span>
@@ -1000,7 +1000,7 @@ export default function CarteiraPage() {
                       .slice(0, 7)
                       .map((ativo) => (
                         <div key={ativo?.id} className="flex justify-between items-center p-2 bg-background rounded">
-                          <TickerWithLogo ticker={ativo?.ticker || ''} size="sm" />
+                          <div className="min-w-[120px]"><TickerWithLogo ticker={ativo?.ticker || ''} size="sm" /></div>
                           <span className="text-orange-600 font-bold">
                             {(ativo?.pvp || 0).toFixed(2)}
                           </span>
@@ -1114,8 +1114,8 @@ export default function CarteiraPage() {
                       </div>
                       
                       {ativo.proventos && ativo.proventos.length > 0 ? (
-                        <div className="overflow-x-auto">
-                          <table className="w-full">
+                         <div className="overflow-x-auto">
+                           <table className="w-full min-w-[600px]">
                             <thead className="bg-muted/30">
                               <tr>
                                 <th className="px-4 py-2 text-left font-medium">Data</th>
@@ -1221,7 +1221,7 @@ export default function CarteiraPage() {
                         
                         {provento.proventos_recebidos && provento.proventos_recebidos.length > 0 ? (
                           <div className="overflow-x-auto">
-                            <table className="w-full">
+                            <table className="w-full min-w-[700px]">
                               <thead className="bg-muted/30">
                                 <tr>
                                   <th className="px-4 py-2 text-left font-medium">Data</th>

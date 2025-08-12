@@ -91,7 +91,7 @@ export default function Layout({ children }: LayoutProps) {
           />
           <div className="absolute inset-y-0 left-0 w-72 max-w-[85%] bg-card border-r border-border shadow-xl p-4 flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h1 className="text-xl font-bold text-foreground">Finma</h1>
+              <h1 className="text-xl font-bold text-foreground">FinMa</h1>
               <button
                 onClick={() => setMobileMenuOpen(false)}
                 className="p-2 rounded hover:bg-accent text-muted-foreground"

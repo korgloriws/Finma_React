@@ -485,13 +485,13 @@ export default function ControlePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Controle Financeiro</h1>
           <p className="text-muted-foreground">Gerencie suas receitas, despesas e alimentação</p>
       </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
         {/* Filtros */}
           <div className="flex items-center gap-2">
               <select
@@ -540,7 +540,7 @@ export default function ControlePage() {
         </div>
 
       {/* Sistema de Abas */}
-      <div className="flex space-x-1 bg-muted/30 p-1 rounded-lg">
+      <div className="flex space-x-1 bg-muted/30 p-1 rounded-lg overflow-x-auto">
         <button
           onClick={() => setAbaAtiva('financeiro')}
           className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -575,7 +575,7 @@ export default function ControlePage() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-card border border-border rounded-xl p-6"
         >
-          <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
             <div className="p-2 bg-green-100 dark:bg-green-900/20 rounded-lg">
               <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
                   </div>
@@ -593,7 +593,7 @@ export default function ControlePage() {
           transition={{ delay: 0.1 }}
           className="bg-card border border-border rounded-xl p-6"
         >
-          <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
             <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded-lg">
               <TrendingDown className="w-5 h-5 text-red-600 dark:text-red-400" />
             </div>
@@ -611,7 +611,7 @@ export default function ControlePage() {
           transition={{ delay: 0.2 }}
           className="bg-card border border-border rounded-xl p-6"
         >
-          <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
             <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
               <Wallet className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
@@ -629,7 +629,7 @@ export default function ControlePage() {
           transition={{ delay: 0.3 }}
           className="bg-card border border-border rounded-xl p-6"
         >
-          <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
             <div className="p-2 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
               <PiggyBank className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
@@ -738,7 +738,7 @@ export default function ControlePage() {
         <h3 className="text-lg font-semibold text-foreground mb-4">Receitas</h3>
         
         {/* Formulário de Adição */}
-        <div className="flex gap-4 mb-6">
+        <div className="flex gap-2 sm:gap-4 mb-6 flex-wrap">
           <input
             type="text"
             placeholder="Nome da receita"
@@ -869,7 +869,7 @@ export default function ControlePage() {
         <h3 className="text-lg font-semibold text-foreground mb-4">Cartões de Crédito</h3>
         
         {/* Formulário de Adição */}
-        <div className="flex gap-4 mb-6">
+        <div className="flex gap-2 sm:gap-4 mb-6 flex-wrap">
           <input
             type="text"
             placeholder="Nome do cartão"
@@ -1025,7 +1025,7 @@ export default function ControlePage() {
         <h3 className="text-lg font-semibold text-foreground mb-4">Outros Gastos</h3>
         
         {/* Formulário de Adição */}
-        <div className="flex gap-4 mb-6">
+        <div className="flex gap-2 sm:gap-4 mb-6 flex-wrap">
           <input
             type="text"
             placeholder="Nome do gasto"

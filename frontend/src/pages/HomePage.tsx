@@ -70,7 +70,7 @@ export default function HomePage() {
   const outros = resumoHome?.outros?.registros || []
   const marmitas = resumoHome?.marmitas?.registros || []
   const evolucaoFinanceira = resumoHome?.evolucao_financeira || []
-  const saldo = resumoHome?.saldo || 0
+  
   
 
 
@@ -93,7 +93,7 @@ export default function HomePage() {
 
   
 
-  const patrimonioTotal = totalInvestido + saldoCalculado + totalReceitas
+  
 
   const ativosPorTipo = carteira?.reduce((acc, ativo) => {
     const tipo = ativo?.tipo || 'Desconhecido'

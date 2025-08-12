@@ -39,25 +39,25 @@ export default function TickerWithLogo({
   return (
     <Link 
       to={`/detalhes?ticker=${displayTicker}`}
-      className={`flex items-center gap-2 hover:text-primary transition-colors ${className}`}
+      className={`flex items-center gap-2 hover:text-primary transition-colors min-w-0 ${className}`}
     >
       {logoUrl ? (
         <img 
           src={logoUrl} 
           alt={`Logo ${displayTicker}`}
-          className={`${logoSize} rounded`}
+          className={`${logoSize} rounded flex-shrink-0 object-contain`}
           onError={(e) => {
             e.currentTarget.style.display = 'none'
           }}
         />
       ) : (
-        <div className={`${logoSize} bg-muted rounded flex items-center justify-center font-medium`}>
+        <div className={`${logoSize} bg-muted rounded flex items-center justify-center font-medium flex-shrink-0`}>
           {displayTicker.charAt(0)}
         </div>
       )}
-      <span className="font-medium">{displayTicker}</span>
+      <span className="font-medium truncate max-w-[80px] sm:max-w-none">{displayTicker}</span>
       {showName && nome && (
-        <span className="text-muted-foreground text-sm">({nome})</span>
+        <span className="text-muted-foreground text-sm hidden md:inline">({nome})</span>
       )}
     </Link>
   )

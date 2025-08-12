@@ -179,7 +179,7 @@ export default function AnalisePage() {
       animate={{ opacity: 1, y: 0 }}
       className="bg-card border border-border rounded-lg p-6 mb-6"
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Filter className="w-5 h-5 text-blue-500" />
           Filtros para Ações
@@ -282,7 +282,7 @@ export default function AnalisePage() {
       animate={{ opacity: 1, y: 0 }}
       className="bg-card border border-border rounded-lg p-6 mb-6"
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Filter className="w-5 h-5 text-green-500" />
           Filtros para BDRs
@@ -385,7 +385,7 @@ export default function AnalisePage() {
       animate={{ opacity: 1, y: 0 }}
       className="bg-card border border-border rounded-lg p-6 mb-6"
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Filter className="w-5 h-5 text-purple-500" />
           Filtros para FIIs
@@ -748,7 +748,7 @@ export default function AnalisePage() {
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex items-center justify-between flex-wrap gap-3"
       >
         <h1 className="text-3xl font-bold text-foreground">Análise de Oportunidades</h1>
         {loadingCarteira && (
@@ -766,10 +766,10 @@ export default function AnalisePage() {
         className="bg-card border border-border rounded-lg"
       >
         <div className="border-b border-border">
-          <div className="flex">
+          <div className="flex overflow-x-auto">
             <button
               onClick={() => setActiveTab('lista')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'lista'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-muted-foreground hover:text-foreground'
@@ -782,7 +782,7 @@ export default function AnalisePage() {
             </button>
             <button
               onClick={() => setActiveTab('graficos')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
                 activeTab === 'graficos'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-muted-foreground hover:text-foreground'
@@ -801,7 +801,7 @@ export default function AnalisePage() {
             <div>
               {/* Sub-tabs para tipos de ativos */}
               <div className="border-b border-border mb-6">
-                <div className="flex">
+                <div className="flex overflow-x-auto">
                   <button
                     onClick={() => setActiveSubTab('acoes')}
                     className={`px-4 py-2 text-sm font-medium transition-colors ${

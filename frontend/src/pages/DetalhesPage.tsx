@@ -259,7 +259,7 @@ export default function DetalhesPage() {
       whileHover={{ scale: 1.02 }}
       className="bg-card border border-border rounded-xl p-6 hover:shadow-lg transition-all duration-200"
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div className={`p-3 rounded-lg bg-${color}-100 dark:bg-${color}-900/30`}>
           <Icon className={`w-6 h-6 text-${color}-600 dark:text-${color}-400`} />
         </div>
@@ -303,7 +303,7 @@ export default function DetalhesPage() {
     <motion.div 
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="flex items-center justify-between py-3 px-4 rounded-lg hover:bg-muted/30 transition-colors"
+      className="flex items-center justify-between flex-wrap gap-3 py-3 px-4 rounded-lg hover:bg-muted/30 transition-colors"
     >
       <div className="flex items-center gap-3">
         {Icon && (
@@ -311,7 +311,9 @@ export default function DetalhesPage() {
         )}
         <span className="font-medium text-sm text-muted-foreground">{label}:</span>
       </div>
-      <span className="text-sm font-semibold text-foreground">{value || '-'}</span>
+      <span className="text-sm font-semibold text-foreground text-right break-all max-w-full sm:max-w-[60%] ml-auto">
+        {value || '-'}
+      </span>
     </motion.div>
   )
 
@@ -528,7 +530,7 @@ export default function DetalhesPage() {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <h1 className="text-3xl font-bold text-foreground">Detalhes do Ativo</h1>
         
-      <div className="flex gap-4 items-center">
+        <div className="flex gap-2 sm:gap-4 items-center w-full lg:w-auto">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={20} />
           <input
@@ -544,7 +546,7 @@ export default function DetalhesPage() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           onClick={handleBuscar}
-          className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          className="px-4 sm:px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap"
         >
           Buscar
           </motion.button>
@@ -598,7 +600,7 @@ export default function DetalhesPage() {
                 className="space-y-6"
               >
                 {/* Header do ativo */}
-                <div className="flex items-center gap-4 p-6 bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl border border-primary/20">
+                <div className="flex items-center gap-4 p-6 bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl border border-primary/20 flex-wrap">
                   {logoUrl ? (
                     <img 
                       src={logoUrl} 
@@ -610,14 +612,14 @@ export default function DetalhesPage() {
                       {ticker.replace('.SA', '').replace('.sa', '').slice(0, 4)}
                     </div>
                   )}
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 flex-wrap">
-                      <h2 className="text-2xl font-bold text-foreground">{info.longName}</h2>
+                      <h2 className="text-2xl font-bold text-foreground min-w-0 break-words">{info.longName}</h2>
                       <motion.span
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.2 }}
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border shrink-0 ${
                           strategyDetails.meets
                             ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800'
                             : 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800'
@@ -629,11 +631,11 @@ export default function DetalhesPage() {
                         ) : (
                           <XCircle className="w-3.5 h-3.5" />
                         )}
-                        <span className="hidden sm:inline">
+                        <span className="hidden sm:inline whitespace-nowrap">
                           {strategyDetails.meets ? 'Dentro da estratégia' : 'Fora da estratégia'}
                         </span>
                       </motion.span>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                         <span className="hidden md:inline">Critérios:</span>
                         {strategyDetails.criteria.map((c, idx) => (
                           <motion.span
@@ -969,7 +971,7 @@ export default function DetalhesPage() {
                 className="space-y-6"
               >
                 {/* Controles dos proventos */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
                   <label className="font-medium flex items-center gap-2">
                     <Calendar className="w-5 h-5 text-green-500" />
                     Período dos Proventos:
@@ -994,7 +996,7 @@ export default function DetalhesPage() {
                 <InfoSection title="Histórico de Proventos" icon={DollarSign} color="green">
                   {dividendData.length > 0 ? (
                     <div className="overflow-x-auto">
-                      <table className="w-full">
+                      <table className="w-full min-w-[700px]">
                         <thead className="bg-muted/30">
                           <tr>
                             <th className="px-4 py-3 text-left font-medium">Data</th>
@@ -1110,7 +1112,7 @@ export default function DetalhesPage() {
                       <LoadingSpinner text="Carregando comparação..." />
                     ) : comparacao && comparacao.length > 0 ? (
                       <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full min-w-[900px]">
                           <thead className="bg-muted/30">
                             <tr>
                               <th className="px-4 py-3 text-left font-medium">Ticker</th>
@@ -1133,9 +1135,9 @@ export default function DetalhesPage() {
                                 transition={{ delay: index * 0.1 }}
                                 className={`${index % 2 === 0 ? 'bg-background' : 'bg-muted/20'} hover:bg-muted/40 transition-colors`}
                               >
-                                <td className="px-4 py-3">
-                                  <TickerWithLogo ticker={ativo.ticker} size="sm" />
-                                </td>
+                <td className="px-4 py-3 min-w-[120px]">
+                  <TickerWithLogo ticker={ativo.ticker} size="sm" />
+                </td>
                                 <td className="px-4 py-3">{ativo.nome}</td>
                                 <td className="px-4 py-3 font-semibold">{formatCurrency(ativo.preco_atual)}</td>
                                 <td className="px-4 py-3">{formatNumber(ativo.pl)}</td>
