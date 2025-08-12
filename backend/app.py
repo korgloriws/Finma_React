@@ -23,6 +23,7 @@ from models import (
     set_usuario_atual, get_usuario_atual, inicializar_bancos_usuario, criar_sessao, invalidar_sessao,
 
     verificar_resposta_seguranca, alterar_senha_direta, atualizar_pergunta_seguranca,
+    invalidar_todas_sessoes,
     obter_historico_carteira_comparado
 )
 
@@ -56,6 +57,12 @@ except Exception:
 
 # Inicializar tabela de usuários
 criar_tabela_usuarios()
+
+# Segurança: ao subir/reiniciar servidor, invalidar todas as sessões persistidas
+try:
+    invalidar_todas_sessoes()
+except Exception:
+    pass
 
 # ==================== APIs DE AUTENTICAÇÃO ====================
 
@@ -137,11 +144,10 @@ def api_login():
             cookie_samesite = 'None' if is_production else 'Lax'
             cookie_secure = True if is_production else False
 
-            # Token de sessão httpOnly
+            # Token de sessão httpOnly como cookie de sessão (sem max_age): expira ao fechar o navegador
             response.set_cookie(
                 'session_token',
                 session_token,
-                max_age=3600,
                 httponly=True,
                 samesite=cookie_samesite,
                 secure=cookie_secure
@@ -475,7 +481,8 @@ def api_get_data():
 def api_get_ativo_details(ticker):
     try:
         ticker = ticker.strip().upper()
-        if '.' not in ticker and len(ticker) <= 6:
+        # Se contiver hifen (criptos ex: BTC-USD), não acrescentar .SA
+        if '-' not in ticker and '.' not in ticker and len(ticker) <= 6:
             ticker += '.SA'
         
         acao = yf.Ticker(ticker)
@@ -592,7 +599,7 @@ def api_get_ativo_historico(ticker):
     try:
         periodo = request.args.get('periodo', '1y')
         ticker = ticker.strip().upper()
-        if '.' not in ticker and len(ticker) <= 6:
+        if '-' not in ticker and '.' not in ticker and len(ticker) <= 6:
             ticker += '.SA'
         
         acao = yf.Ticker(ticker)
@@ -712,8 +719,12 @@ def serve_frontend(path):
     if path.startswith('api/'):
         return jsonify({"error": "Not Found"}), 404
 
-    # Servir arquivos estáticos gerados pelo Vite
-    if path and os.path.exists(os.path.join(server.static_folder, path)):
+    # Servir arquivos estáticos gerados pelo Vite e service worker/manifest
+    requested_path = os.path.join(server.static_folder, path) if path else None
+    if path and os.path.exists(requested_path):
+        return send_from_directory(server.static_folder, path)
+    # Service worker e manifest que ficam na raiz do build do Vite
+    if path in ('sw.js', 'manifest.webmanifest'):
         return send_from_directory(server.static_folder, path)
 
     # Fallback para index.html (React Router)

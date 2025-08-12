@@ -163,7 +163,7 @@ export default function CarteiraPage() {
   const handleAdicionar = useCallback(() => {
     if (!inputTicker.trim() || !inputQuantidade.trim()) return
     
-    const quantidade = parseInt(inputQuantidade)
+    const quantidade = parseFloat(inputQuantidade.replace(',', '.'))
     if (isNaN(quantidade) || quantidade <= 0) return
     
     const normalizedTicker = normalizeTicker(inputTicker.trim())
@@ -189,7 +189,7 @@ export default function CarteiraPage() {
   const handleSalvarEdicao = useCallback(() => {
     if (!editingId || !editQuantidade.trim()) return
     
-    const quantidade = parseInt(editQuantidade)
+    const quantidade = parseFloat(editQuantidade.replace(',', '.'))
     if (isNaN(quantidade) || quantidade <= 0) return
     
     atualizarMutation.mutate({ id: editingId, quantidade })
@@ -361,7 +361,7 @@ export default function CarteiraPage() {
                           <td className="px-4 py-3">
                             {editingId === ativo?.id ? (
                               <input
-                                type="number"
+                                type="text"
                                 value={editQuantidade}
                                 onChange={(e) => setEditQuantidade(e.target.value)}
                                 className="w-20 px-2 py-1 border border-border rounded bg-background text-foreground"
@@ -516,10 +516,10 @@ export default function CarteiraPage() {
                 <div>
                   <label className="block text-sm font-medium mb-2">Quantidade</label>
                   <input
-                    type="number"
+                    type="text"
                     value={inputQuantidade}
                     onChange={(e) => setInputQuantidade(e.target.value)}
-                    placeholder="Ex: 100"
+                    placeholder="Ex: 100 ou 0,0012"
                     className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>

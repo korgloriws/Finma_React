@@ -12,11 +12,11 @@ import json
 import secrets
 
 
-USUARIO_ATUAL = None  # legacy, não usado para autenticação
+USUARIO_ATUAL = None  
 SESSION_LOCK = threading.Lock()
 
 def set_usuario_atual(username):
-    # Mantido por compatibilidade, mas não é utilizado para determinar o usuário atual.
+   
     global USUARIO_ATUAL
     with SESSION_LOCK:
         USUARIO_ATUAL = username
@@ -37,7 +37,7 @@ def _create_sessions_table_if_needed():
         conn.close()
 
 def criar_sessao(username: str, duracao_segundos: int = 3600) -> str:
-    """Cria uma sessão persistida e retorna o token."""
+    """Cria uma sessão persistida e retorna o token. Mesmo sem cookie persistente, expiramos em servidor."""
     _create_sessions_table_if_needed()
     token = secrets.token_urlsafe(32)
     expira_em = int(time.time()) + int(duracao_segundos)
@@ -64,8 +64,23 @@ def invalidar_sessao(token: str) -> None:
         except Exception:
             pass
 
+def invalidar_todas_sessoes() -> None:
+    """Remove todas as sessões persistidas. Útil ao reiniciar o servidor."""
+    try:
+        _create_sessions_table_if_needed()
+        conn = sqlite3.connect(USUARIOS_DB_PATH)
+        c = conn.cursor()
+        c.execute('DELETE FROM sessoes')
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 def get_usuario_atual():
-    """Resolve usuário autenticado a partir de cookie 'session_token'."""
+   
     try:
         from flask import request
         token = request.cookies.get('session_token')
@@ -126,7 +141,21 @@ def get_db_path(usuario, tipo_db):
     return db_path
 
 
-USUARIOS_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "usuarios.db")
+
+_base_dir = os.path.dirname(os.path.abspath(__file__))
+_legacy_path = os.path.join(_base_dir, "usuarios.db")  
+_auth_dir = os.path.join(_base_dir, "bancos_usuarios", "_auth")
+try:
+    os.makedirs(_auth_dir, exist_ok=True)
+except Exception:
+    pass
+_default_persist_path = os.path.join(_auth_dir, "usuarios.db")
+
+
+USUARIOS_DB_PATH = (
+    os.getenv("USUARIOS_DB_PATH")
+    or (_legacy_path if os.path.exists(_legacy_path) else _default_persist_path)
+)
 
 LISTA_ACOES = [
     
@@ -1398,11 +1427,6 @@ def carregar_ativos():
         print(f" Erro no carregamento dos ativos: {e}")
 
 
-
-
-
-
-
 def obter_informacoes(ticker, tipo_ativo, max_retentativas=3):
     def to_float_or_inf(valor):
         try:
@@ -1419,17 +1443,17 @@ def obter_informacoes(ticker, tipo_ativo, max_retentativas=3):
             acao = yf.Ticker(ticker)
             info = acao.info
 
-            # Verificação mais flexível para diferentes tipos de ativos
+           
             if not info:
                 return None
 
-            # Para FIIs, não exigir sector
+
             if tipo_ativo == 'FII':
                 if not info.get("longName") and not info.get("shortName"):
                     print(f" Ativo {ticker} não encontrado na API do Yahoo Finance. Ignorando...")
                     return None
             else:
-                # Para outros tipos, verificar se tem sector
+
                 if "sector" not in info:
                     print(f" Ativo {ticker} não encontrado na API do Yahoo Finance. Ignorando...")
                     return None
@@ -1574,11 +1598,6 @@ def formatar_numero(numero, tipo='preco'):
     return numero
 
 
-
-
-
-
-
 def obter_todas_informacoes(ticker):
     try:
         acao = yf.Ticker(ticker)
@@ -1633,7 +1652,7 @@ def cadastrar_usuario(nome, username, senha, pergunta_seguranca=None, resposta_s
     senha_hash = bcrypt.hashpw(senha.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     data_cadastro = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
-    # Hash da resposta de segurança se fornecida
+
     resposta_hash = None
     if pergunta_seguranca and resposta_seguranca:
         resposta_hash = bcrypt.hashpw(resposta_seguranca.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -1829,6 +1848,7 @@ def obter_cotacao_dolar():
 def obter_informacoes_ativo(ticker):
 
     try:
+        # Não acrescentar .SA aqui; API já envia normalizado
         acao = yf.Ticker(ticker)
         info = acao.info
         preco_atual = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
@@ -1837,6 +1857,7 @@ def obter_informacoes_ativo(ticker):
             "EQUITY": "Ação",
             "ETF": "FII",
             "CRYPTOCURRENCY": "Criptomoeda",
+            "CURRENCY": "Criptomoeda",
         }
         tipo_raw = info.get("quoteType", "Desconhecido")
         tipo = tipo_map.get(tipo_raw, "Desconhecido")
@@ -1847,7 +1868,10 @@ def obter_informacoes_ativo(ticker):
 
         cotacao_brl = obter_cotacao_dolar()
         if tipo == "Criptomoeda":
-            preco_atual *= cotacao_brl
+            try:
+                preco_atual = float(preco_atual) * float(cotacao_brl)
+            except Exception:
+                pass
             
         return {
             "ticker": ticker.upper(),
@@ -2347,7 +2371,7 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
         except Exception:
             ipca_series = [None for _ in datas_labels]
 
-        # Rebase para 100 (onde possível)
+
         def rebase(series):
             vals = [v for v in series if v is not None and v > 0]
             if not vals:
@@ -2355,7 +2379,7 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
             base = vals[0]
             return [ (v / base * 100.0) if (v is not None and v > 0) else None for v in series ]
 
-        # Reduzir por granularidade
+
         def reduce_by_granularity(labels, series_dict, gran):
             if gran in ('mensal', 'maximo'):
                 return labels, series_dict

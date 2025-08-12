@@ -9,7 +9,12 @@ export function normalizeTicker(ticker: string): string {
   // Remove espaços e converte para maiúsculo
   const cleanTicker = ticker.trim().toUpperCase()
   
-  // Se já tem um ponto (como .SA, .O, etc), mantém como está
+  
+  if (cleanTicker.includes('-')) {
+    return cleanTicker
+  }
+
+
   if (cleanTicker.includes('.')) {
     return cleanTicker
   }

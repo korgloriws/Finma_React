@@ -35,6 +35,9 @@ COPY backend /app/backend
 
 # Copiar frontend build para ser servido pelo Flask
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
+# Garantir que service worker e manifest existam
+RUN test -f /app/frontend/dist/sw.js || true
+RUN test -f /app/frontend/dist/manifest.webmanifest || true
 
 EXPOSE 8080
 

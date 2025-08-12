@@ -20,9 +20,9 @@ function App() {
       <ThemeProvider>
         <Routes>
           {/* Rotas públicas */}
-                  <Route path="/login" element={<LoginPage />} />
-        <Route path="/recuperar-senha" element={<RecuperacaoSenhaPage />} />
-        <Route path="/configurar-seguranca" element={<ConfigurarSegurancaPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/recuperar-senha" element={<RecuperacaoSenhaPage />} />
+          <Route path="/configurar-seguranca" element={<ConfigurarSegurancaPage />} />
           
           {/* Rotas protegidas */}
           <Route path="/" element={
