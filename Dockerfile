@@ -21,7 +21,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Dependências básicas (bcrypt/pandas wheels costumam funcionar sem build, mas deixamos build-essential se necessário)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential curl ca-certificates \
+    && apt-get install -y --no-install-recommends build-essential curl ca-certificates imagemagick \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -35,6 +35,10 @@ COPY backend /app/backend
 
 # Copiar frontend build para ser servido pelo Flask
 COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
+# Garantir ícones PWA no build caso não existam
+RUN mkdir -p /app/frontend/dist/icons \
+    && [ -f /app/frontend/dist/icons/icon-192.png ] || convert -size 192x192 canvas:#0f172a /app/frontend/dist/icons/icon-192.png \
+    && [ -f /app/frontend/dist/icons/icon-512.png ] || convert -size 512x512 canvas:#0f172a /app/frontend/dist/icons/icon-512.png
 
 EXPOSE 8080
 

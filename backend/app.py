@@ -724,7 +724,7 @@ def serve_frontend(path):
     if path and os.path.exists(requested_path):
         return send_from_directory(server.static_folder, path)
     # Service worker e manifest que ficam na raiz do build do Vite
-    if path in ('sw.js', 'manifest.webmanifest'):
+    if path in ('sw.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'):
         return send_from_directory(server.static_folder, path)
 
     # Fallback para index.html (React Router)

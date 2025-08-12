@@ -9,13 +9,11 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: FRONTEND_ORIGIN
-       
         value: ""
+      - key: USUARIOS_DB_PATH
+        value: /app/backend/bancos_usuarios/_auth/usuarios.db
     disk:
       name: bancos
       mountPath: /app/backend/bancos_usuarios
       sizeGB: 1
-    envVars:
-      - key: USUARIOS_DB_PATH
-        value: /app/backend/bancos_usuarios/_auth/usuarios.db
 

@@ -1,5 +1,5 @@
 /**
- * Normaliza um ticker para garantir que tenha .SA se necessário
+ 
  * @param ticker - O ticker original
  * @returns O ticker normalizado
  */
