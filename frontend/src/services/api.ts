@@ -15,7 +15,7 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    // Não enviar usuário via header; autenticação deve ser feita via login
+
     return config
   },
   (error) => {
