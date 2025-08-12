@@ -152,10 +152,11 @@ except Exception:
 _default_persist_path = os.path.join(_auth_dir, "usuarios.db")
 
 
-USUARIOS_DB_PATH = (
-    os.getenv("USUARIOS_DB_PATH")
-    or (_legacy_path if os.path.exists(_legacy_path) else _default_persist_path)
-)
+env_db = os.getenv("USUARIOS_DB_PATH")
+if env_db:
+    USUARIOS_DB_PATH = env_db
+else:
+    USUARIOS_DB_PATH = _legacy_path if os.path.exists(_legacy_path) else _default_persist_path
 
 LISTA_ACOES = [
     
