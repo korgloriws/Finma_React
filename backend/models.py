@@ -9,34 +9,106 @@ from datetime import datetime, timedelta
 import bcrypt
 import os
 import json
+import secrets
 
 
-USUARIO_ATUAL = None
+USUARIO_ATUAL = None  # legacy, não usado para autenticação
 SESSION_LOCK = threading.Lock()
 
 def set_usuario_atual(username):
-    
+    # Mantido por compatibilidade, mas não é utilizado para determinar o usuário atual.
     global USUARIO_ATUAL
     with SESSION_LOCK:
         USUARIO_ATUAL = username
 
+def _create_sessions_table_if_needed():
+    conn = sqlite3.connect(USUARIOS_DB_PATH)
+    try:
+        c = conn.cursor()
+        c.execute(
+            '''CREATE TABLE IF NOT EXISTS sessoes (
+                token TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                expira_em INTEGER NOT NULL
+            )'''
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+def criar_sessao(username: str, duracao_segundos: int = 3600) -> str:
+    """Cria uma sessão persistida e retorna o token."""
+    _create_sessions_table_if_needed()
+    token = secrets.token_urlsafe(32)
+    expira_em = int(time.time()) + int(duracao_segundos)
+    conn = sqlite3.connect(USUARIOS_DB_PATH)
+    try:
+        c = conn.cursor()
+        c.execute('INSERT OR REPLACE INTO sessoes (token, username, expira_em) VALUES (?, ?, ?)', (token, username, expira_em))
+        conn.commit()
+        return token
+    finally:
+        conn.close()
+
+def invalidar_sessao(token: str) -> None:
+    try:
+        conn = sqlite3.connect(USUARIOS_DB_PATH)
+        c = conn.cursor()
+        c.execute('DELETE FROM sessoes WHERE token = ?', (token,))
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 def get_usuario_atual():
-    """Retorna usuário da sessão em memória; se ausente, tenta cookie 'current_user'."""
-    global USUARIO_ATUAL
-    with SESSION_LOCK:
-        if USUARIO_ATUAL is None:
-            try:
-                from flask import request
-                cookie_user = request.cookies.get('current_user')
-                if cookie_user:
-                    USUARIO_ATUAL = cookie_user
-            except Exception:
-                pass
-        return USUARIO_ATUAL
+    """Resolve usuário autenticado a partir de cookie 'session_token'."""
+    try:
+        from flask import request
+        token = request.cookies.get('session_token')
+        if not token:
+            return None
+        _create_sessions_table_if_needed()
+        conn = sqlite3.connect(USUARIOS_DB_PATH)
+        try:
+            c = conn.cursor()
+            c.execute('SELECT username, expira_em FROM sessoes WHERE token = ?', (token,))
+            row = c.fetchone()
+            if not row:
+                return None
+            username, expira_em = row
+            if expira_em < int(time.time()):
+                # sessão expirada
+                try:
+                    c.execute('DELETE FROM sessoes WHERE token = ?', (token,))
+                    conn.commit()
+                except Exception:
+                    pass
+                return None
+            return username
+        finally:
+            conn.close()
+    except Exception:
+        return None
 
 def limpar_sessoes_expiradas():
-   
-    pass
+    try:
+        _create_sessions_table_if_needed()
+        conn = sqlite3.connect(USUARIOS_DB_PATH)
+        c = conn.cursor()
+        agora = int(time.time())
+        c.execute('DELETE FROM sessoes WHERE expira_em < ?', (agora,))
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def get_db_path(usuario, tipo_db):
 

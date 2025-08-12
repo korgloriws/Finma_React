@@ -20,7 +20,7 @@ from models import (
     consultar_marmitas, adicionar_marmita, remover_marmita, gastos_mensais,
 
     criar_tabela_usuarios, cadastrar_usuario, buscar_usuario_por_username, verificar_senha,
-    set_usuario_atual, get_usuario_atual, inicializar_bancos_usuario,
+    set_usuario_atual, get_usuario_atual, inicializar_bancos_usuario, criar_sessao, invalidar_sessao,
 
     verificar_resposta_seguranca, alterar_senha_direta, atualizar_pergunta_seguranca,
     obter_historico_carteira_comparado
@@ -124,8 +124,9 @@ def api_login():
             
 
             set_usuario_atual(username)
-            
-            # Criar resposta com cookie
+            # Criar sessão persistente baseada em token
+            session_token = criar_sessao(username, duracao_segundos=3600)
+            # Criar resposta com cookies
             response = make_response(jsonify({
                 "message": "Login realizado com sucesso",
                 "username": username
@@ -136,9 +137,10 @@ def api_login():
             cookie_samesite = 'None' if is_production else 'Lax'
             cookie_secure = True if is_production else False
 
+            # Token de sessão httpOnly
             response.set_cookie(
-                'current_user',
-                username,
+                'session_token',
+                session_token,
                 max_age=3600,
                 httponly=True,
                 samesite=cookie_samesite,
@@ -160,16 +162,20 @@ def api_logout():
         from models import limpar_sessoes_expiradas, SESSION_LOCK
         import threading
         
-        # Limpar variável global
-        from models import set_usuario_atual
-        set_usuario_atual(None)
+        # Invalidar token se existir
+        try:
+            token = request.cookies.get('session_token')
+            if token:
+                invalidar_sessao(token)
+        except Exception:
+            pass
         
         # Limpar sessões expiradas
         limpar_sessoes_expiradas()
         
         # Criar resposta e limpar cookie
         response = make_response(jsonify({"message": "Logout realizado com sucesso"}), 200)
-        response.delete_cookie('current_user')
+        response.delete_cookie('session_token')
         
         # Adicionar headers para forçar limpeza no frontend
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
