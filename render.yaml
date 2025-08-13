@@ -10,10 +10,6 @@ services:
         value: production
       - key: FRONTEND_ORIGIN
         value: ""
-      - key: USUARIOS_DB_PATH
-        value: /app/backend/bancos_usuarios/_auth/usuarios.db
-    disk:
-      name: bancos
-      mountPath: /app/backend/bancos_usuarios
-      sizeGB: 1
+      - key: USUARIOS_DB_URL
+        value: "postgresql://neondb_owner:npg_RI1QJyPED6kt@ep-tiny-recipe-acbzzcs2-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
