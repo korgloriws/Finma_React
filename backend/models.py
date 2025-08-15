@@ -10,6 +10,7 @@ import bcrypt
 import os
 import json
 import secrets
+from typing import Any, Dict, Optional, Tuple
 
 
 USUARIO_ATUAL = None  
@@ -179,13 +180,50 @@ USUARIOS_DB_IS_PG = bool(USUARIOS_DB_URL)
 if USUARIOS_DB_IS_PG:
     try:
         import psycopg2  # type: ignore
+        from psycopg2.pool import ThreadedConnectionPool  # type: ignore
     except Exception:
         USUARIOS_DB_IS_PG = False
         USUARIOS_DB_URL = None
 
+PG_POOL: Optional["ThreadedConnectionPool"] = None  # type: ignore
+
+class _PooledConn:
+    def __init__(self, pool: "ThreadedConnectionPool", conn: Any):  # type: ignore
+        self._pool = pool
+        self._conn = conn
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+    def close(self):
+        try:
+            # Garantir que transações abertas não vazem
+            self._conn.rollback()
+        except Exception:
+            pass
+        try:
+            self._pool.putconn(self._conn)
+        except Exception:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+
+def _init_pg_pool_if_needed() -> Optional["ThreadedConnectionPool"]:  # type: ignore
+    global PG_POOL
+    if not USUARIOS_DB_IS_PG:
+        return None
+    if PG_POOL is None:
+        # Pool pequeno (Render Free + Neon Serverless)
+        minconn = int(os.getenv("PG_MINCONN", "1"))
+        maxconn = int(os.getenv("PG_MAXCONN", "4"))
+        PG_POOL = ThreadedConnectionPool(minconn=minconn, maxconn=maxconn, dsn=USUARIOS_DB_URL)  # type: ignore
+    return PG_POOL
+
 def _get_user_db_conn():
     if USUARIOS_DB_IS_PG:
-        return psycopg2.connect(USUARIOS_DB_URL)  # type: ignore
+        pool = _init_pg_pool_if_needed()
+        assert pool is not None
+        raw = pool.getconn()
+        return _PooledConn(pool, raw)
     return sqlite3.connect(USUARIOS_DB_PATH)
 
 def _adapt_sql(sql: str) -> str:
@@ -1423,6 +1461,25 @@ lock = threading.Lock()
 
 cache = Cache(config={'CACHE_TYPE': 'SimpleCache'})
 
+# Cache leve com TTL (em memória de processo)
+_TTL_CACHE: Dict[str, Tuple[float, Any]] = {}
+
+def cache_get(key: str) -> Any:
+    item = _TTL_CACHE.get(key)
+    if not item:
+        return None
+    expires_at, value = item
+    if time.time() > expires_at:
+        try:
+            del _TTL_CACHE[key]
+        except Exception:
+            pass
+        return None
+    return value
+
+def cache_set(key: str, value: Any, ttl_seconds: int) -> None:
+    _TTL_CACHE[key] = (time.time() + ttl_seconds, value)
+
 
 import threading
 import pandas as pd
@@ -1639,10 +1696,16 @@ def formatar_numero(numero, tipo='preco'):
 
 def obter_todas_informacoes(ticker):
     try:
-        acao = yf.Ticker(ticker)
-        print(f"Obtendo informações brutas para {ticker}...")
-        info = acao.info
-        historico = acao.history(period="max")
+        cache_key = f"yf_full:{ticker}"
+        cached = cache_get(cache_key)
+        if cached is not None:
+            info, historico = cached
+        else:
+            acao = yf.Ticker(ticker)
+            print(f"Obtendo informações brutas para {ticker}...")
+            info = acao.info
+            historico = acao.history(period="max")
+            cache_set(cache_key, (info, historico), ttl_seconds=600)
 
         return {
             "info": info if info else {},
@@ -1875,6 +1938,7 @@ def init_carteira_db(usuario=None):
             )
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_carteira_username ON carteira(username)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_carteira_username_ticker ON carteira(username, ticker)')
     else:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS carteira (
@@ -1904,6 +1968,7 @@ def init_carteira_db(usuario=None):
             )
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_hist_username ON historico_carteira(username)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_hist_username_data ON historico_carteira(username, data)')
     else:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS historico_carteira (
@@ -1928,6 +1993,7 @@ def init_carteira_db(usuario=None):
             )
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_mov_username ON movimentacoes(username)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_mov_username_data ON movimentacoes(username, data)')
     else:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS movimentacoes (
@@ -1947,7 +2013,14 @@ def init_carteira_db(usuario=None):
 def obter_cotacao_dolar():
 
     try:
-        cotacao = yf.Ticker("BRL=X").info.get("regularMarketPrice")
+        cache_key = "yf_info:BRL=X"
+        cached = cache_get(cache_key)
+        if cached is not None:
+            info = cached
+        else:
+            info = yf.Ticker("BRL=X").info
+            cache_set(cache_key, info, ttl_seconds=600)
+        cotacao = info.get("regularMarketPrice")
         return cotacao if cotacao else 5.0
     except:
         return 5.0
@@ -1955,9 +2028,15 @@ def obter_cotacao_dolar():
 def obter_informacoes_ativo(ticker):
 
     try:
-        # Não acrescentar .SA aqui; API já envia normalizado
-        acao = yf.Ticker(ticker)
-        info = acao.info
+      
+        cache_key = f"yf_info:{ticker}"
+        cached = cache_get(cache_key)
+        if cached is not None:
+            info = cached
+        else:
+            acao = yf.Ticker(ticker)
+            info = acao.info
+            cache_set(cache_key, info, ttl_seconds=300)
         preco_atual = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
         
         tipo_map = {
@@ -2426,8 +2505,12 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
         ticker_to_hist = {}
         for tk in tickers:
             try:
-                yf_ticker = yf.Ticker(tk)
-                hist = yf_ticker.history(start=data_ini - timedelta(days=5), end=data_fim + timedelta(days=5))
+                cache_key = f"yf_hist:{tk}:{data_ini.date()}:{data_fim.date()}"
+                hist = cache_get(cache_key)
+                if hist is None:
+                    yf_ticker = yf.Ticker(tk)
+                    hist = yf_ticker.history(start=data_ini - timedelta(days=5), end=data_fim + timedelta(days=5))
+                    cache_set(cache_key, hist, ttl_seconds=1800)
                 
                 try:
                     if hasattr(hist.index, 'tz') and hist.index.tz is not None:
@@ -2495,7 +2578,11 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
             hist = None
             for cand in candidates:
                 try:
-                    h = yf.Ticker(cand).history(start=data_ini - timedelta(days=5), end=data_fim + timedelta(days=5))
+                    cache_key = f"yf_hist:{cand}:{data_ini.date()}:{data_fim.date()}"
+                    h = cache_get(cache_key)
+                    if h is None:
+                        h = yf.Ticker(cand).history(start=data_ini - timedelta(days=5), end=data_fim + timedelta(days=5))
+                        cache_set(cache_key, h, ttl_seconds=1800)
                     if h is not None and not h.empty:
                         try:
                             if hasattr(h.index, 'tz') and h.index.tz is not None:

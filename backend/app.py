@@ -784,7 +784,7 @@ def api_remover_ativo(id):
 
 @server.route("/api/carteira/atualizar/<int:id>", methods=["PUT"])
 def api_atualizar_ativo(id):
-    """API para atualizar a quantidade de um ativo"""
+   
     try:
         data = request.get_json()
         quantidade = data.get('quantidade')
@@ -818,9 +818,21 @@ def api_get_movimentacoes():
 def api_get_historico_carteira():
 
     try:
-        agregacao = request.args.get('periodo', 'mensal')  # mensal, trimestral, semestral, anual, maximo
+        agregacao = request.args.get('periodo', 'mensal')  
         print(f"DEBUG: API /api/carteira/historico chamada com agregacao: {agregacao}")
-        dados = obter_historico_carteira_comparado(agregacao)
+        # Cache simples por usuário/período
+        try:
+            from models import cache_get, cache_set, get_usuario_atual
+            usuario = get_usuario_atual()
+            cache_key = f"hist:{usuario}:{agregacao}"
+            dados = cache_get(cache_key)
+            if dados is None:
+                from models import obter_historico_carteira_comparado
+                dados = obter_historico_carteira_comparado(agregacao)
+                cache_set(cache_key, dados, ttl_seconds=600)
+        except Exception:
+            from models import obter_historico_carteira_comparado
+            dados = obter_historico_carteira_comparado(agregacao)
         return jsonify(dados)
     except Exception as e:
         print(f"DEBUG: Erro na API: {e}")
@@ -915,16 +927,16 @@ def api_get_proventos():
 
 @server.route("/api/carteira/proventos-recebidos", methods=["GET"])
 def api_get_proventos_recebidos():
-    """API para obter proventos recebidos baseado na carteira do usuário"""
+    
     try:
         periodo = request.args.get('periodo', 'total')
         
-        # Obter carteira do usuário
+  
         carteira = obter_carteira()
         if not carteira:
             return jsonify([])
         
-        # Calcular data de início baseada no período
+        
         data_inicio = None
         if periodo != 'total':
             hoje = datetime.now()
@@ -946,7 +958,7 @@ def api_get_proventos_recebidos():
             try:
                 ticker = ativo['ticker']
                 quantidade = ativo['quantidade']
-                data_aquisicao = ativo.get('data_adicao')  # Data quando foi adicionado à carteira
+                data_aquisicao = ativo.get('data_adicao')  
                 
                 if not ticker.endswith('.SA') and not '.' in ticker:
                     ticker_normalizado = f"{ticker}.SA"
@@ -959,26 +971,26 @@ def api_get_proventos_recebidos():
                 if dividendos is not None and not dividendos.empty:
                     proventos_recebidos = []
                     for data, valor in dividendos.items():
-                        # Converter para datetime sem timezone para comparação
+                       
                         data_sem_timezone = data.replace(tzinfo=None)
                         
-                        # Só considerar dividendos pagos após a data de aquisição
+                        
                         if data_aquisicao:
                             try:
                                 data_aquisicao_dt = datetime.strptime(data_aquisicao, '%Y-%m-%d %H:%M:%S')
                                 if data_sem_timezone < data_aquisicao_dt:
-                                    continue  # Pular dividendos pagos antes da aquisição
+                                    continue  
                             except ValueError:
-                                # Se não conseguir fazer o parse, tentar só a data
+                               
                                 try:
                                     data_aquisicao_dt = datetime.strptime(data_aquisicao, '%Y-%m-%d')
                                     if data_sem_timezone < data_aquisicao_dt:
-                                        continue  # Pular dividendos pagos antes da aquisição
+                                        continue 
                                 except ValueError:
-                                    # Se ainda não conseguir, ignorar a data de aquisição
+                                  
                                     pass
                         
-                        # Filtrar por período se especificado
+                        
                         if data_inicio is None or data_sem_timezone >= data_inicio:
                             # Calcular valor recebido baseado na quantidade de ações
                             valor_recebido = float(valor) * quantidade

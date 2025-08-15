@@ -211,6 +211,118 @@ export default function CarteiraPage() {
   const topAtivos = carteira?.slice(0, 5) || []
   const ativosPositivos = carteira?.filter(ativo => ativo?.dy && ativo.dy > 0).length || 0
 
+  // Labels de período para insights
+  const periodoLabel = useMemo(() => {
+    switch (filtroPeriodo) {
+      case 'mensal': return 'no último mês'
+      case 'trimestral': return 'no último trimestre'
+      case 'semestral': return 'no último semestre'
+      case 'anual': return 'no último ano'
+      case 'maximo': return 'no período'
+      default: return 'no período'
+    }
+  }, [filtroPeriodo])
+
+  // Cálculo de variação percentual a partir de séries rebaseadas (100 no início)
+  const calcDeltaFromSeries = useCallback((series?: (number | null)[]) => {
+    if (!series || series.length < 2) return null
+    let firstIndex = -1
+    for (let i = 0; i < series.length; i++) { if (series[i] != null) { firstIndex = i; break } }
+    let lastIndex = -1
+    for (let i = series.length - 1; i >= 0; i--) { if (series[i] != null) { lastIndex = i; break } }
+    if (firstIndex === -1 || lastIndex === -1 || lastIndex === firstIndex) return null
+    const firstVal = series[firstIndex] as number
+    const lastVal = series[lastIndex] as number
+    return lastVal - firstVal
+  }, [])
+
+  const performanceResumo = useMemo(() => {
+    if (!historicoCarteira) return null
+    return {
+      carteira: calcDeltaFromSeries(historicoCarteira.carteira),
+      ibov: calcDeltaFromSeries(historicoCarteira.ibov),
+      ipca: calcDeltaFromSeries(historicoCarteira.ipca)
+    }
+  }, [historicoCarteira, calcDeltaFromSeries])
+
+  
+  const ativosComProventos = useMemo(() => {
+    return proventosRecebidos?.filter(a => a?.proventos_recebidos && a.proventos_recebidos.length > 0).length || 0
+  }, [proventosRecebidos])
+
+  const totalProventosRecebidos = useMemo(() => {
+    return proventosRecebidos?.reduce((sum, a) => sum + (a?.total_recebido || 0), 0) || 0
+  }, [proventosRecebidos])
+
+  const proventosPeriodoLabel = useMemo(() => {
+    switch (filtroProventos) {
+      case 'mes': return 'neste mês'
+      case '6meses': return 'nos últimos 6 meses'
+      case '1ano': return 'no último ano'
+      case '5anos': return 'nos últimos 5 anos'
+      case 'total': return 'no histórico'
+      default: return 'no período'
+    }
+  }, [filtroProventos])
+
+  
+  const calcDrawdownFromSeries = useCallback((series?: (number | null)[]) => {
+    if (!series || series.length < 2) return null
+    let peak = -Infinity
+    let maxDD = 0
+    for (const v of series) {
+      if (v == null) continue
+      if (v > peak) {
+        peak = v
+      } else if (peak > 0) {
+        const dd = ((v - peak) / peak) * 100
+        if (dd < maxDD) maxDD = dd
+      }
+    }
+    return maxDD // negativo ou 0
+  }, [])
+
+  const calcVolFromSeries = useCallback((series?: (number | null)[]) => {
+    if (!series || series.length < 3) return null
+    const vals = series.filter(v => v != null) as number[]
+    if (vals.length < 3) return null
+    const returns: number[] = []
+    for (let i = 1; i < vals.length; i++) {
+      if (vals[i - 1] > 0) {
+        returns.push(((vals[i] / vals[i - 1]) - 1) * 100)
+      }
+    }
+    if (returns.length < 2) return null
+    const mean = returns.reduce((a, b) => a + b, 0) / returns.length
+    const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (returns.length - 1)
+    return Math.sqrt(variance)
+  }, [])
+
+  const carteiraDrawdown = useMemo(() => calcDrawdownFromSeries(historicoCarteira?.carteira), [historicoCarteira, calcDrawdownFromSeries])
+  const carteiraVol = useMemo(() => calcVolFromSeries(historicoCarteira?.carteira), [historicoCarteira, calcVolFromSeries])
+  const retornoReal = useMemo(() => {
+    if (!performanceResumo || performanceResumo.carteira == null) return null
+    const ipcaDelta = performanceResumo.ipca ?? 0
+    return performanceResumo.carteira - ipcaDelta
+  }, [performanceResumo])
+
+  
+  const topConcentracao = useMemo(() => {
+    if (!valorTotal || !topAtivos || topAtivos.length === 0) return 0
+    return (topAtivos[0].valor_total || 0) / valorTotal
+  }, [topAtivos, valorTotal])
+
+  const recomendacoes = useMemo(() => {
+    const recs: string[] = []
+    if ((carteira?.length || 0) < 5) recs.push('Carteira com baixa diversificação. Considere aumentar o número de ativos.')
+    if (topConcentracao > 0.25) recs.push(`Alta concentração em ${topAtivos[0]?.ticker}. Avalie rebalancear (> ${(topConcentracao * 100).toFixed(1)}% da carteira).`)
+    const qtdPLAlto = carteira?.filter(a => (a?.pl ?? 0) > 20).length || 0
+    if (qtdPLAlto > 0) recs.push(`${qtdPLAlto} ativo(s) com P/L elevado (> 20).`)
+    const semDY = carteira?.filter(a => a?.dy == null || a.dy <= 0).length || 0
+    if (semDY > 0) recs.push(`${semDY} ativo(s) sem pagamentos recentes de proventos.`)
+    return recs.slice(0, 3)
+  }, [carteira, topConcentracao, topAtivos])
+
   // Dados para gráfico de proventos por mês
   const dadosGraficoProventos = useMemo(() => {
     if (!proventosRecebidos || proventosRecebidos.length === 0) return []
@@ -1308,7 +1420,7 @@ export default function CarteiraPage() {
 
         {activeTab === 'insights' && (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold mb-4">🤖 Insights com IA</h2>
+            <h2 className="text-xl font-semibold mb-4">Insights</h2>
             
             {carteira && carteira.length > 0 ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1320,10 +1432,24 @@ export default function CarteiraPage() {
                         <BarChart3 className="w-6 h-6 text-blue-600" />
                         <h3 className="text-lg font-semibold text-blue-800">Análise de Performance</h3>
                       </div>
-                      <p className="text-blue-700">
-                        Sua carteira variou <strong>+2.3%</strong> no último mês, 
-                        superando o Ibovespa que teve <strong>-1.1%</strong>.
-                      </p>
+                      {performanceResumo && performanceResumo.carteira != null ? (
+                        <p className="text-blue-700">
+                          Sua carteira variou <strong>{(performanceResumo.carteira >= 0 ? '+' : '')}{performanceResumo.carteira.toFixed(2)}%</strong> {periodoLabel},
+                          {performanceResumo.ibov != null && (
+                            <>
+                              {' '}
+                              {performanceResumo.carteira >= (performanceResumo.ibov || 0) ? 'superando' : 'ficando abaixo do'} o Ibovespa que teve <strong>{(performanceResumo.ibov >= 0 ? '+' : '')}{performanceResumo.ibov.toFixed(2)}%</strong>.
+                            </>
+                          )}
+                          {retornoReal != null && (
+                            <>
+                              {' '}Em termos reais (após IPCA), seu retorno foi <strong>{(retornoReal >= 0 ? '+' : '')}{retornoReal.toFixed(2)}%</strong>.
+                            </>
+                          )}
+                        </p>
+                      ) : (
+                        <p className="text-blue-700">Sem dados suficientes para calcular a performance {periodoLabel}.</p>
+                      )}
                     </div>
 
                     <div className="bg-gradient-to-r from-green-50 to-green-100 border border-green-200 rounded-lg p-6">
@@ -1332,8 +1458,11 @@ export default function CarteiraPage() {
                         <h3 className="text-lg font-semibold text-green-800">Distribuição de Dividendos</h3>
                       </div>
                       <p className="text-green-700">
-                        Você tem <strong>{ativosPositivos} ativos</strong> pagando dividendos, 
-                        representando <strong>{(ativosPositivos / (carteira?.length || 1) * 100).toFixed(1)}%</strong> da carteira.
+                        {proventosRecebidos && proventosRecebidos.length > 0 ? (
+                          <>Recebeu <strong>{formatCurrency(totalProventosRecebidos)}</strong> em proventos {proventosPeriodoLabel}, com <strong>{ativosComProventos}</strong> ativo(s) contribuindo.</>
+                        ) : (
+                          <>Sem proventos {proventosPeriodoLabel} para os ativos em carteira.</>
+                        )}
                       </p>
                     </div>
 
@@ -1352,11 +1481,16 @@ export default function CarteiraPage() {
                     <div className="bg-gradient-to-r from-orange-50 to-orange-100 border border-orange-200 rounded-lg p-6">
                       <div className="flex items-center gap-3 mb-3">
                         <Activity className="w-6 h-6 text-orange-600" />
-                        <h3 className="text-lg font-semibold text-orange-800">Diversificação</h3>
+                        <h3 className="text-lg font-semibold text-orange-800">Risco e Diversificação</h3>
                       </div>
                       <p className="text-orange-700">
-                        Sua carteira está bem diversificada com <strong>{carteira?.length || 0} ativos</strong> 
-                        em <strong>{Object.keys(ativosPorTipo).length} categorias</strong> diferentes.
+                        Sua carteira tem <strong>{carteira?.length || 0} ativos</strong> em <strong>{Object.keys(ativosPorTipo).length}</strong> categorias.{' '}
+                        {carteiraDrawdown != null && (
+                          <>Drawdown máx: <strong>{carteiraDrawdown.toFixed(2)}%</strong>. </>
+                        )}
+                        {carteiraVol != null && (
+                          <>Volatilidade: <strong>{carteiraVol.toFixed(2)}%</strong>.</>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -1369,24 +1503,12 @@ export default function CarteiraPage() {
                     Recomendações
                   </h3>
                   <div className="space-y-3">
-                    <div className="flex items-start gap-2 p-3 bg-background rounded">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                      <p className="text-sm text-muted-foreground">
-                        Considere aumentar posições em ativos com P/L baixo para melhorar a rentabilidade.
-                      </p>
-                    </div>
-                    <div className="flex items-start gap-2 p-3 bg-background rounded">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
-                      <p className="text-sm text-muted-foreground">
-                        Sua exposição a dividendos está acima da média do mercado.
-                      </p>
-                    </div>
-                    <div className="flex items-start gap-2 p-3 bg-background rounded">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0"></div>
-                      <p className="text-sm text-muted-foreground">
-                        Monitore ativos com ROE negativo para possível rebalanceamento.
-                      </p>
-                    </div>
+                    {(recomendacoes.length > 0 ? recomendacoes : ['Sem recomendações no momento.']).map((msg, idx) => (
+                      <div key={idx} className="flex items-start gap-2 p-3 bg-background rounded">
+                        <div className={`w-2 h-2 ${idx === 0 ? 'bg-blue-500' : idx === 1 ? 'bg-green-500' : 'bg-yellow-500'} rounded-full mt-2 flex-shrink-0`}></div>
+                        <p className="text-sm text-muted-foreground">{msg}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -1399,13 +1521,13 @@ export default function CarteiraPage() {
                     <div className="flex items-start gap-2 p-3 bg-background rounded">
                       <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
                       <p className="text-sm text-muted-foreground">
-                        {carteira?.filter(ativo => ativo?.pl && ativo.pl > 20).length || 0} ativos com P/L elevado.
+                        {(carteira?.filter(ativo => (ativo?.pl ?? 0) > 20).length || 0)} ativos com P/L elevado (&gt; 20).
                       </p>
                     </div>
                     <div className="flex items-start gap-2 p-3 bg-background rounded">
                       <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
                       <p className="text-sm text-muted-foreground">
-                        {carteira?.filter(ativo => ativo?.dy && ativo.dy < 0.02).length || 0} ativos com baixo dividend yield.
+                        {(carteira?.filter(ativo => (ativo?.dy ?? 0) < 0.02).length || 0)} ativos com baixo dividend yield (&lt; 2%).
                       </p>
                     </div>
                   </div>
