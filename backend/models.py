@@ -174,28 +174,29 @@ if env_db:
 else:
     USUARIOS_DB_PATH = _legacy_path if os.path.exists(_legacy_path) else _default_persist_path
 
-# Suporte opcional a Postgres para o banco de usuários/sessões
+
 USUARIOS_DB_URL = os.getenv("USUARIOS_DB_URL")
 USUARIOS_DB_IS_PG = bool(USUARIOS_DB_URL)
 if USUARIOS_DB_IS_PG:
     try:
-        import psycopg2  # type: ignore
-        from psycopg2.pool import ThreadedConnectionPool  # type: ignore
+        import psycopg2  
+        from psycopg2.pool import ThreadedConnectionPool  
     except Exception:
         USUARIOS_DB_IS_PG = False
         USUARIOS_DB_URL = None
 
-PG_POOL: Optional["ThreadedConnectionPool"] = None  # type: ignore
+PG_POOL: Optional["ThreadedConnectionPool"] = None 
+PG_USE_POOL: bool = os.getenv("PG_USE_POOL", "1") != "0"
 
 class _PooledConn:
-    def __init__(self, pool: "ThreadedConnectionPool", conn: Any):  # type: ignore
+    def __init__(self, pool: "ThreadedConnectionPool", conn: Any):  
         self._pool = pool
         self._conn = conn
     def __getattr__(self, name):
         return getattr(self._conn, name)
     def close(self):
         try:
-            # Garantir que transações abertas não vazem
+          
             self._conn.rollback()
         except Exception:
             pass
@@ -207,23 +208,32 @@ class _PooledConn:
             except Exception:
                 pass
 
-def _init_pg_pool_if_needed() -> Optional["ThreadedConnectionPool"]:  # type: ignore
+def _init_pg_pool_if_needed() -> Optional["ThreadedConnectionPool"]:  
     global PG_POOL
-    if not USUARIOS_DB_IS_PG:
+    if not USUARIOS_DB_IS_PG or not PG_USE_POOL:
         return None
     if PG_POOL is None:
-        # Pool pequeno (Render Free + Neon Serverless)
-        minconn = int(os.getenv("PG_MINCONN", "1"))
-        maxconn = int(os.getenv("PG_MAXCONN", "4"))
-        PG_POOL = ThreadedConnectionPool(minconn=minconn, maxconn=maxconn, dsn=USUARIOS_DB_URL)  # type: ignore
+        try:
+            
+            minconn = int(os.getenv("PG_MINCONN", "1"))
+            maxconn = int(os.getenv("PG_MAXCONN", "4"))
+            PG_POOL = ThreadedConnectionPool(minconn=minconn, maxconn=maxconn, dsn=USUARIOS_DB_URL)  # type: ignore
+        except Exception as e:
+            try:
+                print(f"[WARN] Falha ao criar pool Postgres: {e}. Usando conexões diretas.")
+            except Exception:
+                pass
+            PG_POOL = None
     return PG_POOL
 
 def _get_user_db_conn():
     if USUARIOS_DB_IS_PG:
         pool = _init_pg_pool_if_needed()
-        assert pool is not None
-        raw = pool.getconn()
-        return _PooledConn(pool, raw)
+        if pool is not None:
+            raw = pool.getconn()
+            return _PooledConn(pool, raw)
+        # fallback para conexão direta
+        return psycopg2.connect(USUARIOS_DB_URL)  # type: ignore
     return sqlite3.connect(USUARIOS_DB_PATH)
 
 def _adapt_sql(sql: str) -> str:
