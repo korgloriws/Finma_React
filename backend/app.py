@@ -26,6 +26,7 @@ from models import (
     invalidar_todas_sessoes,
     obter_historico_carteira_comparado
 )
+from models import cache
 
 FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist'))
 
@@ -34,6 +35,12 @@ server = Flask(
     static_folder=FRONTEND_DIST,
     static_url_path=''
 )
+
+# Inicializar cache simples em memória
+try:
+    cache.init_app(server)
+except Exception:
+    pass
 
 # Configurar CORS para SaaS (frontend e backend em domínios distintos)
 try:
@@ -1303,6 +1310,19 @@ def api_receitas_despesas():
 def api_home_resumo():
     """API para obter resumo completo da HomePage"""
     try:
+        # cache por usuário/mês/ano
+        def _cache_key():
+            try:
+                user = get_usuario_atual() or 'anon'
+            except Exception:
+                user = 'anon'
+            mes_q = request.args.get('mes', type=str) or ''
+            ano_q = request.args.get('ano', type=str) or ''
+            return f"home_resumo:{user}:{mes_q}:{ano_q}"
+        if cache:
+            cached_payload = cache.get(_cache_key())
+            if cached_payload is not None:
+                return jsonify(cached_payload)
         mes = request.args.get('mes', type=str)
         ano = request.args.get('ano', type=str)
         # Usuário deve vir da sessão; não aceitar via query param
@@ -1447,6 +1467,12 @@ def api_home_resumo():
         
 
         
+        # armazenar em cache (60s)
+        try:
+            if cache:
+                cache.set(_cache_key(), resumo, timeout=60)
+        except Exception:
+            pass
         return jsonify(resumo)
     except Exception as e:
         print(f"Erro na API home/resumo: {str(e)}")

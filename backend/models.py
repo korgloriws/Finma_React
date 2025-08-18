@@ -1834,6 +1834,16 @@ def init_carteira_db(usuario=None):
             tipo TEXT NOT NULL
         )
     ''')
+    # Otimizações: PRAGMAs e índices para acelerar consultas por data/ticker
+    try:
+        cursor.execute("PRAGMA journal_mode=WAL;")
+        cursor.execute("PRAGMA synchronous=NORMAL;")
+        cursor.execute("PRAGMA temp_store=MEMORY;")
+    except Exception:
+        pass
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes(data)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_ticker ON movimentacoes(ticker)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_valor_total ON carteira(valor_total)")
     
     conn.commit()
     conn.close()
@@ -2100,21 +2110,23 @@ def obter_movimentacoes(mes=None, ano=None):
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
         
-        query = 'SELECT * FROM movimentacoes'
-        params = []
-        
         if mes and ano:
-            # Usar LIKE para buscar por padrão de data
-            mes_str = f"{mes:02d}"
-            query += ' WHERE data LIKE ?'
-            params = [f"%{ano}-{mes_str}%"]
+            mes_int = int(mes)
+            ano_int = int(ano)
+            if mes_int == 12:
+                prox_ano, prox_mes = ano_int + 1, 1
+            else:
+                prox_ano, prox_mes = ano_int, mes_int + 1
+            inicio = f"{ano_int}-{mes_int:02d}-01"
+            fim = f"{prox_ano}-{prox_mes:02d}-01"
+            cursor.execute('SELECT * FROM movimentacoes WHERE data >= ? AND data < ? ORDER BY data DESC', (inicio, fim))
         elif ano:
-            query += ' WHERE data LIKE ?'
-            params = [f"%{ano}%"]
-            
-        query += ' ORDER BY data DESC'
-        
-        cursor.execute(query, params)
+            ano_int = int(ano)
+            inicio = f"{ano_int}-01-01"
+            fim = f"{ano_int+1}-01-01"
+            cursor.execute('SELECT * FROM movimentacoes WHERE data >= ? AND data < ? ORDER BY data DESC', (inicio, fim))
+        else:
+            cursor.execute('SELECT * FROM movimentacoes ORDER BY data DESC')
         
         movimentacoes = []
         for row in cursor.fetchall():
@@ -2477,6 +2489,17 @@ def init_controle_db(usuario=None):
             data TEXT NOT NULL
         )
     ''')
+    # PRAGMAs e índices
+    try:
+        cursor.execute("PRAGMA journal_mode=WAL;")
+        cursor.execute("PRAGMA synchronous=NORMAL;")
+        cursor.execute("PRAGMA temp_store=MEMORY;")
+    except Exception:
+        pass
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_receitas_data ON receitas(data)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_data ON cartoes(data)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_outros_gastos_data ON outros_gastos(data)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_pago ON cartoes(pago)")
     
     conn.commit()
     conn.close()
@@ -2522,7 +2545,8 @@ def remover_receita(id_registro):
     conn.close()
 
 def carregar_receitas_mes_ano(mes, ano, pessoa=None):
-    """Carregar receitas de um mês/ano específico, opcionalmente filtrado por pessoa"""
+    """Carregar receitas de um mês/ano específico, opcionalmente filtrado por pessoa.
+    Usa intervalo de datas (YYYY-MM) para permitir uso de índice em `data`."""
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
@@ -2530,27 +2554,37 @@ def carregar_receitas_mes_ano(mes, ano, pessoa=None):
     db_path = get_db_path(usuario, "controle")
     
     conn = sqlite3.connect(db_path, check_same_thread=False)
-    
-    # Formatar mês com zero à esquerda se necessário
-    mes_formatado = f"{int(mes):02d}"
-    
-    if pessoa:
-        query = '''
-            SELECT * FROM receitas 
-            WHERE strftime('%m', data) = ? AND strftime('%Y', data) = ? AND nome = ?
-            ORDER BY data DESC
-        '''
-        df = pd.read_sql_query(query, conn, params=(mes_formatado, ano, pessoa))
-    else:
-        query = '''
-            SELECT * FROM receitas 
-            WHERE strftime('%m', data) = ? AND strftime('%Y', data) = ?
-            ORDER BY data DESC
-        '''
-        df = pd.read_sql_query(query, conn, params=(mes_formatado, ano))
-    
-    conn.close()
-    return df
+    try:
+        # Índice útil para filtros por mês/ano
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_receitas_data ON receitas(data)")
+        except Exception:
+            pass
+        mes_int = int(mes)
+        ano_int = int(ano)
+        if mes_int == 12:
+            prox_ano, prox_mes = ano_int + 1, 1
+        else:
+            prox_ano, prox_mes = ano_int, mes_int + 1
+        inicio = f"{ano_int}-{mes_int:02d}-01"
+        fim = f"{prox_ano}-{prox_mes:02d}-01"
+        if pessoa:
+            query = '''
+                SELECT * FROM receitas 
+                WHERE data >= ? AND data < ? AND nome = ?
+                ORDER BY data DESC
+            '''
+            df = pd.read_sql_query(query, conn, params=(inicio, fim, pessoa))
+        else:
+            query = '''
+                SELECT * FROM receitas 
+                WHERE data >= ? AND data < ?
+                ORDER BY data DESC
+            '''
+            df = pd.read_sql_query(query, conn, params=(inicio, fim))
+        return df
+    finally:
+        conn.close()
 
 def adicionar_cartao(nome, valor, pago):
     """Adicionar um novo cartão"""
@@ -2568,24 +2602,30 @@ def adicionar_cartao(nome, valor, pago):
     conn.close()
 
 def carregar_cartoes_mes_ano(mes, ano):
-    """Carregar cartões de um mês/ano específico"""
+    """Carregar cartões de um mês/ano específico (intervalo de datas)."""
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
-    
-    # Formatar mês com zero à esquerda se necessário
-    mes_formatado = f"{int(mes):02d}"
-    
-    query = '''
-        SELECT * FROM cartoes 
-        WHERE strftime('%m', data) = ? AND strftime('%Y', data) = ?
-        ORDER BY data DESC
-    '''
-    df = pd.read_sql_query(query, conn, params=(mes_formatado, ano))
-    conn.close()
+    try:
+        mes_int = int(mes)
+        ano_int = int(ano)
+        if mes_int == 12:
+            prox_ano, prox_mes = ano_int + 1, 1
+        else:
+            prox_ano, prox_mes = ano_int, mes_int + 1
+        inicio = f"{ano_int}-{mes_int:02d}-01"
+        fim = f"{prox_ano}-{prox_mes:02d}-01"
+        query = '''
+            SELECT * FROM cartoes 
+            WHERE data >= ? AND data < ?
+            ORDER BY data DESC
+        '''
+        df = pd.read_sql_query(query, conn, params=(inicio, fim))
+    finally:
+        conn.close()
     return df.to_dict('records')
 
 def atualizar_cartao(id_registro, nome, valor, pago):
@@ -2631,24 +2671,30 @@ def adicionar_outro_gasto(nome, valor):
     conn.close()
 
 def carregar_outros_mes_ano(mes, ano):
-    """Carregar outros gastos de um mês/ano específico"""
+    """Carregar outros gastos de um mês/ano específico (intervalo de datas)."""
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
-    
-    # Formatar mês com zero à esquerda se necessário
-    mes_formatado = f"{int(mes):02d}"
-    
-    query = '''
-        SELECT * FROM outros_gastos 
-        WHERE strftime('%m', data) = ? AND strftime('%Y', data) = ?
-        ORDER BY data DESC
-    '''
-    df = pd.read_sql_query(query, conn, params=(mes_formatado, ano))
-    conn.close()
+    try:
+        mes_int = int(mes)
+        ano_int = int(ano)
+        if mes_int == 12:
+            prox_ano, prox_mes = ano_int + 1, 1
+        else:
+            prox_ano, prox_mes = ano_int, mes_int + 1
+        inicio = f"{ano_int}-{mes_int:02d}-01"
+        fim = f"{prox_ano}-{prox_mes:02d}-01"
+        query = '''
+            SELECT * FROM outros_gastos 
+            WHERE data >= ? AND data < ?
+            ORDER BY data DESC
+        '''
+        df = pd.read_sql_query(query, conn, params=(inicio, fim))
+    finally:
+        conn.close()
     return df.to_dict('records')
 
 def atualizar_outro_gasto(id_registro, nome, valor):
@@ -2701,6 +2747,14 @@ def init_marmitas_db(usuario=None):
             comprou INTEGER NOT NULL
         )
     ''')
+    # PRAGMAs e índice
+    try:
+        cursor.execute("PRAGMA journal_mode=WAL;")
+        cursor.execute("PRAGMA synchronous=NORMAL;")
+        cursor.execute("PRAGMA temp_store=MEMORY;")
+    except Exception:
+        pass
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_marmitas_data ON marmitas(data)")
     
     conn.commit()
     conn.close()
@@ -2716,15 +2770,20 @@ def consultar_marmitas(mes=None, ano=None):
     cursor = conn.cursor()
     
     if mes and ano:
-        # Formatar mês com zero à esquerda se necessário
-        mes_formatado = f"{int(mes):02d}"
-        
+        mes_int = int(mes)
+        ano_int = int(ano)
+        if mes_int == 12:
+            prox_ano, prox_mes = ano_int + 1, 1
+        else:
+            prox_ano, prox_mes = ano_int, mes_int + 1
+        inicio = f"{ano_int}-{mes_int:02d}-01"
+        fim = f"{prox_ano}-{prox_mes:02d}-01"
         query = '''
             SELECT * FROM marmitas 
-            WHERE strftime('%m', data) = ? AND strftime('%Y', data) = ?
+            WHERE data >= ? AND data < ?
             ORDER BY data DESC
         '''
-        cursor.execute(query, (mes_formatado, ano))
+        cursor.execute(query, (inicio, fim))
     else:
         cursor.execute('SELECT * FROM marmitas ORDER BY data DESC')
     
@@ -2781,14 +2840,13 @@ def gastos_mensais(periodo='6m'):
     
     query = '''
         SELECT 
-            strftime('%Y-%m', data) as AnoMes,
+            substr(data, 1, 7) as AnoMes,
             SUM(valor) as valor
         FROM marmitas 
         WHERE data >= ?
-        GROUP BY AnoMes
+        GROUP BY substr(data, 1, 7)
         ORDER BY AnoMes DESC
     '''
-    
     df = pd.read_sql_query(query, conn, params=(data_inicio.strftime('%Y-%m-%d'),))
     conn.close()
     return df

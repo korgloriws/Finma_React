@@ -1,12 +1,11 @@
 /**
  
- * @param ticker - O ticker original
- * @returns O ticker normalizado
+ * @param ticker -
+ * @returns 
  */
 export function normalizeTicker(ticker: string): string {
   if (!ticker) return ''
-  
-  // Remove espaços e converte para maiúsculo
+
   const cleanTicker = ticker.trim().toUpperCase()
   
   
@@ -19,7 +18,7 @@ export function normalizeTicker(ticker: string): string {
     return cleanTicker
   }
   
-  // Se não tem ponto, adiciona .SA
+
   return `${cleanTicker}.SA`
 }
 

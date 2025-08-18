@@ -43,6 +43,6 @@ RUN mkdir -p /app/frontend/dist/icons \
 EXPOSE 8080
 
 # Rodar via gunicorn na porta $PORT (Fly.io define automaticamente)
-CMD ["sh", "-c", "cd /app/backend && exec gunicorn -w 1 -k gthread -t 120 -b 0.0.0.0:${PORT:-8080} app:server"]
+CMD ["sh", "-c", "cd /app/backend && exec gunicorn -w 2 -k gthread --threads 4 -t 120 -b 0.0.0.0:${PORT:-8080} app:server"]
 
 
