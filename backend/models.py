@@ -10,10 +10,49 @@ import bcrypt
 import os
 import json
 import secrets
+import re
+try:
+    import psycopg
+except Exception:
+    psycopg = None
 
 
 USUARIO_ATUAL = None  
 SESSION_LOCK = threading.Lock()
+
+# ==================== ADAPTADOR DE BANCO (SQLite local x Postgres em produção) ====================
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+def _is_postgres() -> bool:
+    return bool(DATABASE_URL) and psycopg is not None
+
+def _get_pg_conn():
+    conn = psycopg.connect(DATABASE_URL)
+    try:
+        conn.autocommit = True
+    except Exception:
+        pass
+    return conn
+
+def _pg_schema_for_user(username: str) -> str:
+   
+    base = re.sub(r"[^a-zA-Z0-9_]", "_", (username or "anon").lower())
+    if not base:
+        base = "anon"
+    return f"u_{base}"
+
+def _pg_use_schema(conn, username: str):
+    schema = _pg_schema_for_user(username)
+    with conn.cursor() as cur:
+        cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+        cur.execute(f"SET search_path TO {schema}")
+    return schema
+
+def _pg_conn_for_user(username: str):
+    conn = _get_pg_conn()
+    _pg_use_schema(conn, username)
+    return conn
 
 def set_usuario_atual(username):
    
@@ -22,40 +61,73 @@ def set_usuario_atual(username):
         USUARIO_ATUAL = username
 
 def _create_sessions_table_if_needed():
-    conn = sqlite3.connect(USUARIOS_DB_PATH)
-    try:
-        c = conn.cursor()
-        c.execute(
-            '''CREATE TABLE IF NOT EXISTS sessoes (
-                token TEXT PRIMARY KEY,
-                username TEXT NOT NULL,
-                expira_em INTEGER NOT NULL
-            )'''
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    if _is_postgres():
+        conn = _get_pg_conn()
+        try:
+            with conn.cursor() as c:
+                c.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS public.sessoes (
+                        token TEXT PRIMARY KEY,
+                        username TEXT NOT NULL,
+                        expira_em BIGINT NOT NULL
+                    )
+                    """
+                )
+        finally:
+            conn.close()
+    else:
+        conn = sqlite3.connect(USUARIOS_DB_PATH)
+        try:
+            c = conn.cursor()
+            c.execute(
+                '''CREATE TABLE IF NOT EXISTS sessoes (
+                    token TEXT PRIMARY KEY,
+                    username TEXT NOT NULL,
+                    expira_em INTEGER NOT NULL
+                )'''
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 def criar_sessao(username: str, duracao_segundos: int = 3600) -> str:
-    """Cria uma sessão persistida e retorna o token. Mesmo sem cookie persistente, expiramos em servidor."""
+  
     _create_sessions_table_if_needed()
     token = secrets.token_urlsafe(32)
     expira_em = int(time.time()) + int(duracao_segundos)
-    conn = sqlite3.connect(USUARIOS_DB_PATH)
-    try:
-        c = conn.cursor()
-        c.execute('INSERT OR REPLACE INTO sessoes (token, username, expira_em) VALUES (?, ?, ?)', (token, username, expira_em))
-        conn.commit()
-        return token
-    finally:
-        conn.close()
+    if _is_postgres():
+        conn = _get_pg_conn()
+        try:
+            with conn.cursor() as c:
+                c.execute('INSERT INTO public.sessoes (token, username, expira_em) VALUES (%s, %s, %s) ON CONFLICT (token) DO UPDATE SET username = EXCLUDED.username, expira_em = EXCLUDED.expira_em', (token, username, expira_em))
+            return token
+        finally:
+            conn.close()
+    else:
+        conn = sqlite3.connect(USUARIOS_DB_PATH)
+        try:
+            c = conn.cursor()
+            c.execute('INSERT OR REPLACE INTO sessoes (token, username, expira_em) VALUES (?, ?, ?)', (token, username, expira_em))
+            conn.commit()
+            return token
+        finally:
+            conn.close()
 
 def invalidar_sessao(token: str) -> None:
     try:
-        conn = sqlite3.connect(USUARIOS_DB_PATH)
-        c = conn.cursor()
-        c.execute('DELETE FROM sessoes WHERE token = ?', (token,))
-        conn.commit()
+        if _is_postgres():
+            conn = _get_pg_conn()
+            try:
+                with conn.cursor() as c:
+                    c.execute('DELETE FROM public.sessoes WHERE token = %s', (token,))
+            finally:
+                conn.close()
+        else:
+            conn = sqlite3.connect(USUARIOS_DB_PATH)
+            c = conn.cursor()
+            c.execute('DELETE FROM sessoes WHERE token = ?', (token,))
+            conn.commit()
     except Exception:
         pass
     finally:
@@ -65,13 +137,21 @@ def invalidar_sessao(token: str) -> None:
             pass
 
 def invalidar_todas_sessoes() -> None:
-    """Remove todas as sessões persistidas. Útil ao reiniciar o servidor."""
+    
     try:
         _create_sessions_table_if_needed()
-        conn = sqlite3.connect(USUARIOS_DB_PATH)
-        c = conn.cursor()
-        c.execute('DELETE FROM sessoes')
-        conn.commit()
+        if _is_postgres():
+            conn = _get_pg_conn()
+            try:
+                with conn.cursor() as c:
+                    c.execute('DELETE FROM public.sessoes')
+            finally:
+                conn.close()
+        else:
+            conn = sqlite3.connect(USUARIOS_DB_PATH)
+            c = conn.cursor()
+            c.execute('DELETE FROM sessoes')
+            conn.commit()
     except Exception:
         pass
     finally:
@@ -87,36 +167,63 @@ def get_usuario_atual():
         if not token:
             return None
         _create_sessions_table_if_needed()
-        conn = sqlite3.connect(USUARIOS_DB_PATH)
-        try:
-            c = conn.cursor()
-            c.execute('SELECT username, expira_em FROM sessoes WHERE token = ?', (token,))
-            row = c.fetchone()
-            if not row:
-                return None
-            username, expira_em = row
-            if expira_em < int(time.time()):
-                # sessão expirada
-                try:
-                    c.execute('DELETE FROM sessoes WHERE token = ?', (token,))
-                    conn.commit()
-                except Exception:
-                    pass
-                return None
-            return username
-        finally:
-            conn.close()
+        if _is_postgres():
+            conn = _get_pg_conn()
+            try:
+                with conn.cursor() as c:
+                    c.execute('SELECT username, expira_em FROM public.sessoes WHERE token = %s', (token,))
+                    row = c.fetchone()
+                    if not row:
+                        return None
+                    username, expira_em = row
+                    if int(expira_em) < int(time.time()):
+                        try:
+                            c.execute('DELETE FROM public.sessoes WHERE token = %s', (token,))
+                        except Exception:
+                            pass
+                        return None
+                    return username
+            finally:
+                conn.close()
+        else:
+            conn = sqlite3.connect(USUARIOS_DB_PATH)
+            try:
+                c = conn.cursor()
+                c.execute('SELECT username, expira_em FROM sessoes WHERE token = ?', (token,))
+                row = c.fetchone()
+                if not row:
+                    return None
+                username, expira_em = row
+                if expira_em < int(time.time()):
+                    # sessão expirada
+                    try:
+                        c.execute('DELETE FROM sessoes WHERE token = ?', (token,))
+                        conn.commit()
+                    except Exception:
+                        pass
+                    return None
+                return username
+            finally:
+                conn.close()
     except Exception:
         return None
 
 def limpar_sessoes_expiradas():
     try:
         _create_sessions_table_if_needed()
-        conn = sqlite3.connect(USUARIOS_DB_PATH)
-        c = conn.cursor()
         agora = int(time.time())
-        c.execute('DELETE FROM sessoes WHERE expira_em < ?', (agora,))
-        conn.commit()
+        if _is_postgres():
+            conn = _get_pg_conn()
+            try:
+                with conn.cursor() as c:
+                    c.execute('DELETE FROM public.sessoes WHERE expira_em < %s', (agora,))
+            finally:
+                conn.close()
+        else:
+            conn = sqlite3.connect(USUARIOS_DB_PATH)
+            c = conn.cursor()
+            c.execute('DELETE FROM sessoes WHERE expira_em < ?', (agora,))
+            conn.commit()
     except Exception:
         pass
     finally:
@@ -1630,24 +1737,39 @@ def obter_todas_informacoes(ticker):
 
 
 def criar_tabela_usuarios():
-    conn = sqlite3.connect(USUARIOS_DB_PATH)
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            username TEXT UNIQUE NOT NULL,
-            senha_hash TEXT NOT NULL,
-            pergunta_seguranca TEXT,
-            resposta_seguranca_hash TEXT,
-            data_cadastro TEXT NOT NULL
-        )
-    ''')
-    
-
-    
-    conn.commit()
-    conn.close()
+    if _is_postgres():
+        conn = _get_pg_conn()
+        try:
+            with conn.cursor() as c:
+                c.execute('''
+                    CREATE TABLE IF NOT EXISTS public.usuarios (
+                        id SERIAL PRIMARY KEY,
+                        nome TEXT NOT NULL,
+                        username TEXT UNIQUE NOT NULL,
+                        senha_hash TEXT NOT NULL,
+                        pergunta_seguranca TEXT,
+                        resposta_seguranca_hash TEXT,
+                        data_cadastro TIMESTAMP NOT NULL
+                    )
+                ''')
+        finally:
+            conn.close()
+    else:
+        conn = sqlite3.connect(USUARIOS_DB_PATH)
+        c = conn.cursor()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                username TEXT UNIQUE NOT NULL,
+                senha_hash TEXT NOT NULL,
+                pergunta_seguranca TEXT,
+                resposta_seguranca_hash TEXT,
+                data_cadastro TEXT NOT NULL
+            )
+        ''')
+        conn.commit()
+        conn.close()
 
 def cadastrar_usuario(nome, username, senha, pergunta_seguranca=None, resposta_seguranca=None):
     senha_hash = bcrypt.hashpw(senha.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -1658,35 +1780,70 @@ def cadastrar_usuario(nome, username, senha, pergunta_seguranca=None, resposta_s
     if pergunta_seguranca and resposta_seguranca:
         resposta_hash = bcrypt.hashpw(resposta_seguranca.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
-    conn = sqlite3.connect(USUARIOS_DB_PATH)
-    c = conn.cursor()
-    try:
-        c.execute('''INSERT INTO usuarios (nome, username, senha_hash, pergunta_seguranca, resposta_seguranca_hash, data_cadastro) VALUES (?, ?, ?, ?, ?, ?)''',
-                  (nome, username, senha_hash, pergunta_seguranca, resposta_hash, data_cadastro))
-        conn.commit()
-        return True
-    except sqlite3.IntegrityError:
-        return False
-    finally:
-        conn.close()
+    if _is_postgres():
+        conn = _get_pg_conn()
+        try:
+            with conn.cursor() as c:
+                try:
+                    c.execute('''
+                        INSERT INTO public.usuarios (nome, username, senha_hash, pergunta_seguranca, resposta_seguranca_hash, data_cadastro)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    ''', (nome, username, senha_hash, pergunta_seguranca, resposta_hash, data_cadastro))
+                    return True
+                except Exception:
+                    return False
+        finally:
+            conn.close()
+    else:
+        conn = sqlite3.connect(USUARIOS_DB_PATH)
+        c = conn.cursor()
+        try:
+            c.execute('''INSERT INTO usuarios (nome, username, senha_hash, pergunta_seguranca, resposta_seguranca_hash, data_cadastro) VALUES (?, ?, ?, ?, ?, ?)''',
+                      (nome, username, senha_hash, pergunta_seguranca, resposta_hash, data_cadastro))
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+        finally:
+            conn.close()
 
 def buscar_usuario_por_username(username):
-    conn = sqlite3.connect(USUARIOS_DB_PATH)
-    c = conn.cursor()
-    c.execute('SELECT id, nome, username, senha_hash, pergunta_seguranca, resposta_seguranca_hash, data_cadastro FROM usuarios WHERE username = ?', (username,))
-    row = c.fetchone()
-    conn.close()
-    if row:
-        return {
-            'id': row[0],
-            'nome': row[1],
-            'username': row[2],
-            'senha_hash': row[3],
-            'pergunta_seguranca': row[4],
-            'resposta_seguranca_hash': row[5],
-            'data_cadastro': row[6]
-        }
-    return None
+    if _is_postgres():
+        conn = _get_pg_conn()
+        try:
+            with conn.cursor() as c:
+                c.execute('SELECT id, nome, username, senha_hash, pergunta_seguranca, resposta_seguranca_hash, data_cadastro FROM public.usuarios WHERE username = %s', (username,))
+                row = c.fetchone()
+                if row:
+                    return {
+                        'id': row[0],
+                        'nome': row[1],
+                        'username': row[2],
+                        'senha_hash': row[3],
+                        'pergunta_seguranca': row[4],
+                        'resposta_seguranca_hash': row[5],
+                        'data_cadastro': row[6]
+                    }
+                return None
+        finally:
+            conn.close()
+    else:
+        conn = sqlite3.connect(USUARIOS_DB_PATH)
+        c = conn.cursor()
+        c.execute('SELECT id, nome, username, senha_hash, pergunta_seguranca, resposta_seguranca_hash, data_cadastro FROM usuarios WHERE username = ?', (username,))
+        row = c.fetchone()
+        conn.close()
+        if row:
+            return {
+                'id': row[0],
+                'nome': row[1],
+                'username': row[2],
+                'senha_hash': row[3],
+                'pergunta_seguranca': row[4],
+                'resposta_seguranca_hash': row[5],
+                'data_cadastro': row[6]
+            }
+        return None
 
 def verificar_senha(username, senha):
     usuario = buscar_usuario_por_username(username)
@@ -1709,37 +1866,59 @@ def alterar_senha_direta(username, nova_senha):
     # Hash da nova senha
     nova_senha_hash = bcrypt.hashpw(nova_senha.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
-    conn = sqlite3.connect(USUARIOS_DB_PATH)
-    c = conn.cursor()
-    
-    try:
-        # Atualizar senha
-        c.execute('UPDATE usuarios SET senha_hash = ? WHERE username = ?', (nova_senha_hash, username))
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"Erro ao alterar senha: {e}")
-        return False
-    finally:
-        conn.close()
+    if _is_postgres():
+        conn = _get_pg_conn()
+        try:
+            with conn.cursor() as c:
+                c.execute('UPDATE public.usuarios SET senha_hash = %s WHERE username = %s', (nova_senha_hash, username))
+                return True
+        except Exception as e:
+            print(f"Erro ao alterar senha: {e}")
+            return False
+        finally:
+            conn.close()
+    else:
+        conn = sqlite3.connect(USUARIOS_DB_PATH)
+        c = conn.cursor()
+        try:
+            c.execute('UPDATE usuarios SET senha_hash = ? WHERE username = ?', (nova_senha_hash, username))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Erro ao alterar senha: {e}")
+            return False
+        finally:
+            conn.close()
 
 def atualizar_pergunta_seguranca(username, pergunta, resposta):
     """Atualizar pergunta de segurança de um usuário"""
-    conn = sqlite3.connect(USUARIOS_DB_PATH)
-    c = conn.cursor()
-    
-    try:
-        # Hash da nova resposta
-        resposta_hash = bcrypt.hashpw(resposta.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        c.execute('UPDATE usuarios SET pergunta_seguranca = ?, resposta_seguranca_hash = ? WHERE username = ?', 
-                  (pergunta, resposta_hash, username))
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"Erro ao atualizar pergunta de segurança: {e}")
-        return False
-    finally:
-        conn.close()
+    if _is_postgres():
+        conn = _get_pg_conn()
+        try:
+            resposta_hash = bcrypt.hashpw(resposta.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            with conn.cursor() as c:
+                c.execute('UPDATE public.usuarios SET pergunta_seguranca = %s, resposta_seguranca_hash = %s WHERE username = %s',
+                          (pergunta, resposta_hash, username))
+                return True
+        except Exception as e:
+            print(f"Erro ao atualizar pergunta de segurança: {e}")
+            return False
+        finally:
+            conn.close()
+    else:
+        conn = sqlite3.connect(USUARIOS_DB_PATH)
+        c = conn.cursor()
+        try:
+            resposta_hash = bcrypt.hashpw(resposta.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            c.execute('UPDATE usuarios SET pergunta_seguranca = ?, resposta_seguranca_hash = ? WHERE username = ?', 
+                      (pergunta, resposta_hash, username))
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Erro ao atualizar pergunta de segurança: {e}")
+            return False
+        finally:
+            conn.close()
 
 def processar_ativos_acoes_com_filtros(roe_min, dy_min, pl_min, pl_max, pvp_max):
     acoes = LISTA_ACOES
@@ -1790,63 +1969,102 @@ def init_carteira_db(usuario=None):
         usuario = get_usuario_atual()
         if not usuario:
             raise ValueError("Usuário não especificado")
-    
-    db_path = get_db_path(usuario, "carteira")
-    conn = sqlite3.connect(db_path, check_same_thread=False)
-    cursor = conn.cursor()
-    
-    # Tabela de carteira
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS carteira (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ticker TEXT NOT NULL,
-            nome_completo TEXT NOT NULL,
-            quantidade INTEGER NOT NULL,
-            preco_atual REAL NOT NULL,
-            valor_total REAL NOT NULL,
-            data_adicao TEXT NOT NULL,
-            tipo TEXT DEFAULT 'Desconhecido',
-            dy REAL,
-            pl REAL,
-            pvp REAL,
-            roe REAL
-        )
-    ''')
-    
-    # Tabela de histórico
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS historico_carteira (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data TEXT NOT NULL,
-            valor_total REAL NOT NULL
-        )
-    ''')
-    
-    # Tabela de movimentações
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS movimentacoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data TEXT NOT NULL,
-            ticker TEXT NOT NULL,
-            nome_completo TEXT,
-            quantidade REAL NOT NULL,
-            preco REAL NOT NULL,
-            tipo TEXT NOT NULL
-        )
-    ''')
-    # Otimizações: PRAGMAs e índices para acelerar consultas por data/ticker
-    try:
-        cursor.execute("PRAGMA journal_mode=WAL;")
-        cursor.execute("PRAGMA synchronous=NORMAL;")
-        cursor.execute("PRAGMA temp_store=MEMORY;")
-    except Exception:
-        pass
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes(data)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_ticker ON movimentacoes(ticker)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_valor_total ON carteira(valor_total)")
-    
-    conn.commit()
-    conn.close()
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS carteira (
+                        id SERIAL PRIMARY KEY,
+                        ticker TEXT NOT NULL,
+                        nome_completo TEXT NOT NULL,
+                        quantidade NUMERIC NOT NULL,
+                        preco_atual NUMERIC NOT NULL,
+                        valor_total NUMERIC NOT NULL,
+                        data_adicao TEXT NOT NULL,
+                        tipo TEXT DEFAULT 'Desconhecido',
+                        dy NUMERIC,
+                        pl NUMERIC,
+                        pvp NUMERIC,
+                        roe NUMERIC
+                    )
+                ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS historico_carteira (
+                        id SERIAL PRIMARY KEY,
+                        data TEXT NOT NULL,
+                        valor_total NUMERIC NOT NULL
+                    )
+                ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS movimentacoes (
+                        id SERIAL PRIMARY KEY,
+                        data TEXT NOT NULL,
+                        ticker TEXT NOT NULL,
+                        nome_completo TEXT,
+                        quantidade NUMERIC NOT NULL,
+                        preco NUMERIC NOT NULL,
+                        tipo TEXT NOT NULL
+                    )
+                ''')
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes(data)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_ticker ON movimentacoes(ticker)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_valor_total ON carteira(valor_total)")
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        cursor = conn.cursor()
+        # Tabela de carteira
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS carteira (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                nome_completo TEXT NOT NULL,
+                quantidade INTEGER NOT NULL,
+                preco_atual REAL NOT NULL,
+                valor_total REAL NOT NULL,
+                data_adicao TEXT NOT NULL,
+                tipo TEXT DEFAULT 'Desconhecido',
+                dy REAL,
+                pl REAL,
+                pvp REAL,
+                roe REAL
+            )
+        ''')
+        # Tabela de histórico
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS historico_carteira (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data TEXT NOT NULL,
+                valor_total REAL NOT NULL
+            )
+        ''')
+        # Tabela de movimentações
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS movimentacoes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data TEXT NOT NULL,
+                ticker TEXT NOT NULL,
+                nome_completo TEXT,
+                quantidade REAL NOT NULL,
+                preco REAL NOT NULL,
+                tipo TEXT NOT NULL
+            )
+        ''')
+        # Otimizações SQLite
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA synchronous=NORMAL;")
+            cursor.execute("PRAGMA temp_store=MEMORY;")
+        except Exception:
+            pass
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes(data)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_ticker ON movimentacoes(ticker)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_valor_total ON carteira(valor_total)")
+        conn.commit()
+        conn.close()
 
 def obter_cotacao_dolar():
 
@@ -1914,30 +2132,41 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None):
         usuario = get_usuario_atual()
         if not usuario:
             return {"success": False, "message": "Usuário não autenticado"}
-
-        db_path = get_db_path(usuario, "carteira")
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        cursor = conn.cursor()
-        
-        # Primeiro registrar a movimentação usando a mesma conexão
-        resultado_movimentacao = registrar_movimentacao(data_adicao, info["ticker"], info["nome_completo"], 
-                             quantidade, info["preco_atual"], "compra", conn)
-        
-        if not resultado_movimentacao["success"]:
+        if _is_postgres():
+            conn = _pg_conn_for_user(usuario)
+            try:
+                with conn.cursor() as cursor:
+                    # movimentação
+                    cursor.execute(
+                        'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
+                        (data_adicao, info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], "compra")
+                    )
+                    # carteira
+                    cursor.execute(
+                        'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, data_adicao, tipo, dy, pl, pvp, roe) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                        (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], valor_total, data_adicao, info["tipo"], info["dy"], info["pl"], info["pvp"], info["roe"]) 
+                    )
+            finally:
+                conn.close()
+        else:
+            db_path = get_db_path(usuario, "carteira")
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            cursor = conn.cursor()
+            # Primeiro registrar a movimentação usando a mesma conexão
+            resultado_movimentacao = registrar_movimentacao(data_adicao, info["ticker"], info["nome_completo"], 
+                                 quantidade, info["preco_atual"], "compra", conn)
+            if not resultado_movimentacao["success"]:
+                conn.close()
+                return resultado_movimentacao
+            cursor.execute('''
+                INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, 
+                                    data_adicao, tipo, dy, pl, pvp, roe)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], 
+                  valor_total, data_adicao, info["tipo"], info["dy"], info["pl"], 
+                  info["pvp"], info["roe"]))
+            conn.commit()
             conn.close()
-            return resultado_movimentacao
-        
-        # Depois inserir na carteira
-        cursor.execute('''
-            INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, 
-                                data_adicao, tipo, dy, pl, pvp, roe)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], 
-              valor_total, data_adicao, info["tipo"], info["dy"], info["pl"], 
-              info["pvp"], info["roe"]))
-        
-        conn.commit()
-        conn.close()
         
         return {"success": True, "message": "Ativo adicionado com sucesso"}
     except Exception as e:
@@ -1950,11 +2179,23 @@ def remover_ativo_carteira(id):
         if not usuario:
             return {"success": False, "message": "Usuário não autenticado"}
 
+        if _is_postgres():
+            conn = _pg_conn_for_user(usuario)
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute('SELECT ticker, nome_completo, quantidade, preco_atual FROM carteira WHERE id = %s', (id,))
+                    ativo = cursor.fetchone()
+                    if not ativo:
+                        return {"success": False, "message": "Ativo não encontrado"}
+                    data = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    cursor.execute('INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)', (data, ativo[0], ativo[1], ativo[2], ativo[3], "venda"))
+                    cursor.execute('DELETE FROM carteira WHERE id = %s', (id,))
+                return {"success": True, "message": "Ativo removido com sucesso"}
+            finally:
+                conn.close()
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
-        
-
         cursor.execute('SELECT ticker, nome_completo, quantidade, preco_atual FROM carteira WHERE id = ?', (id,))
         ativo = cursor.fetchone()
         
@@ -1987,10 +2228,22 @@ def atualizar_ativo_carteira(id, quantidade):
         if not usuario:
             return {"success": False, "message": "Usuário não autenticado"}
 
+        if _is_postgres():
+            conn = _pg_conn_for_user(usuario)
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute('SELECT ticker, nome_completo, preco_atual FROM carteira WHERE id = %s', (id,))
+                    ativo = cursor.fetchone()
+                    if not ativo:
+                        return {"success": False, "message": "Ativo não encontrado"}
+                    valor_total = float(ativo[2]) * quantidade
+                    cursor.execute('UPDATE carteira SET quantidade = %s, valor_total = %s WHERE id = %s', (quantidade, valor_total, id))
+                return {"success": True, "message": "Ativo atualizado com sucesso"}
+            finally:
+                conn.close()
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
-        
         cursor.execute('SELECT ticker, nome_completo, preco_atual FROM carteira WHERE id = ?', (id,))
         ativo = cursor.fetchone()
         
@@ -2019,10 +2272,39 @@ def obter_carteira():
         if not usuario:
             return {"success": False, "message": "Usuário não autenticado"}
 
+        if _is_postgres():
+            conn = _pg_conn_for_user(usuario)
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute('''
+                        SELECT id, ticker, nome_completo, quantidade, preco_atual, valor_total,
+                               data_adicao, tipo, dy, pl, pvp, roe
+                        FROM carteira
+                        ORDER BY valor_total DESC
+                    ''')
+                    rows = cursor.fetchall()
+            finally:
+                conn.close()
+            ativos = []
+            for row in rows:
+                ativos.append({
+                    "id": row[0],
+                    "ticker": row[1],
+                    "nome_completo": row[2],
+                    "quantidade": float(row[3]) if row[3] is not None else 0,
+                    "preco_atual": float(row[4]) if row[4] is not None else 0,
+                    "valor_total": float(row[5]) if row[5] is not None else 0,
+                    "data_adicao": row[6],
+                    "tipo": row[7],
+                    "dy": float(row[8]) if row[8] is not None else None,
+                    "pl": float(row[9]) if row[9] is not None else None,
+                    "pvp": float(row[10]) if row[10] is not None else None,
+                    "roe": float(row[11]) if row[11] is not None else None,
+                })
+            return ativos
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
-        
         cursor.execute('''
             SELECT id, ticker, nome_completo, quantidade, preco_atual, valor_total,
                    data_adicao, tipo, dy, pl, pvp, roe
@@ -2061,37 +2343,54 @@ def registrar_movimentacao(data, ticker, nome_completo, quantidade, preco, tipo,
             return {"success": False, "message": "Usuário não autenticado"}
 
 
-        if conn is None:
-            db_path = get_db_path(usuario, "carteira")
-            conn = sqlite3.connect(db_path, check_same_thread=False)
-            should_close = True
+        if _is_postgres():
+            # Ignorar conexão SQLite passada; abre pg por usuário
+            pg_conn = _pg_conn_for_user(usuario)
+            try:
+                with pg_conn.cursor() as cursor:
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS movimentacoes (
+                            id SERIAL PRIMARY KEY,
+                            data TEXT NOT NULL,
+                            ticker TEXT NOT NULL,
+                            nome_completo TEXT,
+                            quantidade NUMERIC NOT NULL,
+                            preco NUMERIC NOT NULL,
+                            tipo TEXT NOT NULL
+                        )
+                    ''')
+                    cursor.execute(
+                        'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
+                        (data, ticker, nome_completo, quantidade, preco, tipo)
+                    )
+            finally:
+                pg_conn.close()
         else:
-            should_close = False
-            
-        cursor = conn.cursor()
-        
-        # Criar tabela se não existir (sempre)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS movimentacoes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                data TEXT NOT NULL,
-                ticker TEXT NOT NULL,
-                nome_completo TEXT,
-                quantidade REAL NOT NULL,
-                preco REAL NOT NULL,
-                tipo TEXT NOT NULL
-            )
-        ''')
-        
-        # Inserir movimentação
-        cursor.execute('''
-            INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (data, ticker, nome_completo, quantidade, preco, tipo))
-        
-        if should_close:
-            conn.commit()
-            conn.close()
+            if conn is None:
+                db_path = get_db_path(usuario, "carteira")
+                conn = sqlite3.connect(db_path, check_same_thread=False)
+                should_close = True
+            else:
+                should_close = False
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS movimentacoes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    data TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    nome_completo TEXT,
+                    quantidade REAL NOT NULL,
+                    preco REAL NOT NULL,
+                    tipo TEXT NOT NULL
+                )
+            ''')
+            cursor.execute('''
+                INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (data, ticker, nome_completo, quantidade, preco, tipo))
+            if should_close:
+                conn.commit()
+                conn.close()
         
         return {"success": True, "message": "Movimentação registrada com sucesso"}
     except Exception as e:
@@ -2106,30 +2405,55 @@ def obter_movimentacoes(mes=None, ano=None):
         if not usuario:
             return []
 
-        db_path = get_db_path(usuario, "carteira")
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        cursor = conn.cursor()
-        
-        if mes and ano:
-            mes_int = int(mes)
-            ano_int = int(ano)
-            if mes_int == 12:
-                prox_ano, prox_mes = ano_int + 1, 1
-            else:
-                prox_ano, prox_mes = ano_int, mes_int + 1
-            inicio = f"{ano_int}-{mes_int:02d}-01"
-            fim = f"{prox_ano}-{prox_mes:02d}-01"
-            cursor.execute('SELECT * FROM movimentacoes WHERE data >= ? AND data < ? ORDER BY data DESC', (inicio, fim))
-        elif ano:
-            ano_int = int(ano)
-            inicio = f"{ano_int}-01-01"
-            fim = f"{ano_int+1}-01-01"
-            cursor.execute('SELECT * FROM movimentacoes WHERE data >= ? AND data < ? ORDER BY data DESC', (inicio, fim))
+        if _is_postgres():
+            conn = _pg_conn_for_user(usuario)
+            try:
+                with conn.cursor() as cursor:
+                    if mes and ano:
+                        mes_int = int(mes)
+                        ano_int = int(ano)
+                        if mes_int == 12:
+                            prox_ano, prox_mes = ano_int + 1, 1
+                        else:
+                            prox_ano, prox_mes = ano_int, mes_int + 1
+                        inicio = f"{ano_int}-{mes_int:02d}-01"
+                        fim = f"{prox_ano}-{prox_mes:02d}-01"
+                        cursor.execute('SELECT * FROM movimentacoes WHERE data >= %s AND data < %s ORDER BY data DESC', (inicio, fim))
+                    elif ano:
+                        ano_int = int(ano)
+                        inicio = f"{ano_int}-01-01"
+                        fim = f"{ano_int+1}-01-01"
+                        cursor.execute('SELECT * FROM movimentacoes WHERE data >= %s AND data < %s ORDER BY data DESC', (inicio, fim))
+                    else:
+                        cursor.execute('SELECT * FROM movimentacoes ORDER BY data DESC')
+                    rows = cursor.fetchall()
+            finally:
+                conn.close()
         else:
-            cursor.execute('SELECT * FROM movimentacoes ORDER BY data DESC')
+            db_path = get_db_path(usuario, "carteira")
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            cursor = conn.cursor()
+            if mes and ano:
+                mes_int = int(mes)
+                ano_int = int(ano)
+                if mes_int == 12:
+                    prox_ano, prox_mes = ano_int + 1, 1
+                else:
+                    prox_ano, prox_mes = ano_int, mes_int + 1
+                inicio = f"{ano_int}-{mes_int:02d}-01"
+                fim = f"{prox_ano}-{prox_mes:02d}-01"
+                cursor.execute('SELECT * FROM movimentacoes WHERE data >= ? AND data < ? ORDER BY data DESC', (inicio, fim))
+            elif ano:
+                ano_int = int(ano)
+                inicio = f"{ano_int}-01-01"
+                fim = f"{ano_int+1}-01-01"
+                cursor.execute('SELECT * FROM movimentacoes WHERE data >= ? AND data < ? ORDER BY data DESC', (inicio, fim))
+            else:
+                cursor.execute('SELECT * FROM movimentacoes ORDER BY data DESC')
+            rows = cursor.fetchall()
         
         movimentacoes = []
-        for row in cursor.fetchall():
+        for row in rows:
             movimentacoes.append({
                 "id": row[0],
                 "data": row[1],
@@ -2140,7 +2464,6 @@ def obter_movimentacoes(mes=None, ano=None):
                 "tipo": row[6]
             })
         
-        conn.close()
         return movimentacoes
     except Exception as e:
         print(f"Erro ao obter movimentações: {e}")
@@ -2155,17 +2478,28 @@ def obter_historico_carteira(periodo='mensal'):
             print("DEBUG: Usuário não encontrado")
             return []
             
-        db_path = get_db_path(usuario, "carteira")
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        cursor = conn.cursor()
-        
-
-        cursor.execute("""
-            SELECT data, ticker, quantidade, preco, tipo 
-            FROM movimentacoes 
-            ORDER BY data ASC
-        """)
-        movimentacoes = cursor.fetchall()
+        if _is_postgres():
+            conn = _pg_conn_for_user(usuario)
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT data, ticker, quantidade, preco, tipo 
+                        FROM movimentacoes 
+                        ORDER BY data ASC
+                    """)
+                    movimentacoes = cursor.fetchall()
+            finally:
+                conn.close()
+        else:
+            db_path = get_db_path(usuario, "carteira")
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT data, ticker, quantidade, preco, tipo 
+                FROM movimentacoes 
+                ORDER BY data ASC
+            """)
+            movimentacoes = cursor.fetchall()
         
         print(f"DEBUG: Encontradas {len(movimentacoes)} movimentações para usuário {usuario}")
         
@@ -2189,23 +2523,23 @@ def obter_historico_carteira(periodo='mensal'):
             quantidade = float(mov[2])
             preco = float(mov[3])
             
-            # Debug da data
-            print(f"DEBUG: Processando data '{data_mov}' -> data[:10] = '{data_mov[:10]}'")
+    
+ 
             
-            # Atualizar posições
+
             if ticker in posicoes:
                 posicoes[ticker] += quantidade
             else:
                 posicoes[ticker] = quantidade
             
-            # Calcular patrimônio total (usando preço de compra como aproximação)
+            
             patrimonio_total = 0
             for ticker_pos, qtd in posicoes.items():
                 if qtd > 0:
-                    # Usar o preço da última compra como aproximação
+                    
                     patrimonio_total += qtd * preco
             
-            # Adicionar ao histórico
+          
             item_historico = {
                 'data': data_mov[:10],  
                 'valor_total': patrimonio_total
@@ -2218,7 +2552,6 @@ def obter_historico_carteira(periodo='mensal'):
         for i, item in enumerate(historico[:3]):
             print(f"  {i+1}. {item}")
         
-        conn.close()
         return historico
         
     except Exception as e:
@@ -2233,7 +2566,7 @@ def _month_end(dt: datetime) -> datetime:
 
 
 def _gerar_pontos_tempo(_: str, data_inicio: datetime, data_fim: datetime) -> list:
-    # Sempre gerar pontos no fim do mês; agregação é aplicada depois
+   
     pontos = []
     atual = datetime(data_inicio.year, data_inicio.month, 1)
     fim = datetime(data_fim.year, data_fim.month, 1)
@@ -2244,41 +2577,53 @@ def _gerar_pontos_tempo(_: str, data_inicio: datetime, data_fim: datetime) -> li
 
 
 def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
-    """Calcula evolução patrimonial real por agregação e séries comparativas (rebased=100)."""
+    
     try:
         usuario = get_usuario_atual()
         if not usuario:
             return {"datas": [], "carteira": [], "ibov": [], "ivvb11": [], "ifix": [], "ipca": []}
 
-        db_path = get_db_path(usuario, "carteira")
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT data, ticker, quantidade, preco, tipo 
-            FROM movimentacoes 
-            ORDER BY data ASC
-        """)
-        movimentos = cursor.fetchall()
-        conn.close()
+        if _is_postgres():
+            conn = _pg_conn_for_user(usuario)
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT data, ticker, quantidade, preco, tipo 
+                        FROM movimentacoes 
+                        ORDER BY data ASC
+                    """)
+                    movimentos = cursor.fetchall()
+            finally:
+                conn.close()
+        else:
+            db_path = get_db_path(usuario, "carteira")
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT data, ticker, quantidade, preco, tipo 
+                FROM movimentacoes 
+                ORDER BY data ASC
+            """)
+            movimentos = cursor.fetchall()
 
         if not movimentos:
             return {"datas": [], "carteira": [], "ibov": [], "ivvb11": [], "ifix": [], "ipca": []}
 
-        # Preparar datas
+
         datas_mov = [datetime.strptime(m[0][:10], '%Y-%m-%d') for m in movimentos]
         data_ini = min(datas_mov)
         data_fim = datetime.now()
-        # Sempre gere pontos mensais; a janela será aplicada depois
+
         pontos = _gerar_pontos_tempo('mensal', data_ini, data_fim)
 
-        # Tickers e histórico de preços
+
         tickers = sorted(list({m[1] for m in movimentos}))
         ticker_to_hist = {}
         for tk in tickers:
             try:
                 yf_ticker = yf.Ticker(tk)
                 hist = yf_ticker.history(start=data_ini - timedelta(days=5), end=data_fim + timedelta(days=5))
-                # Normalizar timezone para comparações
+               
                 try:
                     if hasattr(hist.index, 'tz') and hist.index.tz is not None:
                         hist.index = hist.index.tz_localize(None)
@@ -2288,11 +2633,11 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
             except Exception:
                 ticker_to_hist[tk] = None
 
-        # Funções auxiliares
+
         def price_on_or_before(hist_df, dt):
             if hist_df is None or hist_df.empty:
                 return None
-            # buscar o último preço de fechamento antes ou na data
+            
             try:
                 sub = hist_df[hist_df.index <= dt]
                 if sub.empty:
@@ -2317,7 +2662,7 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
                         q += mq
             return q
 
-        # Valor da carteira por ponto
+ 
         carteira_vals = []
         datas_labels = []
         for pt in pontos:
@@ -2333,7 +2678,7 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
             carteira_vals.append(total)
             datas_labels.append(pt.strftime('%Y-%m'))
 
-        # Comparadores via yfinance
+ 
         indices_map = {
             'ibov': ['^BVSP', 'BOVA11.SA'],
             'ivvb11': ['IVVB11.SA'],
@@ -2370,11 +2715,11 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
 
                 ipca_map = {}
                 for item in dados:
-                    data_br = item['data']  # dd/mm/yyyy
+                    data_br = item['data']  
                     dia, mes, ano = data_br.split('/')
                     chave = f"{ano}-{mes}"
                     ipca_map[chave] = float(item['valor'])
-                # acumular
+
                 base = 100.0
                 for lab in datas_labels:
                     var = ipca_map.get(lab)
@@ -2425,7 +2770,7 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
         }
         datas_labels, series_dict = reduce_by_granularity(datas_labels, series_dict, agregacao)
 
-        # Rebase após aplicar a granularidade
+
         carteira_rebased = rebase(series_dict['carteira'])
         ibov_rebased = rebase(series_dict['ibov'])
         ivvb_rebased = rebase(series_dict['ivvb11'])
@@ -2455,11 +2800,47 @@ def init_controle_db(usuario=None):
         if not usuario:
             raise ValueError("Usuário não especificado")
     
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS receitas (
+                        id SERIAL PRIMARY KEY,
+                        nome TEXT NOT NULL,
+                        valor NUMERIC NOT NULL,
+                        data TEXT NOT NULL
+                    )
+                ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS cartoes (
+                        id SERIAL PRIMARY KEY,
+                        nome TEXT NOT NULL,
+                        valor NUMERIC NOT NULL,
+                        pago TEXT NOT NULL,
+                        data TEXT NOT NULL
+                    )
+                ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS outros_gastos (
+                        id SERIAL PRIMARY KEY,
+                        nome TEXT NOT NULL,
+                        valor NUMERIC NOT NULL,
+                        data TEXT NOT NULL
+                    )
+                ''')
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_receitas_data ON receitas(data)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_data ON cartoes(data)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_outros_gastos_data ON outros_gastos(data)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_pago ON cartoes(pago)")
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
     
-    # Tabela de receitas
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS receitas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2469,7 +2850,7 @@ def init_controle_db(usuario=None):
         )
     ''')
     
-    # Tabela de cartões
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS cartoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2480,7 +2861,7 @@ def init_controle_db(usuario=None):
         )
     ''')
     
-    # Tabela de outros gastos
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS outros_gastos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2489,7 +2870,7 @@ def init_controle_db(usuario=None):
             data TEXT NOT NULL
         )
     ''')
-    # PRAGMAs e índices
+
     try:
         cursor.execute("PRAGMA journal_mode=WAL;")
         cursor.execute("PRAGMA synchronous=NORMAL;")
@@ -2505,25 +2886,41 @@ def init_controle_db(usuario=None):
     conn.close()
 
 def salvar_receita(nome, valor):
-    """Salvar uma nova receita"""
+
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    data_atual = datetime.now().strftime('%Y-%m-%d')
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('INSERT INTO receitas (nome, valor, data) VALUES (%s, %s, %s)', (nome, valor, data_atual))
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    data_atual = datetime.now().strftime('%Y-%m-%d')
     cursor.execute('INSERT INTO receitas (nome, valor, data) VALUES (?, ?, ?)', (nome, valor, data_atual))
     conn.commit()
     conn.close()
 
 def atualizar_receita(id_registro, nome, valor):
-    """Atualizar uma receita existente"""
+
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('UPDATE receitas SET nome = %s, valor = %s WHERE id = %s', (nome, valor, id_registro))
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
@@ -2532,11 +2929,19 @@ def atualizar_receita(id_registro, nome, valor):
     conn.close()
 
 def remover_receita(id_registro):
-    """Remover uma receita"""
+  
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('DELETE FROM receitas WHERE id = %s', (id_registro,))
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
@@ -2545,29 +2950,46 @@ def remover_receita(id_registro):
     conn.close()
 
 def carregar_receitas_mes_ano(mes, ano, pessoa=None):
-    """Carregar receitas de um mês/ano específico, opcionalmente filtrado por pessoa.
-    Usa intervalo de datas (YYYY-MM) para permitir uso de índice em `data`."""
+   
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    mes_int = int(mes)
+    ano_int = int(ano)
+    if mes_int == 12:
+        prox_ano, prox_mes = ano_int + 1, 1
+    else:
+        prox_ano, prox_mes = ano_int, mes_int + 1
+    inicio = f"{ano_int}-{mes_int:02d}-01"
+    fim = f"{prox_ano}-{prox_mes:02d}-01"
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            if pessoa:
+                query = '''
+                    SELECT * FROM receitas 
+                    WHERE data >= %s AND data < %s AND nome = %s
+                    ORDER BY data DESC
+                '''
+                df = pd.read_sql_query(query, conn, params=(inicio, fim, pessoa))
+            else:
+                query = '''
+                    SELECT * FROM receitas 
+                    WHERE data >= %s AND data < %s
+                    ORDER BY data DESC
+                '''
+                df = pd.read_sql_query(query, conn, params=(inicio, fim))
+            return df
+        finally:
+            conn.close()
     db_path = get_db_path(usuario, "controle")
-    
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
-        # Índice útil para filtros por mês/ano
         try:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_receitas_data ON receitas(data)")
         except Exception:
             pass
-        mes_int = int(mes)
-        ano_int = int(ano)
-        if mes_int == 12:
-            prox_ano, prox_mes = ano_int + 1, 1
-        else:
-            prox_ano, prox_mes = ano_int, mes_int + 1
-        inicio = f"{ano_int}-{mes_int:02d}-01"
-        fim = f"{prox_ano}-{prox_mes:02d}-01"
         if pessoa:
             query = '''
                 SELECT * FROM receitas 
@@ -2587,22 +3009,31 @@ def carregar_receitas_mes_ano(mes, ano, pessoa=None):
         conn.close()
 
 def adicionar_cartao(nome, valor, pago):
-    """Adicionar um novo cartão"""
+
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    data_atual = datetime.now().strftime('%Y-%m-%d')
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('INSERT INTO cartoes (nome, valor, pago, data) VALUES (%s, %s, %s, %s)', 
+                               (nome, valor, pago, data_atual))
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    data_atual = datetime.now().strftime('%Y-%m-%d')
     cursor.execute('INSERT INTO cartoes (nome, valor, pago, data) VALUES (?, ?, ?, ?)', 
                   (nome, valor, pago, data_atual))
     conn.commit()
     conn.close()
 
 def carregar_cartoes_mes_ano(mes, ano):
-    """Carregar cartões de um mês/ano específico (intervalo de datas)."""
+    
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
@@ -2629,7 +3060,7 @@ def carregar_cartoes_mes_ano(mes, ano):
     return df.to_dict('records')
 
 def atualizar_cartao(id_registro, nome, valor, pago):
-    """Atualizar um cartão existente"""
+
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
@@ -2643,7 +3074,7 @@ def atualizar_cartao(id_registro, nome, valor, pago):
     conn.close()
 
 def remover_cartao(id_registro):
-    """Remover um cartão"""
+ 
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
@@ -2656,7 +3087,7 @@ def remover_cartao(id_registro):
     conn.close()
 
 def adicionar_outro_gasto(nome, valor):
-    """Adicionar outro gasto"""
+ 
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
@@ -2671,7 +3102,7 @@ def adicionar_outro_gasto(nome, valor):
     conn.close()
 
 def carregar_outros_mes_ano(mes, ano):
-    """Carregar outros gastos de um mês/ano específico (intervalo de datas)."""
+   
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
@@ -2698,7 +3129,7 @@ def carregar_outros_mes_ano(mes, ano):
     return df.to_dict('records')
 
 def atualizar_outro_gasto(id_registro, nome, valor):
-    """Atualizar outro gasto"""
+
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
@@ -2712,7 +3143,7 @@ def atualizar_outro_gasto(id_registro, nome, valor):
     conn.close()
 
 def remover_outro_gasto(id_registro):
-    """Remover outro gasto"""
+   
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
@@ -2729,16 +3160,31 @@ def remover_outro_gasto(id_registro):
 # ==================== FUNÇÕES DE MARMITAS ====================
 
 def init_marmitas_db(usuario=None):
-    """Inicializar banco de dados de marmitas para um usuário específico"""
+ 
     if not usuario:
         usuario = get_usuario_atual()
         if not usuario:
             raise ValueError("Usuário não especificado")
     
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS marmitas (
+                        id SERIAL PRIMARY KEY,
+                        data TEXT NOT NULL,
+                        valor NUMERIC NOT NULL,
+                        comprou INTEGER NOT NULL
+                    )
+                ''')
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_marmitas_data ON marmitas(data)")
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "marmitas")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS marmitas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2747,7 +3193,6 @@ def init_marmitas_db(usuario=None):
             comprou INTEGER NOT NULL
         )
     ''')
-    # PRAGMAs e índice
     try:
         cursor.execute("PRAGMA journal_mode=WAL;")
         cursor.execute("PRAGMA synchronous=NORMAL;")
@@ -2755,7 +3200,6 @@ def init_marmitas_db(usuario=None):
     except Exception:
         pass
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_marmitas_data ON marmitas(data)")
-    
     conn.commit()
     conn.close()
 
@@ -2765,10 +3209,28 @@ def consultar_marmitas(mes=None, ano=None):
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                if mes and ano:
+                    mes_int = int(mes)
+                    ano_int = int(ano)
+                    if mes_int == 12:
+                        prox_ano, prox_mes = ano_int + 1, 1
+                    else:
+                        prox_ano, prox_mes = ano_int, mes_int + 1
+                    inicio = f"{ano_int}-{mes_int:02d}-01"
+                    fim = f"{prox_ano}-{prox_mes:02d}-01"
+                    cursor.execute('SELECT * FROM marmitas WHERE data >= %s AND data < %s ORDER BY data DESC', (inicio, fim))
+                else:
+                    cursor.execute('SELECT * FROM marmitas ORDER BY data DESC')
+                return cursor.fetchall()
+        finally:
+            conn.close()
     db_path = get_db_path(usuario, "marmitas")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    
     if mes and ano:
         mes_int = int(mes)
         ano_int = int(ano)
@@ -2778,15 +3240,9 @@ def consultar_marmitas(mes=None, ano=None):
             prox_ano, prox_mes = ano_int, mes_int + 1
         inicio = f"{ano_int}-{mes_int:02d}-01"
         fim = f"{prox_ano}-{prox_mes:02d}-01"
-        query = '''
-            SELECT * FROM marmitas 
-            WHERE data >= ? AND data < ?
-            ORDER BY data DESC
-        '''
-        cursor.execute(query, (inicio, fim))
+        cursor.execute('SELECT * FROM marmitas WHERE data >= ? AND data < ? ORDER BY data DESC', (inicio, fim))
     else:
         cursor.execute('SELECT * FROM marmitas ORDER BY data DESC')
-    
     registros = cursor.fetchall()
     conn.close()
     return registros
@@ -2797,6 +3253,14 @@ def adicionar_marmita(data, valor, comprou):
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('INSERT INTO marmitas (data, valor, comprou) VALUES (%s, %s, %s)', (data, valor, comprou))
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "marmitas")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
@@ -2811,6 +3275,14 @@ def remover_marmita(id_registro):
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('DELETE FROM marmitas WHERE id = %s', (id_registro,))
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "marmitas")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
@@ -2824,10 +3296,7 @@ def gastos_mensais(periodo='6m'):
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
-    db_path = get_db_path(usuario, "marmitas")
-    conn = sqlite3.connect(db_path, check_same_thread=False)
-    
-    # Calcular data de início baseada no período
+   
     hoje = datetime.now()
     if periodo.endswith('m'):
         meses = int(periodo.replace('m', ''))
@@ -2836,8 +3305,22 @@ def gastos_mensais(periodo='6m'):
         anos = int(periodo.replace('y', ''))
         data_inicio = hoje - timedelta(days=365*anos)
     else:
-        data_inicio = hoje - timedelta(days=180)  # Default 6 meses
-    
+        data_inicio = hoje - timedelta(days=30)  
+        conn = _pg_conn_for_user(usuario)
+        try:
+            query = '''
+                SELECT left(data, 7) as "AnoMes", SUM(valor) as valor
+                FROM marmitas
+                WHERE data >= %s
+                GROUP BY 1
+                ORDER BY 1 DESC
+            '''
+            df = pd.read_sql_query(query, conn, params=(data_inicio.strftime('%Y-%m-%d'),))
+        finally:
+            conn.close()
+        return df
+    db_path = get_db_path(usuario, "marmitas")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     query = '''
         SELECT 
             substr(data, 1, 7) as AnoMes,
@@ -2858,51 +3341,67 @@ def inicializar_bancos_usuario(usuario):
     init_marmitas_db(usuario)
 
 def calcular_saldo_mes_ano(mes, ano, pessoa=None):
-    """Calcular saldo de um mês/ano específico"""
+    
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
-    db_path = get_db_path(usuario, "controle")
-    conn = sqlite3.connect(db_path, check_same_thread=False)
-    
-    # Formatar mês com zero à esquerda se necessário
-    mes_formatado = f"{int(mes):02d}"
-  
-    query_receitas = '''
-        SELECT SUM(valor) as total FROM receitas 
-        WHERE strftime('%m', data) = ? AND strftime('%Y', data) = ?
-    '''
-    df_receitas = pd.read_sql_query(query_receitas, conn, params=(mes_formatado, ano))
-    
-
-    query_cartoes = '''
-        SELECT * FROM cartoes 
-        WHERE strftime('%m', data) = ? AND strftime('%Y', data) = ?
-    '''
-    df_cartoes = pd.read_sql_query(query_cartoes, conn, params=(mes_formatado, ano))
-    
-
-    query_outros = '''
-        SELECT * FROM outros_gastos 
-        WHERE strftime('%m', data) = ? AND strftime('%Y', data) = ?
-    '''
-    df_outros = pd.read_sql_query(query_outros, conn, params=(mes_formatado, ano))
-    
-    conn.close()
-    
-    total_receitas = df_receitas['total'].iloc[0] if not df_receitas.empty and df_receitas['total'].iloc[0] is not None else 0
-    
-
-    if not df_cartoes.empty:
-        df_cartoes_pagos = df_cartoes[df_cartoes['pago'] == 'Sim']
-        total_cartoes = df_cartoes_pagos['valor'].sum() if not df_cartoes_pagos.empty else 0
+    mes_int = int(mes)
+    ano_int = int(ano)
+    if mes_int == 12:
+        prox_ano, prox_mes = ano_int + 1, 1
     else:
-        total_cartoes = 0
-    
-    total_outros = df_outros['valor'].sum() if not df_outros.empty else 0
+        prox_ano, prox_mes = ano_int, mes_int + 1
+    inicio = f"{ano_int}-{mes_int:02d}-01"
+    fim = f"{prox_ano}-{prox_mes:02d}-01"
+
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+
+            df_receitas = pd.read_sql_query(
+                'SELECT SUM(valor) as total FROM receitas WHERE data >= %s AND data < %s',
+                conn,
+                params=(inicio, fim)
+            )
+          
+            df_cartoes = pd.read_sql_query(
+                "SELECT valor, pago FROM cartoes WHERE data >= %s AND data < %s",
+                conn,
+                params=(inicio, fim)
+            )
+  
+            df_outros = pd.read_sql_query(
+                'SELECT valor FROM outros_gastos WHERE data >= %s AND data < %s',
+                conn,
+                params=(inicio, fim)
+            )
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "controle")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        # Intervalos para usar índice
+        df_receitas = pd.read_sql_query(
+            'SELECT SUM(valor) as total FROM receitas WHERE data >= ? AND data < ?',
+            conn,
+            params=(inicio, fim)
+        )
+        df_cartoes = pd.read_sql_query(
+            'SELECT valor, pago FROM cartoes WHERE data >= ? AND data < ?',
+            conn,
+            params=(inicio, fim)
+        )
+        df_outros = pd.read_sql_query(
+            'SELECT valor FROM outros_gastos WHERE data >= ? AND data < ?',
+            conn,
+            params=(inicio, fim)
+        )
+        conn.close()
+
+    total_receitas = float(df_receitas['total'].iloc[0]) if not df_receitas.empty and df_receitas['total'].iloc[0] is not None else 0.0
+    total_cartoes = float(df_cartoes[df_cartoes['pago'] == 'Sim']['valor'].sum()) if not df_cartoes.empty else 0.0
+    total_outros = float(df_outros['valor'].sum()) if not df_outros.empty else 0.0
     total_despesas = total_cartoes + total_outros
-    
     return total_receitas - total_despesas
 
-# ==================== FUNÇÕES DE ASSISTENTE IA ====================
