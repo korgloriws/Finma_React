@@ -40,19 +40,14 @@ def _get_pg_conn():
     return conn
 
 def _pg_schema_for_user(username: str) -> str:
-   
-    base = re.sub(r"[^a-zA-Z0-9_]", "_", (username or "anon").lower())
-    if not base:
-        base = "anon"
-    return f"u_{base}"
+    # Usar apenas o schema público neste momento
+    return "public"
 
 def _pg_use_schema(conn, username: str):
-    schema = _pg_schema_for_user(username)
+    # Forçar uso do schema público
     with conn.cursor() as cur:
-        cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
-        # Priorizar schema do usuário, mas permitir fallback para public
-        cur.execute(f"SET search_path TO {schema}, public")
-    return schema
+        cur.execute("SET search_path TO public")
+    return "public"
 
 def _pg_conn_for_user(username: str):
     conn = _get_pg_conn()
@@ -60,10 +55,11 @@ def _pg_conn_for_user(username: str):
     return conn
 
 def _get_sqlalchemy_engine_for_user(username: str):
-    # Retorna um Engine do SQLAlchemy com search_path configurado para <schema>,public
+    
     if not _is_postgres() or create_engine is None:
         return None
-    schema = _pg_schema_for_user(username)
+    # schema fixo em public
+    schema = "public"
     url = DATABASE_URL
     try:
         if url.startswith('postgresql://'):
@@ -74,7 +70,7 @@ def _get_sqlalchemy_engine_for_user(username: str):
         engine = create_engine(
             url,
             connect_args={
-                "options": f"-c search_path={schema},public"
+                "options": f"-c search_path=public"
             },
             pool_pre_ping=True,
         )
