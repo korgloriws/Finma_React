@@ -6,3 +6,4 @@ flask-caching
 bcrypt
 gunicorn
 psycopg[binary]
+SQLAlchemy

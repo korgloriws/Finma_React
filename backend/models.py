@@ -15,6 +15,10 @@ try:
     import psycopg
 except Exception:
     psycopg = None
+try:
+    from sqlalchemy import create_engine  # para melhor compatibilidade com pandas
+except Exception:
+    create_engine = None
 
 
 USUARIO_ATUAL = None  
@@ -46,13 +50,37 @@ def _pg_use_schema(conn, username: str):
     schema = _pg_schema_for_user(username)
     with conn.cursor() as cur:
         cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
-        cur.execute(f"SET search_path TO {schema}")
+        # Priorizar schema do usuário, mas permitir fallback para public
+        cur.execute(f"SET search_path TO {schema}, public")
     return schema
 
 def _pg_conn_for_user(username: str):
     conn = _get_pg_conn()
     _pg_use_schema(conn, username)
     return conn
+
+def _get_sqlalchemy_engine_for_user(username: str):
+    # Retorna um Engine do SQLAlchemy com search_path configurado para <schema>,public
+    if not _is_postgres() or create_engine is None:
+        return None
+    schema = _pg_schema_for_user(username)
+    url = DATABASE_URL
+    try:
+        if url.startswith('postgresql://'):
+            url = 'postgresql+psycopg://' + url[len('postgresql://'):]
+    except Exception:
+        pass
+    try:
+        engine = create_engine(
+            url,
+            connect_args={
+                "options": f"-c search_path={schema},public"
+            },
+            pool_pre_ping=True,
+        )
+        return engine
+    except Exception:
+        return None
 
 def set_usuario_atual(username):
    
@@ -2964,25 +2992,22 @@ def carregar_receitas_mes_ano(mes, ano, pessoa=None):
     inicio = f"{ano_int}-{mes_int:02d}-01"
     fim = f"{prox_ano}-{prox_mes:02d}-01"
     if _is_postgres():
-        conn = _pg_conn_for_user(usuario)
-        try:
-            if pessoa:
-                query = '''
-                    SELECT * FROM receitas 
-                    WHERE data >= %s AND data < %s AND nome = %s
-                    ORDER BY data DESC
-                '''
-                df = pd.read_sql_query(query, conn, params=(inicio, fim, pessoa))
-            else:
-                query = '''
-                    SELECT * FROM receitas 
-                    WHERE data >= %s AND data < %s
-                    ORDER BY data DESC
-                '''
-                df = pd.read_sql_query(query, conn, params=(inicio, fim))
-            return df
-        finally:
-            conn.close()
+        engine = _get_sqlalchemy_engine_for_user(usuario)
+        if pessoa:
+            query = '''
+                SELECT * FROM receitas 
+                WHERE data >= %s AND data < %s AND nome = %s
+                ORDER BY data DESC
+            '''
+            df = pd.read_sql_query(query, engine, params=(inicio, fim, pessoa))
+        else:
+            query = '''
+                SELECT * FROM receitas 
+                WHERE data >= %s AND data < %s
+                ORDER BY data DESC
+            '''
+            df = pd.read_sql_query(query, engine, params=(inicio, fim))
+        return df
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
@@ -3047,16 +3072,13 @@ def carregar_cartoes_mes_ano(mes, ano):
     inicio = f"{ano_int}-{mes_int:02d}-01"
     fim = f"{prox_ano}-{prox_mes:02d}-01"
     if _is_postgres():
-        conn = _pg_conn_for_user(usuario)
-        try:
-            query = '''
-                SELECT * FROM cartoes 
-                WHERE data >= %s AND data < %s
-                ORDER BY data DESC
-            '''
-            df = pd.read_sql_query(query, conn, params=(inicio, fim))
-        finally:
-            conn.close()
+        engine = _get_sqlalchemy_engine_for_user(usuario)
+        query = '''
+            SELECT * FROM cartoes 
+            WHERE data >= %s AND data < %s
+            ORDER BY data DESC
+        '''
+        df = pd.read_sql_query(query, engine, params=(inicio, fim))
         return df.to_dict('records')
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3154,16 +3176,13 @@ def carregar_outros_mes_ano(mes, ano):
     inicio = f"{ano_int}-{mes_int:02d}-01"
     fim = f"{prox_ano}-{prox_mes:02d}-01"
     if _is_postgres():
-        conn = _pg_conn_for_user(usuario)
-        try:
-            query = '''
-                SELECT * FROM outros_gastos 
-                WHERE data >= %s AND data < %s
-                ORDER BY data DESC
-            '''
-            df = pd.read_sql_query(query, conn, params=(inicio, fim))
-        finally:
-            conn.close()
+        engine = _get_sqlalchemy_engine_for_user(usuario)
+        query = '''
+            SELECT * FROM outros_gastos 
+            WHERE data >= %s AND data < %s
+            ORDER BY data DESC
+        '''
+        df = pd.read_sql_query(query, engine, params=(inicio, fim))
         return df.to_dict('records')
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3374,18 +3393,15 @@ def gastos_mensais(periodo='6m'):
         data_inicio = hoje - timedelta(days=30)
 
     if _is_postgres():
-        conn = _pg_conn_for_user(usuario)
-        try:
-            query = '''
-                SELECT left(data, 7) as "AnoMes", SUM(valor) as valor
-                FROM marmitas
-                WHERE data >= %s
-                GROUP BY 1
-                ORDER BY 1 DESC
-            '''
-            df = pd.read_sql_query(query, conn, params=(data_inicio.strftime('%Y-%m-%d'),))
-        finally:
-            conn.close()
+        engine = _get_sqlalchemy_engine_for_user(usuario)
+        query = '''
+            SELECT left(data, 7) as "AnoMes", SUM(valor) as valor
+            FROM marmitas
+            WHERE data >= %s
+            GROUP BY 1
+            ORDER BY 1 DESC
+        '''
+        df = pd.read_sql_query(query, engine, params=(data_inicio.strftime('%Y-%m-%d'),))
         return df
     db_path = get_db_path(usuario, "marmitas")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3424,28 +3440,23 @@ def calcular_saldo_mes_ano(mes, ano, pessoa=None):
     fim = f"{prox_ano}-{prox_mes:02d}-01"
 
     if _is_postgres():
-        conn = _pg_conn_for_user(usuario)
-        try:
-
-            df_receitas = pd.read_sql_query(
-                'SELECT SUM(valor) as total FROM receitas WHERE data >= %s AND data < %s',
-                conn,
-                params=(inicio, fim)
-            )
-          
-            df_cartoes = pd.read_sql_query(
-                "SELECT valor, pago FROM cartoes WHERE data >= %s AND data < %s",
-                conn,
-                params=(inicio, fim)
-            )
-  
-            df_outros = pd.read_sql_query(
-                'SELECT valor FROM outros_gastos WHERE data >= %s AND data < %s',
-                conn,
-                params=(inicio, fim)
-            )
-        finally:
-            conn.close()
+        engine = _get_sqlalchemy_engine_for_user(usuario)
+        
+        df_receitas = pd.read_sql_query(
+            'SELECT SUM(valor) as total FROM receitas WHERE data >= %s AND data < %s',
+            engine,
+            params=(inicio, fim)
+        )
+        df_cartoes = pd.read_sql_query(
+            'SELECT valor, pago FROM cartoes WHERE data >= %s AND data < %s',
+            engine,
+            params=(inicio, fim)
+        )
+        df_outros = pd.read_sql_query(
+            'SELECT valor FROM outros_gastos WHERE data >= %s AND data < %s',
+            engine,
+            params=(inicio, fim)
+        )
     else:
         db_path = get_db_path(usuario, "controle")
         conn = sqlite3.connect(db_path, check_same_thread=False)
