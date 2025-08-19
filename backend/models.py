@@ -22,7 +22,7 @@ SESSION_LOCK = threading.Lock()
 
 # ==================== ADAPTADOR DE BANCO (SQLite local x Postgres em produção) ====================
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("USUARIOS_DB_URL")
 
 def _is_postgres() -> bool:
     return bool(DATABASE_URL) and psycopg is not None
@@ -3038,17 +3038,29 @@ def carregar_cartoes_mes_ano(mes, ano):
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    mes_int = int(mes)
+    ano_int = int(ano)
+    if mes_int == 12:
+        prox_ano, prox_mes = ano_int + 1, 1
+    else:
+        prox_ano, prox_mes = ano_int, mes_int + 1
+    inicio = f"{ano_int}-{mes_int:02d}-01"
+    fim = f"{prox_ano}-{prox_mes:02d}-01"
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            query = '''
+                SELECT * FROM cartoes 
+                WHERE data >= %s AND data < %s
+                ORDER BY data DESC
+            '''
+            df = pd.read_sql_query(query, conn, params=(inicio, fim))
+        finally:
+            conn.close()
+        return df.to_dict('records')
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
-        mes_int = int(mes)
-        ano_int = int(ano)
-        if mes_int == 12:
-            prox_ano, prox_mes = ano_int + 1, 1
-        else:
-            prox_ano, prox_mes = ano_int, mes_int + 1
-        inicio = f"{ano_int}-{mes_int:02d}-01"
-        fim = f"{prox_ano}-{prox_mes:02d}-01"
         query = '''
             SELECT * FROM cartoes 
             WHERE data >= ? AND data < ?
@@ -3060,11 +3072,20 @@ def carregar_cartoes_mes_ano(mes, ano):
     return df.to_dict('records')
 
 def atualizar_cartao(id_registro, nome, valor, pago):
-
+    
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('UPDATE cartoes SET nome = %s, valor = %s, pago = %s WHERE id = %s', 
+                               (nome, valor, pago, id_registro))
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
@@ -3074,11 +3095,19 @@ def atualizar_cartao(id_registro, nome, valor, pago):
     conn.close()
 
 def remover_cartao(id_registro):
- 
+    
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('DELETE FROM cartoes WHERE id = %s', (id_registro,))
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
@@ -3087,37 +3116,58 @@ def remover_cartao(id_registro):
     conn.close()
 
 def adicionar_outro_gasto(nome, valor):
- 
+    
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    data_atual = datetime.now().strftime('%Y-%m-%d')
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('INSERT INTO outros_gastos (nome, valor, data) VALUES (%s, %s, %s)', 
+                               (nome, valor, data_atual))
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    data_atual = datetime.now().strftime('%Y-%m-%d')
     cursor.execute('INSERT INTO outros_gastos (nome, valor, data) VALUES (?, ?, ?)', 
                   (nome, valor, data_atual))
     conn.commit()
     conn.close()
 
 def carregar_outros_mes_ano(mes, ano):
-   
+    
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    mes_int = int(mes)
+    ano_int = int(ano)
+    if mes_int == 12:
+        prox_ano, prox_mes = ano_int + 1, 1
+    else:
+        prox_ano, prox_mes = ano_int, mes_int + 1
+    inicio = f"{ano_int}-{mes_int:02d}-01"
+    fim = f"{prox_ano}-{prox_mes:02d}-01"
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            query = '''
+                SELECT * FROM outros_gastos 
+                WHERE data >= %s AND data < %s
+                ORDER BY data DESC
+            '''
+            df = pd.read_sql_query(query, conn, params=(inicio, fim))
+        finally:
+            conn.close()
+        return df.to_dict('records')
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
-        mes_int = int(mes)
-        ano_int = int(ano)
-        if mes_int == 12:
-            prox_ano, prox_mes = ano_int + 1, 1
-        else:
-            prox_ano, prox_mes = ano_int, mes_int + 1
-        inicio = f"{ano_int}-{mes_int:02d}-01"
-        fim = f"{prox_ano}-{prox_mes:02d}-01"
         query = '''
             SELECT * FROM outros_gastos 
             WHERE data >= ? AND data < ?
@@ -3129,11 +3179,20 @@ def carregar_outros_mes_ano(mes, ano):
     return df.to_dict('records')
 
 def atualizar_outro_gasto(id_registro, nome, valor):
-
+    
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('UPDATE outros_gastos SET nome = %s, valor = %s WHERE id = %s', 
+                               (nome, valor, id_registro))
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
@@ -3143,11 +3202,19 @@ def atualizar_outro_gasto(id_registro, nome, valor):
     conn.close()
 
 def remover_outro_gasto(id_registro):
-   
+    
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('DELETE FROM outros_gastos WHERE id = %s', (id_registro,))
+        finally:
+            conn.close()
+        return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
@@ -3296,7 +3363,6 @@ def gastos_mensais(periodo='6m'):
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
-   
     hoje = datetime.now()
     if periodo.endswith('m'):
         meses = int(periodo.replace('m', ''))
@@ -3305,7 +3371,9 @@ def gastos_mensais(periodo='6m'):
         anos = int(periodo.replace('y', ''))
         data_inicio = hoje - timedelta(days=365*anos)
     else:
-        data_inicio = hoje - timedelta(days=30)  
+        data_inicio = hoje - timedelta(days=30)
+
+    if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             query = '''
