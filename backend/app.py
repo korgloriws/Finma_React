@@ -75,8 +75,14 @@ except Exception:
     # Fallback seguro
     CORS(server, supports_credentials=True)
 
-# Inicializar tabela de usuários
-criar_tabela_usuarios()
+
+try:
+    criar_tabela_usuarios()
+except Exception as e:
+    try:
+        print(f"WARN: não foi possível inicializar tabela de usuários agora: {e}")
+    except Exception:
+        pass
 
 # Segurança: ao subir/reiniciar servidor, invalidar todas as sessões persistidas
 try:

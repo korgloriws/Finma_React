@@ -24,11 +24,25 @@ SESSION_LOCK = threading.Lock()
 
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("USUARIOS_DB_URL")
 
+def _sanitize_dsn(dsn: str) -> str:
+
+    try:
+        from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+        parsed = urlparse(dsn)
+        q = dict(parse_qsl(parsed.query))
+        q.pop('channel_binding', None)
+        new_query = urlencode(q)
+        sanitized = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+        return sanitized
+    except Exception:
+        return dsn
+
 def _is_postgres() -> bool:
     return bool(DATABASE_URL) and psycopg is not None
 
 def _get_pg_conn():
-    conn = psycopg.connect(DATABASE_URL)
+    dsn = _sanitize_dsn(DATABASE_URL)
+    conn = psycopg.connect(dsn, connect_timeout=10)
     try:
         conn.autocommit = True
     except Exception:
