@@ -12,5 +12,5 @@ services:
         value: ""
       - key: USUARIOS_DB_URL
         sync: false
-
+    # Nenhum disco necessário quando usando Postgres Neon persistente
 

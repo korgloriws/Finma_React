@@ -24,25 +24,11 @@ SESSION_LOCK = threading.Lock()
 
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("USUARIOS_DB_URL")
 
-def _sanitize_dsn(dsn: str) -> str:
-
-    try:
-        from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
-        parsed = urlparse(dsn)
-        q = dict(parse_qsl(parsed.query))
-        q.pop('channel_binding', None)
-        new_query = urlencode(q)
-        sanitized = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
-        return sanitized
-    except Exception:
-        return dsn
-
 def _is_postgres() -> bool:
     return bool(DATABASE_URL) and psycopg is not None
 
 def _get_pg_conn():
-    dsn = _sanitize_dsn(DATABASE_URL)
-    conn = psycopg.connect(dsn, connect_timeout=10)
+    conn = psycopg.connect(DATABASE_URL)
     try:
         conn.autocommit = True
     except Exception:
@@ -174,17 +160,27 @@ def invalidar_todas_sessoes() -> None:
         except Exception:
             pass
 def get_usuario_atual():
-    
+   
     try:
         from flask import request, g
-        # Cache por request: evita hits repetidos ao banco na mesma requisição
+    except Exception:
+        request = None
+        g = None
+    # Cache por requisição para evitar consultas repetidas ao banco
+    if g is not None:
         try:
-            if hasattr(g, 'current_user') and g.current_user:
-                return g.current_user
+            cached_user = getattr(g, "_usuario_atual_cached")
+            return cached_user
         except Exception:
             pass
-        token = request.cookies.get('session_token')
+    try:
+        token = request.cookies.get('session_token') if request else None
         if not token:
+            if g is not None:
+                try:
+                    setattr(g, "_usuario_atual_cached", None)
+                except Exception:
+                    pass
             return None
         _create_sessions_table_if_needed()
         if _is_postgres():
@@ -194,6 +190,11 @@ def get_usuario_atual():
                     c.execute('SELECT username, expira_em FROM public.sessoes WHERE token = %s', (token,))
                     row = c.fetchone()
                     if not row:
+                        if g is not None:
+                            try:
+                                setattr(g, "_usuario_atual_cached", None)
+                            except Exception:
+                                pass
                         return None
                     username, expira_em = row
                     if int(expira_em) < int(time.time()):
@@ -201,14 +202,23 @@ def get_usuario_atual():
                             c.execute('DELETE FROM public.sessoes WHERE token = %s', (token,))
                         except Exception:
                             pass
+                        if g is not None:
+                            try:
+                                setattr(g, "_usuario_atual_cached", None)
+                            except Exception:
+                                pass
                         return None
-                    try:
-                        g.current_user = username
-                    except Exception:
-                        pass
+                    if g is not None:
+                        try:
+                            setattr(g, "_usuario_atual_cached", username)
+                        except Exception:
+                            pass
                     return username
             finally:
-                conn.close()
+                try:
+                    conn.close()
+                except Exception:
+                    pass
         else:
             conn = sqlite3.connect(USUARIOS_DB_PATH)
             try:
@@ -216,6 +226,11 @@ def get_usuario_atual():
                 c.execute('SELECT username, expira_em FROM sessoes WHERE token = ?', (token,))
                 row = c.fetchone()
                 if not row:
+                    if g is not None:
+                        try:
+                            setattr(g, "_usuario_atual_cached", None)
+                        except Exception:
+                            pass
                     return None
                 username, expira_em = row
                 if expira_em < int(time.time()):
@@ -225,11 +240,17 @@ def get_usuario_atual():
                         conn.commit()
                     except Exception:
                         pass
+                    if g is not None:
+                        try:
+                            setattr(g, "_usuario_atual_cached", None)
+                        except Exception:
+                            pass
                     return None
-                try:
-                    g.current_user = username
-                except Exception:
-                    pass
+                if g is not None:
+                    try:
+                        setattr(g, "_usuario_atual_cached", username)
+                    except Exception:
+                        pass
                 return username
             finally:
                 conn.close()
@@ -1527,31 +1548,6 @@ import yfinance as yf
 
 global_state = {"df_ativos": None, "carregando": False}
 
-# ==================== Cache helpers ====================
-CACHE_TTL_SHORT = 60  # segundos
-
-def _cache_set(key: str, value, timeout: int = CACHE_TTL_SHORT) -> None:
-    try:
-        if cache:
-            cache.set(key, value, timeout=timeout)
-    except Exception:
-        pass
-
-def _cache_get(key: str):
-    try:
-        if cache:
-            return cache.get(key)
-    except Exception:
-        return None
-    return None
-
-def _cache_clear_all() -> None:
-    try:
-        if cache:
-            cache.clear()
-    except Exception:
-        pass
-
 def carregar_ativos():
     acoes = LISTA_ACOES
     fiis = LISTA_FIIS
@@ -1842,7 +1838,6 @@ def cadastrar_usuario(nome, username, senha, pergunta_seguranca=None, resposta_s
                         INSERT INTO public.usuarios (nome, username, senha_hash, pergunta_seguranca, resposta_seguranca_hash, data_cadastro)
                         VALUES (%s, %s, %s, %s, %s, %s)
                     ''', (nome, username, senha_hash, pergunta_seguranca, resposta_hash, data_cadastro))
-                    _cache_clear_all()
                     return True
                 except Exception:
                     return False
@@ -1855,7 +1850,6 @@ def cadastrar_usuario(nome, username, senha, pergunta_seguranca=None, resposta_s
             c.execute('''INSERT INTO usuarios (nome, username, senha_hash, pergunta_seguranca, resposta_seguranca_hash, data_cadastro) VALUES (?, ?, ?, ?, ?, ?)''',
                       (nome, username, senha_hash, pergunta_seguranca, resposta_hash, data_cadastro))
             conn.commit()
-            _cache_clear_all()
             return True
         except sqlite3.IntegrityError:
             return False
@@ -1926,7 +1920,6 @@ def alterar_senha_direta(username, nova_senha):
         try:
             with conn.cursor() as c:
                 c.execute('UPDATE public.usuarios SET senha_hash = %s WHERE username = %s', (nova_senha_hash, username))
-                _cache_clear_all()
                 return True
         except Exception as e:
             print(f"Erro ao alterar senha: {e}")
@@ -1939,7 +1932,6 @@ def alterar_senha_direta(username, nova_senha):
         try:
             c.execute('UPDATE usuarios SET senha_hash = ? WHERE username = ?', (nova_senha_hash, username))
             conn.commit()
-            _cache_clear_all()
             return True
         except Exception as e:
             print(f"Erro ao alterar senha: {e}")
@@ -1956,7 +1948,6 @@ def atualizar_pergunta_seguranca(username, pergunta, resposta):
             with conn.cursor() as c:
                 c.execute('UPDATE public.usuarios SET pergunta_seguranca = %s, resposta_seguranca_hash = %s WHERE username = %s',
                           (pergunta, resposta_hash, username))
-                _cache_clear_all()
                 return True
         except Exception as e:
             print(f"Erro ao atualizar pergunta de segurança: {e}")
@@ -1971,7 +1962,6 @@ def atualizar_pergunta_seguranca(username, pergunta, resposta):
             c.execute('UPDATE usuarios SET pergunta_seguranca = ?, resposta_seguranca_hash = ? WHERE username = ?', 
                       (pergunta, resposta_hash, username))
             conn.commit()
-            _cache_clear_all()
             return True
         except Exception as e:
             print(f"Erro ao atualizar pergunta de segurança: {e}")
@@ -2227,14 +2217,6 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None):
             conn.commit()
             conn.close()
         
-        # Invalida caches relacionados
-        try:
-            user = get_usuario_atual()
-            if user:
-                _cache_set(f"carteira:{user}", None, timeout=1)
-                _cache_set(f"movs:{user}::", None, timeout=1)
-        except Exception:
-            pass
         return {"success": True, "message": "Ativo adicionado com sucesso"}
     except Exception as e:
         return {"success": False, "message": f"Erro ao adicionar ativo: {str(e)}"}
@@ -2257,12 +2239,6 @@ def remover_ativo_carteira(id):
                     data = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     cursor.execute('INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)', (data, ativo[0], ativo[1], ativo[2], ativo[3], "venda"))
                     cursor.execute('DELETE FROM carteira WHERE id = %s', (id,))
-                # invalidate caches
-                try:
-                    _cache_set(f"carteira:{usuario}", None, timeout=1)
-                    _cache_set(f"movs:{usuario}::", None, timeout=1)
-                except Exception:
-                    pass
                 return {"success": True, "message": "Ativo removido com sucesso"}
             finally:
                 conn.close()
@@ -2290,11 +2266,6 @@ def remover_ativo_carteira(id):
         conn.commit()
         conn.close()
         
-        try:
-            _cache_set(f"carteira:{usuario}", None, timeout=1)
-            _cache_set(f"movs:{usuario}::", None, timeout=1)
-        except Exception:
-            pass
         return {"success": True, "message": "Ativo removido com sucesso"}
     except Exception as e:
         return {"success": False, "message": f"Erro ao remover ativo: {str(e)}"}
@@ -2316,10 +2287,6 @@ def atualizar_ativo_carteira(id, quantidade):
                         return {"success": False, "message": "Ativo não encontrado"}
                     valor_total = float(ativo[2]) * quantidade
                     cursor.execute('UPDATE carteira SET quantidade = %s, valor_total = %s WHERE id = %s', (quantidade, valor_total, id))
-                try:
-                    _cache_set(f"carteira:{usuario}", None, timeout=1)
-                except Exception:
-                    pass
                 return {"success": True, "message": "Ativo atualizado com sucesso"}
             finally:
                 conn.close()
@@ -2343,10 +2310,6 @@ def atualizar_ativo_carteira(id, quantidade):
         conn.commit()
         conn.close()
         
-        try:
-            _cache_set(f"carteira:{usuario}", None, timeout=1)
-        except Exception:
-            pass
         return {"success": True, "message": "Ativo atualizado com sucesso"}
     except Exception as e:
         return {"success": False, "message": f"Erro ao atualizar ativo: {str(e)}"}
@@ -2357,11 +2320,7 @@ def obter_carteira():
         usuario = get_usuario_atual()
         if not usuario:
             return {"success": False, "message": "Usuário não autenticado"}
-        # Cache por usuário
-        cache_key = f"carteira:{usuario}"
-        cached = _cache_get(cache_key)
-        if cached is not None:
-            return cached
+
         if _is_postgres():
             conn = _pg_conn_for_user(usuario)
             try:
@@ -2391,7 +2350,6 @@ def obter_carteira():
                     "pvp": float(row[10]) if row[10] is not None else None,
                     "roe": float(row[11]) if row[11] is not None else None,
                 })
-            _cache_set(cache_key, ativos)
             return ativos
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -2421,7 +2379,6 @@ def obter_carteira():
             })
         
         conn.close()
-        _cache_set(cache_key, ativos)
         return ativos
     except Exception as e:
         print(f"Erro ao obter carteira: {e}")
@@ -2496,11 +2453,6 @@ def obter_movimentacoes(mes=None, ano=None):
         usuario = get_usuario_atual()
         if not usuario:
             return []
-        # Cache por usuário/mes/ano
-        cache_key = f"movs:{usuario}:{mes or ''}:{ano or ''}"
-        cached = _cache_get(cache_key)
-        if cached is not None:
-            return cached
 
         if _is_postgres():
             conn = _pg_conn_for_user(usuario)
@@ -2560,7 +2512,7 @@ def obter_movimentacoes(mes=None, ano=None):
                 "preco": row[5],
                 "tipo": row[6]
             })
-        _cache_set(cache_key, movimentacoes)
+        
         return movimentacoes
     except Exception as e:
         print(f"Erro ao obter movimentações: {e}")
@@ -2996,11 +2948,6 @@ def salvar_receita(nome, valor):
                 cursor.execute('INSERT INTO receitas (nome, valor, data) VALUES (%s, %s, %s)', (nome, valor, data_atual))
         finally:
             conn.close()
-        try:
-            _cache_set(f"receitas:{usuario}", None, timeout=1)
-            _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-        except Exception:
-            pass
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3008,11 +2955,6 @@ def salvar_receita(nome, valor):
     cursor.execute('INSERT INTO receitas (nome, valor, data) VALUES (?, ?, ?)', (nome, valor, data_atual))
     conn.commit()
     conn.close()
-    try:
-        _cache_set(f"receitas:{usuario}", None, timeout=1)
-        _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-    except Exception:
-        pass
 
 def atualizar_receita(id_registro, nome, valor):
 
@@ -3027,11 +2969,6 @@ def atualizar_receita(id_registro, nome, valor):
                 cursor.execute('UPDATE receitas SET nome = %s, valor = %s WHERE id = %s', (nome, valor, id_registro))
         finally:
             conn.close()
-        try:
-            _cache_set(f"receitas:{usuario}", None, timeout=1)
-            _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-        except Exception:
-            pass
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3039,11 +2976,6 @@ def atualizar_receita(id_registro, nome, valor):
     cursor.execute('UPDATE receitas SET nome = ?, valor = ? WHERE id = ?', (nome, valor, id_registro))
     conn.commit()
     conn.close()
-    try:
-        _cache_set(f"receitas:{usuario}", None, timeout=1)
-        _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-    except Exception:
-        pass
 
 def remover_receita(id_registro):
   
@@ -3058,11 +2990,6 @@ def remover_receita(id_registro):
                 cursor.execute('DELETE FROM receitas WHERE id = %s', (id_registro,))
         finally:
             conn.close()
-        try:
-            _cache_set(f"receitas:{usuario}", None, timeout=1)
-            _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-        except Exception:
-            pass
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3070,21 +2997,12 @@ def remover_receita(id_registro):
     cursor.execute('DELETE FROM receitas WHERE id = ?', (id_registro,))
     conn.commit()
     conn.close()
-    try:
-        _cache_set(f"receitas:{usuario}", None, timeout=1)
-        _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-    except Exception:
-        pass
 
 def carregar_receitas_mes_ano(mes, ano, pessoa=None):
    
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
-    cache_key = f"receitas:{usuario}:{mes}:{ano}:{pessoa or ''}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
 
     mes_int = int(mes)
     ano_int = int(ano)
@@ -3111,7 +3029,6 @@ def carregar_receitas_mes_ano(mes, ano, pessoa=None):
                     ORDER BY data DESC
                 '''
                 df = pd.read_sql_query(query, conn, params=(inicio, fim))
-            _cache_set(cache_key, df)
             return df
         finally:
             conn.close()
@@ -3136,7 +3053,6 @@ def carregar_receitas_mes_ano(mes, ano, pessoa=None):
                 ORDER BY data DESC
             '''
             df = pd.read_sql_query(query, conn, params=(inicio, fim))
-        _cache_set(cache_key, df)
         return df
     finally:
         conn.close()
@@ -3156,11 +3072,6 @@ def adicionar_cartao(nome, valor, pago):
                                (nome, valor, pago, data_atual))
         finally:
             conn.close()
-        try:
-            _cache_set(f"cartoes:{usuario}", None, timeout=1)
-            _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-        except Exception:
-            pass
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3169,21 +3080,12 @@ def adicionar_cartao(nome, valor, pago):
                   (nome, valor, pago, data_atual))
     conn.commit()
     conn.close()
-    try:
-        _cache_set(f"cartoes:{usuario}", None, timeout=1)
-        _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-    except Exception:
-        pass
 
 def carregar_cartoes_mes_ano(mes, ano):
     
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
-    cache_key = f"cartoes:{usuario}:{mes}:{ano}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
 
     mes_int = int(mes)
     ano_int = int(ano)
@@ -3204,9 +3106,7 @@ def carregar_cartoes_mes_ano(mes, ano):
             df = pd.read_sql_query(query, conn, params=(inicio, fim))
         finally:
             conn.close()
-        payload = df.to_dict('records')
-        _cache_set(cache_key, payload)
-        return payload
+        return df.to_dict('records')
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
@@ -3218,9 +3118,7 @@ def carregar_cartoes_mes_ano(mes, ano):
         df = pd.read_sql_query(query, conn, params=(inicio, fim))
     finally:
         conn.close()
-    payload = df.to_dict('records')
-    _cache_set(cache_key, payload)
-    return payload
+    return df.to_dict('records')
 
 def atualizar_cartao(id_registro, nome, valor, pago):
     
@@ -3236,11 +3134,6 @@ def atualizar_cartao(id_registro, nome, valor, pago):
                                (nome, valor, pago, id_registro))
         finally:
             conn.close()
-        try:
-            _cache_set(f"cartoes:{usuario}", None, timeout=1)
-            _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-        except Exception:
-            pass
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3249,11 +3142,6 @@ def atualizar_cartao(id_registro, nome, valor, pago):
                   (nome, valor, pago, id_registro))
     conn.commit()
     conn.close()
-    try:
-        _cache_set(f"cartoes:{usuario}", None, timeout=1)
-        _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-    except Exception:
-        pass
 
 def remover_cartao(id_registro):
     
@@ -3268,11 +3156,6 @@ def remover_cartao(id_registro):
                 cursor.execute('DELETE FROM cartoes WHERE id = %s', (id_registro,))
         finally:
             conn.close()
-        try:
-            _cache_set(f"cartoes:{usuario}", None, timeout=1)
-            _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-        except Exception:
-            pass
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3280,11 +3163,6 @@ def remover_cartao(id_registro):
     cursor.execute('DELETE FROM cartoes WHERE id = ?', (id_registro,))
     conn.commit()
     conn.close()
-    try:
-        _cache_set(f"cartoes:{usuario}", None, timeout=1)
-        _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-    except Exception:
-        pass
 
 def adicionar_outro_gasto(nome, valor):
     
@@ -3301,11 +3179,6 @@ def adicionar_outro_gasto(nome, valor):
                                (nome, valor, data_atual))
         finally:
             conn.close()
-        try:
-            _cache_set(f"outros:{usuario}", None, timeout=1)
-            _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-        except Exception:
-            pass
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3314,21 +3187,12 @@ def adicionar_outro_gasto(nome, valor):
                   (nome, valor, data_atual))
     conn.commit()
     conn.close()
-    try:
-        _cache_set(f"outros:{usuario}", None, timeout=1)
-        _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-    except Exception:
-        pass
 
 def carregar_outros_mes_ano(mes, ano):
     
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
-    cache_key = f"outros:{usuario}:{mes}:{ano}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
 
     mes_int = int(mes)
     ano_int = int(ano)
@@ -3349,9 +3213,7 @@ def carregar_outros_mes_ano(mes, ano):
             df = pd.read_sql_query(query, conn, params=(inicio, fim))
         finally:
             conn.close()
-        payload = df.to_dict('records')
-        _cache_set(cache_key, payload)
-        return payload
+        return df.to_dict('records')
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
@@ -3363,9 +3225,7 @@ def carregar_outros_mes_ano(mes, ano):
         df = pd.read_sql_query(query, conn, params=(inicio, fim))
     finally:
         conn.close()
-    payload = df.to_dict('records')
-    _cache_set(cache_key, payload)
-    return payload
+    return df.to_dict('records')
 
 def atualizar_outro_gasto(id_registro, nome, valor):
     
@@ -3381,11 +3241,6 @@ def atualizar_outro_gasto(id_registro, nome, valor):
                                (nome, valor, id_registro))
         finally:
             conn.close()
-        try:
-            _cache_set(f"outros:{usuario}", None, timeout=1)
-            _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-        except Exception:
-            pass
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3394,11 +3249,6 @@ def atualizar_outro_gasto(id_registro, nome, valor):
                   (nome, valor, id_registro))
     conn.commit()
     conn.close()
-    try:
-        _cache_set(f"outros:{usuario}", None, timeout=1)
-        _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-    except Exception:
-        pass
 
 def remover_outro_gasto(id_registro):
     
@@ -3413,11 +3263,6 @@ def remover_outro_gasto(id_registro):
                 cursor.execute('DELETE FROM outros_gastos WHERE id = %s', (id_registro,))
         finally:
             conn.close()
-        try:
-            _cache_set(f"outros:{usuario}", None, timeout=1)
-            _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-        except Exception:
-            pass
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3425,11 +3270,6 @@ def remover_outro_gasto(id_registro):
     cursor.execute('DELETE FROM outros_gastos WHERE id = ?', (id_registro,))
     conn.commit()
     conn.close()
-    try:
-        _cache_set(f"outros:{usuario}", None, timeout=1)
-        _cache_set(f"home_resumo:{usuario}", None, timeout=1)
-    except Exception:
-        pass
 
 
 
@@ -3501,8 +3341,7 @@ def consultar_marmitas(mes=None, ano=None):
                     cursor.execute('SELECT * FROM marmitas WHERE data >= %s AND data < %s ORDER BY data DESC', (inicio, fim))
                 else:
                     cursor.execute('SELECT * FROM marmitas ORDER BY data DESC')
-                rows = cursor.fetchall()
-                return rows
+                return cursor.fetchall()
         finally:
             conn.close()
     db_path = get_db_path(usuario, "marmitas")

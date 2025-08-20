@@ -36,24 +36,18 @@ server = Flask(
     static_url_path=''
 )
 
-# Inicializar cache simples em memória
+# Compressão gzip para reduzir payloads de JSON
 try:
-    cache.init_app(server)
+    from flask_compress import Compress
+    Compress(server)
 except Exception:
     pass
 
 
-@server.after_request
-def add_http_cache_headers(response):
-    try:
-        from flask import request
-        path = request.path or ''
-        if request.method == 'GET' and path.startswith('/api/') and not path.startswith('/api/auth'):
-            response.headers['Cache-Control'] = 'private, max-age=60'
-            response.headers['Vary'] = 'Cookie'
-    except Exception:
-        pass
-    return response
+try:
+    cache.init_app(server)
+except Exception:
+    pass
 
 
 try:
@@ -61,7 +55,7 @@ try:
     allowed_origins = set()
     if FRONTEND_ORIGIN:
         allowed_origins.add(FRONTEND_ORIGIN)
-    # Origens comuns em desenvolvimento
+  
     allowed_origins.update({
         'http://localhost:5173',
         'http://127.0.0.1:5173',
@@ -72,49 +66,43 @@ try:
         resources={r"/api/*": {"origins": list(allowed_origins)}},
     )
 except Exception:
-    # Fallback seguro
+
     CORS(server, supports_credentials=True)
 
 
-try:
-    criar_tabela_usuarios()
-except Exception as e:
-    try:
-        print(f"WARN: não foi possível inicializar tabela de usuários agora: {e}")
-    except Exception:
-        pass
+criar_tabela_usuarios()
 
-# Segurança: ao subir/reiniciar servidor, invalidar todas as sessões persistidas
+
 try:
     invalidar_todas_sessoes()
 except Exception:
     pass
 
-# ==================== APIs DE AUTENTICAÇÃO ====================
+
 
 @server.route("/api/auth/registro", methods=["POST"])
 def api_registro():
-    """Registrar novo usuário"""
+    
     try:
         data = request.get_json()
         nome = data.get('nome')
         username = data.get('username')
         senha = data.get('senha')
-        pergunta_seguranca = data.get('pergunta_seguranca')  # Opcional
-        resposta_seguranca = data.get('resposta_seguranca')  # Opcional
+        pergunta_seguranca = data.get('pergunta_seguranca') 
+        resposta_seguranca = data.get('resposta_seguranca')  
         
         if not nome or not username or not senha:
             return jsonify({"error": "Nome, username e senha são obrigatórios"}), 400
         
-        # Verificar se usuário já existe
+ 
         usuario_existente = buscar_usuario_por_username(username)
         if usuario_existente:
             return jsonify({"error": "Usuário já existe"}), 400
         
-        # Cadastrar usuário
+        
         resultado = cadastrar_usuario(nome, username, senha, pergunta_seguranca, resposta_seguranca)
         if resultado:
-            # Inicializar bancos para o novo usuário
+           
             inicializar_bancos_usuario(username)
             return jsonify({"message": "Usuário cadastrado com sucesso"}), 201
         else:
@@ -125,7 +113,7 @@ def api_registro():
 
 @server.route("/api/auth/login", methods=["POST"])
 def api_login():
-    """Fazer login do usuário"""
+    
     try:
         data = request.get_json()
         username = data.get('username')
@@ -134,9 +122,9 @@ def api_login():
         if not username or not senha:
             return jsonify({"error": "Username e senha são obrigatórios"}), 400
         
-        # Verificar credenciais
+      
         if verificar_senha(username, senha):
-            # Verificar se os bancos existem, se não, criar
+
             try:
                 import os
                 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -145,32 +133,32 @@ def api_login():
                 if not os.path.exists(bancos_dir):
                     inicializar_bancos_usuario(username)
                 else:
-                    # Verificar se todos os 3 bancos existem
+             
                     bancos_necessarios = ['carteira.db', 'controle.db', 'marmitas.db']
                     bancos_existentes = [f for f in os.listdir(bancos_dir) if f.endswith('.db')]
                     
                     if len(bancos_existentes) < 3:
                         inicializar_bancos_usuario(username)
             except Exception as e:
-                # Continuar mesmo com erro nos bancos
+               
                 pass
             
 
             set_usuario_atual(username)
-            # Criar sessão persistente baseada em token
+           
             session_token = criar_sessao(username, duracao_segundos=3600)
-            # Criar resposta com cookies
+           
             response = make_response(jsonify({
                 "message": "Login realizado com sucesso",
                 "username": username
             }), 200)
 
-            # Definir cookie com o username (cross-site em produção)
+           
             is_production = bool(os.getenv('FLY_APP_NAME')) or os.getenv('ENVIRONMENT') == 'production'
             cookie_samesite = 'None' if is_production else 'Lax'
             cookie_secure = True if is_production else False
 
-            # Token de sessão httpOnly como cookie de sessão (sem max_age): expira ao fechar o navegador
+            
             response.set_cookie(
                 'session_token',
                 session_token,
@@ -188,13 +176,13 @@ def api_login():
 
 @server.route("/api/auth/logout", methods=["POST"])
 def api_logout():
-    """Fazer logout do usuário"""
+
     try:
-        # Forçar limpeza completa da sessão
+       
         from models import limpar_sessoes_expiradas, SESSION_LOCK
         import threading
         
-        # Invalidar token se existir
+     
         try:
             token = request.cookies.get('session_token')
             if token:
@@ -202,14 +190,14 @@ def api_logout():
         except Exception:
             pass
         
-        # Limpar sessões expiradas
+        
         limpar_sessoes_expiradas()
         
-        # Criar resposta e limpar cookie
+     
         response = make_response(jsonify({"message": "Logout realizado com sucesso"}), 200)
         response.delete_cookie('session_token')
         
-        # Adicionar headers para forçar limpeza no frontend
+      
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
@@ -232,7 +220,7 @@ def api_usuario_atual():
 
 @server.route("/api/auth/debug-bancos", methods=["GET"])
 def api_debug_bancos():
-    """Debug: Verificar bancos de dados dos usuários"""
+    
     try:
         import os
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -264,14 +252,14 @@ def api_debug_bancos():
 
 @server.route("/api/auth/criar-bancos/<username>", methods=["POST"])
 def api_criar_bancos(username):
-    """Forçar criação dos bancos para um usuário específico"""
+    
     try:
-        # Verificar se o usuário existe
+
         usuario_existente = buscar_usuario_por_username(username)
         if not usuario_existente:
             return jsonify({"error": "Usuário não encontrado"}), 404
         
-        # Inicializar bancos para o usuário
+       
         inicializar_bancos_usuario(username)
         
         return jsonify({
@@ -285,7 +273,7 @@ def api_criar_bancos(username):
 
 @server.route("/api/auth/obter-pergunta", methods=["POST"])
 def api_obter_pergunta():
-    """Obter pergunta de segurança do usuário"""
+  
     try:
         data = request.get_json()
         username = data.get('username')
@@ -768,8 +756,18 @@ def api_get_carteira():
         # Debug: verificar qual usuário está sendo usado
         usuario_atual = get_usuario_atual()
         print(f"DEBUG - Carteira: Usuário atual = {usuario_atual}")
-        
+        # Cache por usuário (30s)
+        cache_key = f"carteira:{usuario_atual}" if usuario_atual else None
+        if cache_key and cache:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return jsonify(cached)
         carteira = obter_carteira()
+        if cache_key and cache:
+            try:
+                cache.set(cache_key, carteira, timeout=30)
+            except Exception:
+                pass
         return jsonify(carteira)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -787,7 +785,12 @@ def api_adicionar_ativo():
             return jsonify({"error": "Ticker e quantidade são obrigatórios"}), 400
             
         resultado = adicionar_ativo_carteira(ticker, quantidade, tipo)
-        
+        # invalidar cache simples
+        try:
+            if cache:
+                cache.clear()
+        except Exception:
+            pass
         if resultado["success"]:
             return jsonify(resultado), 201
         else:
@@ -800,6 +803,11 @@ def api_remover_ativo(id):
     """API para remover um ativo da carteira"""
     try:
         resultado = remover_ativo_carteira(id)
+        try:
+            if cache:
+                cache.clear()
+        except Exception:
+            pass
         
         if resultado["success"]:
             return jsonify(resultado), 200
@@ -819,6 +827,11 @@ def api_atualizar_ativo(id):
             return jsonify({"error": "Quantidade é obrigatória"}), 400
             
         resultado = atualizar_ativo_carteira(id, quantidade)
+        try:
+            if cache:
+                cache.clear()
+        except Exception:
+            pass
         
         if resultado["success"]:
             return jsonify(resultado), 200
@@ -834,8 +847,19 @@ def api_get_movimentacoes():
         mes = request.args.get('mes', type=int)
         ano = request.args.get('ano', type=int)
         
+        usuario_atual = get_usuario_atual()
+        cache_key = None
+        if cache and usuario_atual:
+            cache_key = f"movimentacoes:{usuario_atual}:{mes or ''}:{ano or ''}"
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return jsonify(cached)
         movimentacoes = obter_movimentacoes(mes, ano)
-        
+        if cache and cache_key:
+            try:
+                cache.set(cache_key, movimentacoes, timeout=30)
+            except Exception:
+                pass
         return jsonify(movimentacoes)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1047,10 +1071,19 @@ def api_get_marmitas():
         mes = request.args.get('mes', type=int)
         ano = request.args.get('ano', type=int)
         
-        registros = consultar_marmitas(
-            str(mes).zfill(2) if mes else None, 
-            str(ano) if ano else None
-        )
+        usuario = get_usuario_atual()
+        mes_key = str(mes).zfill(2) if mes else ''
+        ano_key = str(ano) if ano else ''
+        cache_key = None
+        if cache and usuario:
+            cache_key = f"marmitas:{usuario}:{mes_key}:{ano_key}"
+            cached = cache.get(cache_key)
+            if cached is not None:
+                registros = cached
+            else:
+                registros = consultar_marmitas(mes_key or None, ano_key or None)
+        else:
+            registros = consultar_marmitas(mes_key or None, ano_key or None)
         
         # Formatar dados
         marmitas = []
@@ -1063,6 +1096,11 @@ def api_get_marmitas():
                 'comprou': bool(registro[3])
             })
         
+        if cache and cache_key:
+            try:
+                cache.set(cache_key, registros, timeout=30)
+            except Exception:
+                pass
         return jsonify(marmitas)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1082,6 +1120,11 @@ def api_adicionar_marmita():
         # Normalizar para apenas a parte de data (YYYY-MM-DD) sem timezone
         data_limpa = str(data_marmita)[:10]
         adicionar_marmita(data_limpa, valor, 1 if comprou else 0)
+        try:
+            if cache:
+                cache.clear()
+        except Exception:
+            pass
         
         return jsonify({"success": True, "message": "Marmita adicionada com sucesso"}), 201
     except Exception as e:
@@ -1092,6 +1135,11 @@ def api_remover_marmita(id):
     """API para remover marmita"""
     try:
         remover_marmita(id)
+        try:
+            if cache:
+                cache.clear()
+        except Exception:
+            pass
         return jsonify({"success": True, "message": "Marmita removida com sucesso"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1102,6 +1150,13 @@ def api_get_gastos_mensais():
     try:
         periodo = request.args.get('periodo', '6m')
         
+        usuario = get_usuario_atual()
+        cache_key = None
+        if cache and usuario:
+            cache_key = f"marmitas_gastos:{usuario}:{periodo}"
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return jsonify(cached)
         df_gastos = gastos_mensais(periodo)
         
         gastos = []
@@ -1111,6 +1166,11 @@ def api_get_gastos_mensais():
                 'valor': float(row['valor'])
             })
         
+        if cache and cache_key:
+            try:
+                cache.set(cache_key, gastos, timeout=30)
+            except Exception:
+                pass
         return jsonify(gastos)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1127,6 +1187,11 @@ def api_receitas():
             valor = data.get('valor')
             if valor and nome:
                 salvar_receita(nome, valor)
+                try:
+                    if cache:
+                        cache.clear()
+                except Exception:
+                    pass
                 return jsonify({"message": "Receita salva com sucesso"})
             return jsonify({"error": "Nome e valor são obrigatórios"}), 400
         elif request.method == "PUT":
@@ -1136,20 +1201,41 @@ def api_receitas():
                 data.get('nome'),
                 data.get('valor')
             )
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
             return jsonify({"message": "Receita atualizada com sucesso"})
         elif request.method == "DELETE":
             id_registro = request.args.get('id', type=int)
             if id_registro:
                 remover_receita(id_registro)
+                try:
+                    if cache:
+                        cache.clear()
+                except Exception:
+                    pass
                 return jsonify({"message": "Receita removida com sucesso"})
             return jsonify({"error": "ID é obrigatório"}), 400
         else:
             mes = request.args.get('mes', type=str)
             ano = request.args.get('ano', type=str)
-            # No sistema multi-usuário, não precisamos mais do parâmetro pessoa
+            usuario = get_usuario_atual()
+            cache_key = None
+            if cache and usuario:
+                cache_key = f"receitas:{usuario}:{mes or ''}:{ano or ''}"
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return jsonify(cached)
             receitas = carregar_receitas_mes_ano(mes, ano)
-            receitas = carregar_receitas_mes_ano(mes, ano)
-            return jsonify(receitas.to_dict('records') if not receitas.empty else [])
+            payload = receitas.to_dict('records') if not receitas.empty else []
+            if cache and cache_key:
+                try:
+                    cache.set(cache_key, payload, timeout=30)
+                except Exception:
+                    pass
+            return jsonify(payload)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1164,6 +1250,11 @@ def api_cartoes():
                 data.get('valor'),
                 data.get('pago')
             )
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
             return jsonify({"message": "Cartão adicionado com sucesso"})
         elif request.method == "PUT":
             data = request.get_json()
@@ -1173,16 +1264,38 @@ def api_cartoes():
                 data.get('valor'),
                 data.get('pago')
             )
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
             return jsonify({"message": "Cartão atualizado com sucesso"})
         elif request.method == "DELETE":
             id_registro = request.args.get('id', type=int)
             if id_registro:
                 remover_cartao(id_registro)
+                try:
+                    if cache:
+                        cache.clear()
+                except Exception:
+                    pass
                 return jsonify({"message": "Cartão removido com sucesso"})
             return jsonify({"error": "ID é obrigatório"}), 400
         else:
             mes = request.args.get('mes', type=str)
             ano = request.args.get('ano', type=str)
+            usuario = get_usuario_atual()
+            if cache and usuario:
+                key = f"cartoes:{usuario}:{mes or ''}:{ano or ''}"
+                cached = cache.get(key)
+                if cached is not None:
+                    return jsonify(cached)
+                cartoes = carregar_cartoes_mes_ano(mes, ano)
+                try:
+                    cache.set(key, cartoes, timeout=30)
+                except Exception:
+                    pass
+                return jsonify(cartoes)
             cartoes = carregar_cartoes_mes_ano(mes, ano)
             return jsonify(cartoes)
     except Exception as e:
@@ -1195,20 +1308,47 @@ def api_outros():
         if request.method == "POST":
             data = request.get_json()
             adicionar_outro_gasto(data.get('nome'), data.get('valor'))
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
             return jsonify({"message": "Gasto adicionado com sucesso"})
         elif request.method == "PUT":
             data = request.get_json()
             atualizar_outro_gasto(data.get('id'), data.get('nome'), data.get('valor'))
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
             return jsonify({"message": "Gasto atualizado com sucesso"})
         elif request.method == "DELETE":
             id_registro = request.args.get('id', type=int)
             if id_registro:
                 remover_outro_gasto(id_registro)
+                try:
+                    if cache:
+                        cache.clear()
+                except Exception:
+                    pass
                 return jsonify({"message": "Gasto removido com sucesso"})
             return jsonify({"error": "ID é obrigatório"}), 400
         else:
             mes = request.args.get('mes', type=str)
             ano = request.args.get('ano', type=str)
+            usuario = get_usuario_atual()
+            if cache and usuario:
+                key = f"outros:{usuario}:{mes or ''}:{ano or ''}"
+                cached = cache.get(key)
+                if cached is not None:
+                    return jsonify(cached)
+                outros = carregar_outros_mes_ano(mes, ano)
+                try:
+                    cache.set(key, outros, timeout=30)
+                except Exception:
+                    pass
+                return jsonify(outros)
             outros = carregar_outros_mes_ano(mes, ano)
             return jsonify(outros)
     except Exception as e:
@@ -1221,7 +1361,18 @@ def api_saldo():
         mes = request.args.get('mes', type=str)
         ano = request.args.get('ano', type=str)
         # No sistema multi-usuário, não precisamos mais do parâmetro pessoa
+        usuario = get_usuario_atual()
+        if cache and usuario:
+            key = f"saldo:{usuario}:{mes or ''}:{ano or ''}"
+            cached = cache.get(key)
+            if cached is not None:
+                return jsonify({"saldo": cached})
         saldo = calcular_saldo_mes_ano(mes, ano)
+        if cache and usuario:
+            try:
+                cache.set(key, saldo, timeout=30)
+            except Exception:
+                pass
         return jsonify({"saldo": saldo})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1230,8 +1381,7 @@ def api_saldo():
 def api_total_por_pessoa():
     """API para obter total por pessoa - Removida pois não é mais necessária no sistema multi-usuário"""
     try:
-        # No sistema multi-usuário, cada usuário tem seu próprio banco
-        # Não há mais necessidade de agrupar por pessoa
+        
         return jsonify([])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1306,6 +1456,12 @@ def api_receitas_despesas():
         
         # No sistema multi-usuário, não precisamos mais do parâmetro pessoa
         # Cada usuário só vê seus próprios dados
+        usuario = get_usuario_atual()
+        if cache and usuario:
+            key = f"receitas_despesas:{usuario}:{mes or ''}:{ano or ''}"
+            cached = cache.get(key)
+            if cached is not None:
+                return jsonify(cached)
         df_receita = carregar_receitas_mes_ano(mes, ano)
         df_cartao = pd.DataFrame(carregar_cartoes_mes_ano(mes, ano))
         df_outros = pd.DataFrame(carregar_outros_mes_ano(mes, ano))
@@ -1318,10 +1474,16 @@ def api_receitas_despesas():
         
         total_receita = df_receita["valor"].sum() if not df_receita.empty else 0
         
-        return jsonify({
+        payload = {
             "receitas": float(total_receita),
             "despesas": float(despesas)
-        })
+        }
+        if cache and usuario:
+            try:
+                cache.set(key, payload, timeout=30)
+            except Exception:
+                pass
+        return jsonify(payload)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
