@@ -1,18 +1,19 @@
 import { Routes, Route } from 'react-router-dom'
+import { Suspense, lazy } from 'react'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { AuthProvider } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import SecurityCheck from './components/SecurityCheck'
-import LoginPage from './pages/LoginPage'
-import RecuperacaoSenhaPage from './pages/RecuperacaoSenhaPage'
-import ConfigurarSegurancaPage from './pages/ConfigurarSegurancaPage'
-import DetalhesPage from './pages/DetalhesPage'
-import AnalisePage from './pages/AnalisePage'
-import CarteiraPage from './pages/CarteiraPage'
-import ControlePage from './pages/ControlePage'
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const RecuperacaoSenhaPage = lazy(() => import('./pages/RecuperacaoSenhaPage'))
+const ConfigurarSegurancaPage = lazy(() => import('./pages/ConfigurarSegurancaPage'))
+const DetalhesPage = lazy(() => import('./pages/DetalhesPage'))
+const AnalisePage = lazy(() => import('./pages/AnalisePage'))
+const CarteiraPage = lazy(() => import('./pages/CarteiraPage'))
+const ControlePage = lazy(() => import('./pages/ControlePage'))
 
-import HomePage from './pages/HomePage'
+const HomePage = lazy(() => import('./pages/HomePage'))
 
 function App() {
   return (
@@ -20,16 +21,16 @@ function App() {
       <ThemeProvider>
         <Routes>
           {/* Rotas públicas */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/recuperar-senha" element={<RecuperacaoSenhaPage />} />
-          <Route path="/configurar-seguranca" element={<ConfigurarSegurancaPage />} />
+          <Route path="/login" element={<Suspense fallback={<div />}> <LoginPage /> </Suspense>} />
+          <Route path="/recuperar-senha" element={<Suspense fallback={<div />}> <RecuperacaoSenhaPage /> </Suspense>} />
+          <Route path="/configurar-seguranca" element={<Suspense fallback={<div />}> <ConfigurarSegurancaPage /> </Suspense>} />
           
           {/* Rotas protegidas */}
           <Route path="/" element={
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <HomePage />
+                  <Suspense fallback={<div />}> <HomePage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
@@ -39,7 +40,7 @@ function App() {
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <DetalhesPage />
+                  <Suspense fallback={<div />}> <DetalhesPage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
@@ -49,7 +50,7 @@ function App() {
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <AnalisePage />
+                  <Suspense fallback={<div />}> <AnalisePage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
@@ -59,7 +60,7 @@ function App() {
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <CarteiraPage />
+                  <Suspense fallback={<div />}> <CarteiraPage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
@@ -69,7 +70,7 @@ function App() {
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <ControlePage />
+                  <Suspense fallback={<div />}> <ControlePage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
