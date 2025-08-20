@@ -70,7 +70,13 @@ except Exception:
     CORS(server, supports_credentials=True)
 
 
-criar_tabela_usuarios()
+try:
+    criar_tabela_usuarios()
+except Exception as e:
+    try:
+        print(f"WARN: falha ao criar tabela de usuários na inicialização: {e}")
+    except Exception:
+        pass
 
 
 try:
@@ -1356,11 +1362,11 @@ def api_outros():
 
 @server.route("/api/controle/saldo", methods=["GET"])
 def api_saldo():
-    """API para obter saldo do mês"""
+
     try:
         mes = request.args.get('mes', type=str)
         ano = request.args.get('ano', type=str)
-        # No sistema multi-usuário, não precisamos mais do parâmetro pessoa
+        
         usuario = get_usuario_atual()
         if cache and usuario:
             key = f"saldo:{usuario}:{mes or ''}:{ano or ''}"
@@ -1379,7 +1385,7 @@ def api_saldo():
 
 @server.route("/api/controle/total-por-pessoa", methods=["GET"])
 def api_total_por_pessoa():
-    """API para obter total por pessoa - Removida pois não é mais necessária no sistema multi-usuário"""
+   
     try:
         
         return jsonify([])
@@ -1388,25 +1394,24 @@ def api_total_por_pessoa():
 
 @server.route("/api/controle/evolucao-financeira", methods=["GET"])
 def api_evolucao_financeira():
-    """API para obter dados de evolução financeira"""
+  
     try:
         mes = request.args.get('mes', type=str)
         ano = request.args.get('ano', type=str)
         
-        # No sistema multi-usuário, não precisamos mais do parâmetro pessoa
-        # Cada usuário só vê seus próprios dados
+        
         df_receita = carregar_receitas_mes_ano(mes, ano)
         df_cartao = pd.DataFrame(carregar_cartoes_mes_ano(mes, ano))
         df_outros = pd.DataFrame(carregar_outros_mes_ano(mes, ano))
         
-        # Processar receitas
+    
         if not df_receita.empty:
             df_receita["data"] = pd.to_datetime(df_receita["data"])
             df_receita_grouped = df_receita.groupby("data")["valor"].sum().reset_index(name="receitas")
         else:
             df_receita_grouped = pd.DataFrame(columns=["data", "receitas"])
         
-        # Processar despesas
+      
         df_cartao["data"] = pd.to_datetime(df_cartao["data"]) if not df_cartao.empty else pd.Series(dtype='datetime64[ns]')
         df_outros["data"] = pd.to_datetime(df_outros["data"]) if not df_outros.empty else pd.Series(dtype='datetime64[ns]')
         df_cartao_ = df_cartao[["data", "valor"]] if not df_cartao.empty else pd.DataFrame(columns=["data", "valor"])

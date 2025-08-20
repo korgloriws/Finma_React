@@ -22,7 +22,26 @@ SESSION_LOCK = threading.Lock()
 
 # ==================== ADAPTADOR DE BANCO (SQLite local x Postgres em produção) ====================
 
-DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("USUARIOS_DB_URL")
+def _sanitize_db_url(url: str) -> str:
+    if not url:
+        return url
+    try:
+        from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+        parsed = urlparse(url)
+        query_pairs = dict(parse_qsl(parsed.query))
+        # Remover channel_binding=require (pode causar falha em ambientes sem suporte)
+        if query_pairs.get("channel_binding", "").lower() == "require":
+            query_pairs.pop("channel_binding", None)
+        # Garantir sslmode=require
+        if not query_pairs.get("sslmode"):
+            query_pairs["sslmode"] = "require"
+        new_query = urlencode(query_pairs)
+        parsed = parsed._replace(query=new_query)
+        return urlunparse(parsed)
+    except Exception:
+        return url
+
+DATABASE_URL = _sanitize_db_url(os.getenv("DATABASE_URL") or os.getenv("USUARIOS_DB_URL"))
 
 def _is_postgres() -> bool:
     return bool(DATABASE_URL) and psycopg is not None
