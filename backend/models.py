@@ -2078,6 +2078,16 @@ def init_carteira_db(usuario=None):
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes(data)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_ticker ON movimentacoes(ticker)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_valor_total ON carteira(valor_total)")
+                # Configuração de rebalanceamento (uma linha por usuário)
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS rebalance_config (
+                        id SERIAL PRIMARY KEY,
+                        periodo TEXT NOT NULL,
+                        targets_json TEXT NOT NULL,
+                        start_date TEXT,
+                        updated_at TEXT NOT NULL
+                    )
+                ''')
         finally:
             conn.close()
     else:
@@ -2131,6 +2141,16 @@ def init_carteira_db(usuario=None):
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes(data)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_ticker ON movimentacoes(ticker)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_valor_total ON carteira(valor_total)")
+        # Configuração de rebalanceamento (uma linha por usuário)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS rebalance_config (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                periodo TEXT NOT NULL,
+                targets_json TEXT NOT NULL,
+                start_date TEXT,
+                updated_at TEXT NOT NULL
+            )
+        ''')
         conn.commit()
         conn.close()
 
@@ -2402,6 +2422,158 @@ def obter_carteira():
     except Exception as e:
         print(f"Erro ao obter carteira: {e}")
         return []
+
+# ==================== REBALANCEAMENTO ====================
+
+def save_rebalance_config(periodo: str, targets: dict):
+    import json as _json
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    targets_json = _json.dumps(targets or {})
+    # start_date: se não existe, define como agora; se existe, mantém
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('SELECT id, start_date FROM rebalance_config LIMIT 1')
+                row = c.fetchone()
+                if row:
+                    start = row[1] or now
+                    c.execute('UPDATE rebalance_config SET periodo=%s, targets_json=%s, updated_at=%s WHERE id=%s',
+                              (periodo, targets_json, now, row[0]))
+                else:
+                    c.execute('INSERT INTO rebalance_config (periodo, targets_json, start_date, updated_at) VALUES (%s, %s, %s, %s)',
+                              (periodo, targets_json, now, now))
+        finally:
+            conn.close()
+        return {"success": True}
+    # sqlite
+    db_path = get_db_path(usuario, "carteira")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        c = conn.cursor()
+        c.execute('SELECT id, start_date FROM rebalance_config LIMIT 1')
+        row = c.fetchone()
+        if row:
+            start = row[1] or now
+            c.execute('UPDATE rebalance_config SET periodo=?, targets_json=?, updated_at=? WHERE id=?',
+                      (periodo, targets_json, now, row[0]))
+        else:
+            c.execute('INSERT INTO rebalance_config (periodo, targets_json, start_date, updated_at) VALUES (?, ?, ?, ?)',
+                      (periodo, targets_json, now, now))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"success": True}
+
+def get_rebalance_config():
+    import json as _json
+    usuario = get_usuario_atual()
+    if not usuario:
+        return None
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('SELECT periodo, targets_json, start_date, updated_at FROM rebalance_config LIMIT 1')
+                row = c.fetchone()
+                if not row:
+                    return None
+                periodo, targets_json, start_date, updated_at = row
+                return {
+                    'periodo': periodo,
+                    'targets': _json.loads(targets_json or '{}'),
+                    'start_date': start_date,
+                    'updated_at': updated_at,
+                }
+        finally:
+            conn.close()
+    db_path = get_db_path(usuario, "carteira")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        c = conn.cursor()
+        c.execute('SELECT periodo, targets_json, start_date, updated_at FROM rebalance_config LIMIT 1')
+        row = c.fetchone()
+        if not row:
+            return None
+        periodo, targets_json, start_date, updated_at = row
+        return {
+            'periodo': periodo,
+            'targets': json.loads(targets_json or '{}'),
+            'start_date': start_date,
+            'updated_at': updated_at,
+        }
+    finally:
+        conn.close()
+
+def compute_rebalance_status():
+    from datetime import datetime as _dt
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"error": "Não autenticado"}
+    cfg = get_rebalance_config()
+    carteira = obter_carteira() or []
+    if not cfg or not carteira:
+        return {
+            'configured': bool(cfg),
+            'can_rebalance': False,
+            'since_start_days': None,
+            'current_distribution': {},
+            'targets': cfg.get('targets') if cfg else {},
+            'periodo': cfg.get('periodo') if cfg else None,
+            'deviations': {},
+            'suggestions': [],
+        }
+    # distribuição atual por tipo
+    total = sum((it.get('valor_total') or 0.0) for it in carteira)
+    dist = {}
+    for it in carteira:
+        tipo = it.get('tipo') or 'Desconhecido'
+        dist[tipo] = dist.get(tipo, 0.0) + float(it.get('valor_total') or 0.0)
+    dist_pct = {k: (v/total*100.0 if total>0 else 0.0) for k, v in dist.items()}
+    # metas
+    targets = cfg.get('targets') or {}
+    # desvios
+    deviations = {}
+    for tipo, tgt in targets.items():
+        cur = dist_pct.get(tipo, 0.0)
+        deviations[tipo] = cur - float(tgt or 0.0)
+    # datas e janela
+    start_str = cfg.get('start_date')
+    try:
+        since_days = ( _dt.now() - _dt.strptime(start_str[:19], '%Y-%m-%d %H:%M:%S') ).days if start_str else None
+    except Exception:
+        since_days = None
+    periodo = (cfg.get('periodo') or 'mensal').lower()
+    period_days = {'mensal': 30, 'trimestral': 90, 'semestral': 180, 'anual': 365}.get(periodo, 30)
+    can_rebalance = since_days is not None and since_days >= period_days
+    # sugestões simples: comprar classes abaixo da meta; vender classes acima
+    suggestions = []
+    for tipo, tgt in targets.items():
+        cur_val = dist.get(tipo, 0.0)
+        tgt_val = (float(tgt or 0.0)/100.0) * total
+        diff_val = tgt_val - cur_val
+        if abs(diff_val) < 1e-6:
+            continue
+        action = 'comprar' if diff_val > 0 else 'vender'
+        suggestions.append({
+            'classe': tipo,
+            'acao': action,
+            'valor': abs(diff_val)
+        })
+    return {
+        'configured': True,
+        'can_rebalance': can_rebalance,
+        'since_start_days': since_days,
+        'period_days': period_days,
+        'periodo': periodo,
+        'current_distribution': dist_pct,
+        'targets': targets,
+        'deviations': deviations,
+        'suggestions': suggestions,
+    }
 
 def registrar_movimentacao(data, ticker, nome_completo, quantidade, preco, tipo, conn=None):
 

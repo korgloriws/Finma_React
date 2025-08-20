@@ -90,6 +90,11 @@ export const carteiraService = {
     return response.data
   },
 
+  getInsights: async (): Promise<any> => {
+    const response = await api.get('/carteira/insights')
+    return response.data
+  },
+
 
   adicionarAtivo: async (ticker: string, quantidade: number, tipo?: string): Promise<any> => {
     const normalizedTicker = normalizeTicker(ticker)
@@ -122,6 +127,20 @@ export const carteiraService = {
     if (ano) params.append('ano', ano.toString())
     
     const response = await api.get(`/carteira/movimentacoes?${params.toString()}`)
+    return response.data
+  },
+
+  // Rebalanceamento
+  getRebalanceConfig: async (): Promise<{ periodo?: string; targets?: Record<string, number>; start_date?: string } | {}> => {
+    const response = await api.get('/carteira/rebalance/config')
+    return response.data
+  },
+  saveRebalanceConfig: async (payload: { periodo: string; targets: Record<string, number> }): Promise<any> => {
+    const response = await api.post('/carteira/rebalance/config', payload)
+    return response.data
+  },
+  getRebalanceStatus: async (): Promise<any> => {
+    const response = await api.get('/carteira/rebalance/status')
     return response.data
   },
 

@@ -24,7 +24,10 @@ from models import (
 
     verificar_resposta_seguranca, alterar_senha_direta, atualizar_pergunta_seguranca,
     invalidar_todas_sessoes,
-    obter_historico_carteira_comparado
+    obter_historico_carteira_comparado,
+    save_rebalance_config,
+    get_rebalance_config,
+    compute_rebalance_status,
 )
 from models import cache
 
@@ -778,6 +781,153 @@ def api_get_carteira():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@server.route("/api/carteira/insights", methods=["GET"])
+def api_carteira_insights():
+    try:
+        usuario_atual = get_usuario_atual()
+        if not usuario_atual:
+            return jsonify({"error": "Não autenticado"}), 401
+        cache_key = f"carteira_insights:{usuario_atual}"
+        if cache:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return jsonify(cached)
+
+        itens = obter_carteira() or []
+        total_investido = float(sum((it.get('valor_total') or 0.0) for it in itens)) if itens else 0.0
+        num_ativos = len(itens)
+        tipos_map = {}
+        for it in itens:
+            tipos_map[it.get('tipo') or 'Desconhecido'] = tipos_map.get(it.get('tipo') or 'Desconhecido', 0) + (it.get('valor_total') or 0.0)
+
+        # Percentuais por ativo
+        enriched = []
+        for it in itens:
+            valor = float(it.get('valor_total') or 0.0)
+            pct = (valor / total_investido * 100.0) if total_investido > 0 else 0.0
+            enriched.append({
+                **it,
+                'percentual_carteira': pct
+            })
+        top_positions = sorted(enriched, key=lambda x: x.get('valor_total') or 0.0, reverse=True)[:5]
+
+   
+        concentration_alerts = []
+        for it in enriched:
+            if it['percentual_carteira'] > 25.0:
+                concentration_alerts.append({
+                    'ticker': it['ticker'],
+                    'percentual': it['percentual_carteira']
+                })
+
+       
+        soma_valor_dy = 0.0
+        for it in itens:
+            dy_raw = it.get('dy')
+            if dy_raw is None:
+                continue
+            try:
+                dy_val = float(dy_raw)
+            except Exception:
+                continue
+            dy_frac = (dy_val / 100.0) if dy_val > 1.5 else dy_val
+            soma_valor_dy += float((it.get('valor_total') or 0.0)) * dy_frac
+        weighted_dy = (soma_valor_dy / total_investido) if total_investido > 0 else None
+        weighted_dy_pct = (round(weighted_dy * 100.0, 2) if weighted_dy is not None else None)
+
+        # Médias/contagens de métricas
+        def _safe_vals(key):
+            vals = [float(it.get(key)) for it in itens if it.get(key) is not None]
+            return vals
+        vals_pl = _safe_vals('pl')
+        vals_pvp = _safe_vals('pvp')
+        vals_roe = _safe_vals('roe')
+
+        avg_pl = (sum(vals_pl)/len(vals_pl)) if vals_pl else None
+        avg_pvp = (sum(vals_pvp)/len(vals_pvp)) if vals_pvp else None
+        avg_roe = (sum(vals_roe)/len(vals_roe)) if vals_roe else None
+
+        high_pl = len([v for v in vals_pl if v is not None and v > 25.0])
+        low_pl = len([v for v in vals_pl if v is not None and 0.0 < v <= 10.0])
+        undervalued_pvp = len([v for v in vals_pvp if v is not None and v <= 1.0])
+        over_pvp = len([v for v in vals_pvp if v is not None and v >= 3.0])
+        negative_roe = len([v for v in vals_roe if v is not None and v < 0.0])
+
+        # Top DY (até 5)
+        top_dy = sorted(
+            [it for it in itens if it.get('dy') is not None],
+            key=lambda x: x.get('dy') or 0.0,
+            reverse=True
+        )[:5]
+        top_dy = [
+            {
+                'ticker': it['ticker'],
+                'nome_completo': it.get('nome_completo'),
+                'dy': float(it.get('dy') or 0.0),
+                'dy_pct': (round(float(it.get('dy')), 2) if (it.get('dy') is not None and float(it.get('dy')) > 1.5) else round((float(it.get('dy') or 0.0) * 100.0), 2)),
+                'percentual_carteira': next((e['percentual_carteira'] for e in enriched if e['ticker']==it['ticker']), 0.0)
+            } for it in top_dy
+        ]
+
+        # Diversificação (HHI simples)
+        shares = [(v / total_investido) for v in tipos_map.values()] if total_investido > 0 else []
+        hhi = sum([s*s for s in shares]) if shares else None
+
+        payload = {
+            'resumo': {
+                'total_investido': total_investido,
+                'num_ativos': num_ativos,
+                'tipos': {k: {'valor': float(v), 'percentual': (float(v)/total_investido*100.0 if total_investido>0 else 0.0)} for k, v in tipos_map.items()},
+                'weighted_dy': weighted_dy,  # fração (compat)
+                'weighted_dy_pct': weighted_dy_pct,
+                'avg_pl': avg_pl,
+                'avg_pvp': avg_pvp,
+                'avg_roe': avg_roe,  # fração
+                'hhi': hhi,
+            },
+            'concentracao': {
+                'top_positions': [
+                    {
+                        'ticker': it.get('ticker'),
+                        'valor_total': float(it.get('valor_total') or 0.0),
+                        'percentual': it.get('percentual_carteira')
+                    } for it in top_positions
+                ],
+                'alerts': concentration_alerts
+            },
+            'avaliacao': {
+                'pl': {
+                    'avg': avg_pl,
+                    'high_count': high_pl,
+                    'low_count': low_pl,
+                },
+                'pvp': {
+                    'avg': avg_pvp,
+                    'undervalued_count': undervalued_pvp,
+                    'overpriced_count': over_pvp,
+                },
+                'roe': {
+                    'avg': avg_roe,
+                    'negative_count': negative_roe,
+                }
+            },
+            'renda': {
+                'weighted_dy': weighted_dy,
+                'weighted_dy_pct': weighted_dy_pct,
+                'top_dy': top_dy,
+                'ativos_sem_dy': len([1 for it in itens if not it.get('dy')])
+            }
+        }
+
+        if cache:
+            try:
+                cache.set(cache_key, payload, timeout=30)
+            except Exception:
+                pass
+        return jsonify(payload)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @server.route("/api/carteira/adicionar", methods=["POST"])
 def api_adicionar_ativo():
     """API para adicionar um ativo à carteira"""
@@ -867,6 +1017,29 @@ def api_get_movimentacoes():
             except Exception:
                 pass
         return jsonify(movimentacoes)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/carteira/rebalance/config", methods=["GET", "POST"])
+def api_rebalance_config():
+    try:
+        if request.method == 'POST':
+            data = request.get_json() or {}
+            periodo = str(data.get('periodo') or 'mensal').lower()
+            targets = data.get('targets') or {}
+            res = save_rebalance_config(periodo, targets)
+            return jsonify(res)
+        else:
+            cfg = get_rebalance_config() or {}
+            return jsonify(cfg)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/carteira/rebalance/status", methods=["GET"])
+def api_rebalance_status():
+    try:
+        status = compute_rebalance_status()
+        return jsonify(status)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1034,9 +1207,9 @@ def api_get_proventos_recebidos():
                                     # Se ainda não conseguir, ignorar a data de aquisição
                                     pass
                         
-                        # Filtrar por período se especificado
+                        
                         if data_inicio is None or data_sem_timezone >= data_inicio:
-                            # Calcular valor recebido baseado na quantidade de ações
+                       
                             valor_recebido = float(valor) * quantidade
                             proventos_recebidos.append({
                                 'data': data.strftime('%Y-%m-%d'),
@@ -1072,7 +1245,7 @@ def api_get_proventos_recebidos():
 
 @server.route("/api/marmitas", methods=["GET"])
 def api_get_marmitas():
-    """API para obter marmitas"""
+  
     try:
         mes = request.args.get('mes', type=int)
         ano = request.args.get('ano', type=int)
@@ -1091,12 +1264,12 @@ def api_get_marmitas():
         else:
             registros = consultar_marmitas(mes_key or None, ano_key or None)
         
-        # Formatar dados
+
         marmitas = []
         for registro in registros:
             marmitas.append({
                 'id': registro[0],
-                # Garantir retorno apenas da parte de data (YYYY-MM-DD) exatamente como armazenada
+                
                 'data': str(registro[1])[:10] if registro and len(str(registro[1])) >= 10 else str(registro[1]),
                 'valor': float(registro[2]) if registro[2] else 0,
                 'comprou': bool(registro[3])
@@ -1113,7 +1286,7 @@ def api_get_marmitas():
 
 @server.route("/api/marmitas", methods=["POST"])
 def api_adicionar_marmita():
-    """API para adicionar marmita"""
+
     try:
         data = request.get_json()
         data_marmita = data.get('data')
@@ -1123,7 +1296,7 @@ def api_adicionar_marmita():
         if not data_marmita:
             return jsonify({"error": "Data é obrigatória"}), 400
             
-        # Normalizar para apenas a parte de data (YYYY-MM-DD) sem timezone
+
         data_limpa = str(data_marmita)[:10]
         adicionar_marmita(data_limpa, valor, 1 if comprou else 0)
         try:
@@ -1138,7 +1311,7 @@ def api_adicionar_marmita():
 
 @server.route("/api/marmitas/<int:id>", methods=["DELETE"])
 def api_remover_marmita(id):
-    """API para remover marmita"""
+
     try:
         remover_marmita(id)
         try:
@@ -1152,7 +1325,7 @@ def api_remover_marmita(id):
 
 @server.route("/api/marmitas/gastos-mensais", methods=["GET"])
 def api_get_gastos_mensais():
-    """API para obter gastos mensais"""
+
     try:
         periodo = request.args.get('periodo', '6m')
         
@@ -1185,7 +1358,7 @@ def api_get_gastos_mensais():
 
 @server.route("/api/controle/receitas", methods=["GET", "POST", "PUT", "DELETE"])
 def api_receitas():
-    """API para gerenciar receitas"""
+
     try:
         if request.method == "POST":
             data = request.get_json()
@@ -1247,7 +1420,7 @@ def api_receitas():
 
 @server.route("/api/controle/cartoes", methods=["GET", "POST", "PUT", "DELETE"])
 def api_cartoes():
-    """API para gerenciar cartões"""
+
     try:
         if request.method == "POST":
             data = request.get_json()
@@ -1309,7 +1482,7 @@ def api_cartoes():
 
 @server.route("/api/controle/outros", methods=["GET", "POST", "PUT", "DELETE"])
 def api_outros():
-    """API para gerenciar outros gastos"""
+
     try:
         if request.method == "POST":
             data = request.get_json()
@@ -1423,21 +1596,21 @@ def api_evolucao_financeira():
         else:
             df_despesas_grouped = df_despesas.groupby("data")["valor"].sum().reset_index(name="despesas")
         
-        # Criar base de datas do mês
+
         dias = pd.date_range(
             start=f"{ano}-{mes.zfill(2)}-01", 
             end=pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
         )
         df_base = pd.DataFrame({"data": dias})
         
-        # Merge e cálculo do saldo
+ 
         df_merged = pd.merge(df_base, df_receita_grouped, on="data", how="left").merge(df_despesas_grouped, on="data", how="left")
         df_merged["receitas"] = df_merged["receitas"].fillna(0)
         df_merged["despesas"] = df_merged["despesas"].fillna(0)
         df_merged["saldo_dia"] = df_merged["receitas"] - df_merged["despesas"]
         df_merged["saldo_acumulado"] = df_merged["saldo_dia"].cumsum()
         
-        # Converter para formato JSON
+
         evolucao = []
         for _, row in df_merged.iterrows():
             evolucao.append({
@@ -1454,13 +1627,12 @@ def api_evolucao_financeira():
 
 @server.route("/api/controle/receitas-despesas", methods=["GET"])
 def api_receitas_despesas():
-    """API para obter dados de receitas vs despesas"""
+   
     try:
         mes = request.args.get('mes', type=str)
         ano = request.args.get('ano', type=str)
         
-        # No sistema multi-usuário, não precisamos mais do parâmetro pessoa
-        # Cada usuário só vê seus próprios dados
+       
         usuario = get_usuario_atual()
         if cache and usuario:
             key = f"receitas_despesas:{usuario}:{mes or ''}:{ano or ''}"
@@ -1494,9 +1666,9 @@ def api_receitas_despesas():
 
 @server.route("/api/home/resumo", methods=["GET"])
 def api_home_resumo():
-    """API para obter resumo completo da HomePage"""
+
     try:
-        # cache por usuário/mês/ano
+       
         def _cache_key():
             try:
                 user = get_usuario_atual() or 'anon'
@@ -1511,7 +1683,7 @@ def api_home_resumo():
                 return jsonify(cached_payload)
         mes = request.args.get('mes', type=str)
         ano = request.args.get('ano', type=str)
-        # Usuário deve vir da sessão; não aceitar via query param
+       
         usuario = get_usuario_atual()
         if not usuario:
             return jsonify({"error": "Não autenticado"}), 401
@@ -1519,9 +1691,7 @@ def api_home_resumo():
         if not mes or not ano:
             return jsonify({"error": "Mês e ano são obrigatórios"}), 400
         
-        # usuário já vem da sessão
-        
-        # 1. Carteira
+
         carteira = obter_carteira()
         total_investido = sum(ativo.get('valor_total', 0) for ativo in carteira)
         ativos_por_tipo = {}
@@ -1529,20 +1699,20 @@ def api_home_resumo():
             tipo = ativo.get('tipo', 'Desconhecido')
             ativos_por_tipo[tipo] = ativos_por_tipo.get(tipo, 0) + ativo.get('valor_total', 0)
         
-        # 2. Receitas
+
         df_receitas = carregar_receitas_mes_ano(mes, ano)
         receitas = df_receitas.to_dict('records') if not df_receitas.empty else []
         total_receitas = df_receitas['valor'].sum() if not df_receitas.empty else 0
         
-        # 3. Cartões
+  
         cartoes = carregar_cartoes_mes_ano(mes, ano)
         total_cartoes = sum(cartao.get('valor', 0) for cartao in cartoes)
         
-        # 4. Outros gastos
+   
         outros = carregar_outros_mes_ano(mes, ano)
         total_outros = sum(outro.get('valor', 0) for outro in outros)
         
-        # 5. Marmitas
+
         marmitas = consultar_marmitas(mes, ano)
         marmitas_formatted = []
         total_marmitas = 0
@@ -1556,22 +1726,22 @@ def api_home_resumo():
             marmitas_formatted.append(marmita)
             total_marmitas += marmita['valor']
         
-        # 6. Saldo
+     
         saldo = calcular_saldo_mes_ano(mes, ano)
         
-        # 7. Evolução financeira
+  
         df_receita = carregar_receitas_mes_ano(mes, ano)
         df_cartao = pd.DataFrame(carregar_cartoes_mes_ano(mes, ano))
         df_outros = pd.DataFrame(carregar_outros_mes_ano(mes, ano))
         
-        # Processar receitas
+       
         if not df_receita.empty:
             df_receita["data"] = pd.to_datetime(df_receita["data"])
             df_receita_grouped = df_receita.groupby("data")["valor"].sum().reset_index(name="receitas")
         else:
             df_receita_grouped = pd.DataFrame(columns=["data", "receitas"])
         
-        # Processar despesas
+   
         df_cartao["data"] = pd.to_datetime(df_cartao["data"]) if not df_cartao.empty else pd.Series(dtype='datetime64[ns]')
         df_outros["data"] = pd.to_datetime(df_outros["data"]) if not df_outros.empty else pd.Series(dtype='datetime64[ns]')
         df_cartao_ = df_cartao[["data", "valor"]] if not df_cartao.empty else pd.DataFrame(columns=["data", "valor"])
@@ -1583,21 +1753,21 @@ def api_home_resumo():
         else:
             df_despesas_grouped = df_despesas.groupby("data")["valor"].sum().reset_index(name="despesas")
         
-        # Criar base de datas do mês
+
         dias = pd.date_range(
             start=f"{ano}-{mes.zfill(2)}-01", 
             end=pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
         )
         df_base = pd.DataFrame({"data": dias})
         
-        # Merge e cálculo do saldo
+
         df_merged = pd.merge(df_base, df_receita_grouped, on="data", how="left").merge(df_despesas_grouped, on="data", how="left")
         df_merged["receitas"] = df_merged["receitas"].fillna(0)
         df_merged["despesas"] = df_merged["despesas"].fillna(0)
         df_merged["saldo_dia"] = df_merged["receitas"] - df_merged["despesas"]
         df_merged["saldo_acumulado"] = df_merged["saldo_dia"].cumsum()
         
-        # Converter para formato JSON
+
         evolucao = []
         for _, row in df_merged.iterrows():
             evolucao.append({
@@ -1608,7 +1778,7 @@ def api_home_resumo():
                 'saldo_acumulado': float(row['saldo_acumulado'])
             })
         
-        # 8. Gastos mensais (marmitas)
+
         df_gastos = gastos_mensais('6m')
         gastos_mensais_data = []
         for _, row in df_gastos.iterrows():
@@ -1617,7 +1787,7 @@ def api_home_resumo():
                 'valor': float(row['valor'])
             })
         
-        # Resumo completo
+
         resumo = {
             'carteira': {
                 'ativos': carteira,
@@ -1653,7 +1823,7 @@ def api_home_resumo():
         
 
         
-        # armazenar em cache (60s)
+
         try:
             if cache:
                 cache.set(_cache_key(), resumo, timeout=60)

@@ -41,7 +41,7 @@ export default function DetalhesPage() {
   const [, setTickersComparar] = useState<string[]>([])
   const compararInputRef = useRef<HTMLInputElement>(null)
   const [periodoDividendos, setPeriodoDividendos] = useState('1y')
-  const [activeTab, setActiveTab] = useState<'overview' | 'fundamentals' | 'charts' | 'comparison' | 'dividends'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'fundamentals' | 'charts' | 'comparison' | 'dividends' | 'history' | 'concepts'>('overview')
 
   const ticker = searchParams.get('ticker') || ''
 
@@ -169,6 +169,166 @@ export default function DetalhesPage() {
   const pl = info?.trailingPE ?? null
   const pvp = info?.priceToBook ?? null
   const liquidezDiaria = info?.averageDailyVolume10Day ?? info?.averageVolume ?? 0
+
+  // EV/EBIT: usar enterpriseValue e melhor proxy de EBIT disponível
+  const enterpriseValue: number | null = info?.enterpriseValue ?? null
+  const ebitComputed: number | null = useMemo(() => {
+    const ebit = (info as any)?.ebit
+    if (typeof ebit === 'number') return ebit
+    const operatingIncome = (info as any)?.operatingIncome
+    if (typeof operatingIncome === 'number') return operatingIncome
+    const ebitda = (info as any)?.ebitda
+    const da = (info as any)?.depreciationAndAmortization
+    if (typeof ebitda === 'number' && typeof da === 'number') return ebitda - da
+    return null
+  }, [info])
+  const evToEbit: number | null = useMemo(() => {
+    if (enterpriseValue == null || ebitComputed == null) return null
+    if (!isFinite(enterpriseValue) || !isFinite(ebitComputed) || ebitComputed === 0) return null
+    return enterpriseValue / ebitComputed
+  }, [enterpriseValue, ebitComputed])
+
+  // Conceitos: entradas e cálculos (Graham e Bazin)
+  const defaultGrowthPct = useMemo(() => {
+    const eg = (info?.earningsGrowth != null) ? (Number(info.earningsGrowth) * 100) : null
+    const rg = (info?.revenueGrowth != null) ? (Number(info.revenueGrowth) * 100) : null
+    if (eg != null && isFinite(eg)) return eg
+    if (rg != null && isFinite(rg)) return rg
+    return 0
+  }, [info])
+  const grahamGrowthPctValue = defaultGrowthPct
+  const isBrazilian = useMemo(() => {
+    const sym = (info?.symbol || ticker || '').toUpperCase()
+    return sym.endsWith('.SA') || (info?.country?.toLowerCase?.() === 'brazil')
+  }, [info, ticker])
+  const { data: selicPct } = useQuery<number | undefined>({
+    queryKey: ['selic-rate', ticker],
+    enabled: !!ticker && isBrazilian,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const codes = [1178, 432, 4189]
+      for (const code of codes) {
+        try {
+          const res = await fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.${code}/dados/ultimos/1?formato=json`)
+          if (!res.ok) continue
+          const json = await res.json()
+          const val = parseFloat(json?.[0]?.valor)
+          if (isFinite(val) && val > 0) return val
+        } catch (_) {
+          continue
+        }
+      }
+      return undefined
+    }
+  })
+  const grahamYieldPctValue = selicPct ?? 6.0
+  const [bazinRatePct, setBazinRatePct] = useState<number>(8.0)
+  // Overrides e campos editáveis (mantém automático por padrão; usuário pode sobrescrever)
+  const [grahamEPSOverride, setGrahamEPSOverride] = useState<number | null>(null)
+  const [grahamGOverride, setGrahamGOverride] = useState<number | null>(null)
+  const [grahamYOverride, setGrahamYOverride] = useState<number | null>(null)
+  const [grahamEPSText, setGrahamEPSText] = useState<string>('')
+  const [grahamGText, setGrahamGText] = useState<string>('')
+  const [grahamYText, setGrahamYText] = useState<string>('')
+
+  const eps = (typeof info?.trailingEps === 'number') ? Number(info.trailingEps) : null
+  const effectiveEPS = grahamEPSOverride ?? eps
+  const effectiveG = grahamGOverride ?? grahamGrowthPctValue
+  const effectiveY = grahamYOverride ?? grahamYieldPctValue
+  const grahamFairPrice = useMemo(() => {
+    if (effectiveEPS == null || !isFinite(effectiveEPS)) return null
+    const g = Number(effectiveG)
+    const Y = Number(effectiveY)
+    if (!isFinite(g) || !isFinite(Y) || Y <= 0) return null
+    const base = 8.5 + 2 * g
+    const factor = 4.4 / Y
+    return effectiveEPS * base * factor
+  }, [effectiveEPS, effectiveG, effectiveY])
+
+  const dividends12m = useMemo(() => {
+    try {
+      const map = detalhes?.dividends
+      if (!map) return null
+      const now = new Date()
+      const cutoff = new Date(now.getTime() - 365 * 24 * 3600 * 1000)
+      let sum = 0
+      for (const [iso, val] of Object.entries(map)) {
+        const dt = new Date(iso)
+        if (dt >= cutoff) sum += Number(val || 0)
+      }
+      if (sum > 0) return sum
+      const dr = (typeof info?.dividendRate === 'number') ? Number(info.dividendRate) : null
+      return dr != null ? dr : null
+    } catch {
+      const dr = (typeof info?.dividendRate === 'number') ? Number(info.dividendRate) : null
+      return dr != null ? dr : null
+    }
+  }, [detalhes, info])
+  const bazinCeilingPrice = useMemo(() => {
+    if (dividends12m == null || !isFinite(dividends12m)) return null
+    const r = Number(bazinRatePct)
+    if (!isFinite(r) || r <= 0) return null
+    return dividends12m / (r / 100)
+  }, [dividends12m, bazinRatePct])
+
+
+  useEffect(() => {
+    if (grahamEPSOverride == null) setGrahamEPSText(eps != null ? String(eps) : '')
+  }, [eps, grahamEPSOverride])
+  useEffect(() => {
+    if (grahamGOverride == null) setGrahamGText(isFinite(grahamGrowthPctValue) ? String(Number(grahamGrowthPctValue.toFixed(2))) : '')
+  }, [grahamGrowthPctValue, grahamGOverride])
+  useEffect(() => {
+    if (grahamYOverride == null) setGrahamYText(isFinite(grahamYieldPctValue) ? String(Number(grahamYieldPctValue.toFixed(2))) : '')
+  }, [grahamYieldPctValue, grahamYOverride])
+  useEffect(() => {
+    // Ao trocar de ticker, resetar overrides para voltar ao automático
+    setGrahamEPSOverride(null)
+    setGrahamGOverride(null)
+    setGrahamYOverride(null)
+  }, [ticker])
+
+  // Funções de commit (Enter) para aplicar overrides (ou limpar para voltar ao automático)
+  const commitGrahamEPS = useCallback(() => {
+    const raw = grahamEPSText?.trim()
+    if (!raw) { setGrahamEPSOverride(null); return }
+    const val = parseFloat(raw.replace(',', '.'))
+    if (isFinite(val)) setGrahamEPSOverride(val)
+    else setGrahamEPSOverride(null)
+  }, [grahamEPSText])
+  const commitGrahamG = useCallback(() => {
+    const raw = grahamGText?.trim()
+    if (!raw) { setGrahamGOverride(null); return }
+    const val = parseFloat(raw.replace(',', '.'))
+    if (isFinite(val)) setGrahamGOverride(val)
+    else setGrahamGOverride(null)
+  }, [grahamGText])
+  const commitGrahamY = useCallback(() => {
+    const raw = grahamYText?.trim()
+    if (!raw) { setGrahamYOverride(null); return }
+    const val = parseFloat(raw.replace(',', '.'))
+    if (isFinite(val)) setGrahamYOverride(val)
+    else setGrahamYOverride(null)
+  }, [grahamYText])
+
+  // Selos de atendimento por critério
+  const grahamBadge = useMemo(() => {
+    const price = typeof info?.currentPrice === 'number' ? Number(info.currentPrice) : null
+    if (grahamFairPrice == null || price == null || !isFinite(price)) return null
+    const ratio = price / grahamFairPrice
+    if (!isFinite(ratio)) return null
+    if (ratio <= 0.8) return { label: 'Barata (Graham)', color: 'green' as const }
+    if (ratio <= 1.1) return { label: 'Justa (Graham)', color: 'yellow' as const }
+    return { label: 'Cara (Graham)', color: 'red' as const }
+  }, [info, grahamFairPrice])
+
+  const bazinBadge = useMemo(() => {
+    const price = typeof info?.currentPrice === 'number' ? Number(info.currentPrice) : null
+    if (bazinCeilingPrice == null || price == null || !isFinite(price)) return null
+    if (price <= bazinCeilingPrice) return { label: 'Abaixo do teto (Bazin)', color: 'green' as const }
+    return { label: 'Acima do teto (Bazin)', color: 'red' as const }
+  }, [info, bazinCeilingPrice])
 
   // Regras da estratégia por tipo (declarado antes de qualquer return condicional)
   const strategyDetails = useMemo(() => {
@@ -570,6 +730,8 @@ export default function DetalhesPage() {
               { id: 'fundamentals', label: 'Fundamentos', icon: Target },
               { id: 'charts', label: 'Gráficos', icon: LineChart },
               { id: 'dividends', label: 'Proventos', icon: DollarSign },
+              { id: 'history', label: 'História', icon: FileText },
+              { id: 'concepts', label: 'Conceitos', icon: Target },
               { id: 'comparison', label: 'Comparação', icon: BarChart3 }
             ].map((tab) => (
               <button
@@ -635,7 +797,7 @@ export default function DetalhesPage() {
                           {strategyDetails.meets ? 'Dentro da estratégia' : 'Fora da estratégia'}
                         </span>
                       </motion.span>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                      <div className="w-full mt-2 flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                         <span className="hidden md:inline">Critérios:</span>
                         {strategyDetails.criteria.map((c, idx) => (
                           <motion.span
@@ -658,6 +820,46 @@ export default function DetalhesPage() {
                             <span className="max-w-[120px] truncate">{c.label}</span>
                           </motion.span>
                         ))}
+                        {tipoAtivo === 'FII' && (
+                          <>
+                            {fiiInfo?.tipo && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/10 dark:text-purple-300 dark:border-purple-800"
+                                title={`Tipo de FII: ${fiiInfo?.tipo}`}
+                              >
+                                <PieChart className="w-3 h-3" />
+                                <span className="max-w-[140px] truncate">{fiiInfo?.tipo}</span>
+                              </span>
+                            )}
+                            {fiiInfo?.segmento && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/10 dark:text-indigo-300 dark:border-indigo-800"
+                                title={`Segmento: ${fiiInfo?.segmento}`}
+                              >
+                                <Building2 className="w-3 h-3" />
+                                <span className="max-w-[160px] truncate">{fiiInfo?.segmento}</span>
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {/* Selos de Graham e Bazin no overview (responsivos) */}
+                        {grahamBadge && (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${
+                            grahamBadge.color === 'green' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-300 dark:border-green-800' :
+                            grahamBadge.color === 'yellow' ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/10 dark:text-yellow-300 dark:border-yellow-800' :
+                            'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-300 dark:border-red-800'
+                          }`}>
+                            {grahamBadge.label}
+                          </span>
+                        )}
+                        {bazinBadge && (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${
+                            bazinBadge.color === 'green' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-300 dark:border-green-800' :
+                            'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-300 dark:border-red-800'
+                          }`}>
+                            {bazinBadge.label}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <p className="text-lg text-muted-foreground">{info.symbol}</p>
@@ -749,6 +951,9 @@ export default function DetalhesPage() {
                   <InfoSection title="Indicadores de Mercado" icon={TrendingUp} color="green">
                     <div className="space-y-1">
                       <InfoRow label="Market Cap" value={formatCurrency(info.marketCap)} icon={DollarSign} />
+                      <InfoRow label="Enterprise Value (EV)" value={formatCurrency(enterpriseValue)} icon={DollarSign} />
+                      <InfoRow label="EBIT (estimado)" value={formatCurrency(ebitComputed)} icon={Target} />
+                      <InfoRow label="EV/EBIT" value={formatNumber(evToEbit)} icon={FileText} />
                       <InfoRow label="Volume Médio" value={formatCurrency(info.averageVolume)} icon={BarChart3} />
                       <InfoRow label="Beta" value={formatNumber(info.beta)} icon={Activity} />
                       <InfoRow label="Média 50 dias" value={formatCurrency(info.fiftyDayAverage)} icon={TrendingUp} />
@@ -1071,6 +1276,45 @@ export default function DetalhesPage() {
               </motion.div>
             )}
 
+            {activeTab === 'history' && (
+              <motion.div
+                key="history"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-6"
+              >
+                <InfoSection title="História e Atuação" icon={FileText} color="indigo">
+                  <div className="space-y-3">
+                    <div className="text-sm leading-relaxed text-foreground/90">
+                      {(info.longBusinessSummary && String(info.longBusinessSummary).trim())
+                        ? String(info.longBusinessSummary)
+                        : 'Resumo não disponível.'}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <InfoRow label="Setor" value={info.sector} icon={Building2} />
+                      <InfoRow label="Indústria" value={info.industry} icon={Target} />
+                      <InfoRow label="País" value={info.country} icon={Globe} />
+                      <InfoRow label="Funcionários" value={info.fullTimeEmployees?.toLocaleString('pt-BR')} icon={Users} />
+                      <InfoRow label="Endereço" value={[info.address1, info.address2, info.city, info.state, info.zip, info.country].filter(Boolean).join(', ') || '-'} icon={FileText} />
+                      <InfoRow label="Telefone" value={info.phone} icon={FileText} />
+                      <InfoRow label="Website" value={info.website} icon={ExternalLink} />
+                    </div>
+                  </div>
+                </InfoSection>
+
+                <InfoSection title="Diretoria e Contatos (se disponível)" icon={Users} color="blue">
+                  <div className="space-y-1">
+                    <InfoRow label="Cidade" value={info.city} icon={Globe} />
+                    <InfoRow label="Estado" value={info.state} icon={Globe} />
+                    <InfoRow label="Código Postal" value={info.zip} icon={FileText} />
+                    <InfoRow label="Fax" value={info.fax} icon={FileText} />
+                  </div>
+                </InfoSection>
+              </motion.div>
+            )}
+
             {activeTab === 'comparison' && (
               <motion.div
                 key="comparison"
@@ -1258,6 +1502,131 @@ export default function DetalhesPage() {
             </div>
           )}
         </div>
+                </InfoSection>
+              </motion.div>
+            )}
+
+            {activeTab === 'concepts' && (
+              <motion.div
+                key="concepts"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-6"
+              >
+                {/* Preço Justo de Graham */}
+                <InfoSection title="Preço Justo de Graham" icon={Target} color="blue">
+                  <div className="space-y-4">
+                    <div className="text-sm text-muted-foreground leading-relaxed">
+                      Fórmula clássica (adaptada): <strong>V = LPA × (8,5 + 2g) × (4,4 / Y)</strong><br/>
+                      Onde: LPA = lucro por ação (EPS), g = crescimento esperado anual (%), Y = taxa de juros de referência (%).<br/>
+                      Quanto maior o crescimento e menor a taxa de juros, maior o preço justo estimado.
+                    </div>
+                    {/* Selos */}
+                    <div className="flex flex-wrap gap-2">
+                      {grahamBadge && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${
+                          grahamBadge.color === 'green' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-300 dark:border-green-800' :
+                          grahamBadge.color === 'yellow' ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/10 dark:text-yellow-300 dark:border-yellow-800' :
+                          'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-300 dark:border-red-800'
+                        }`}>
+                          {grahamBadge.label}
+                        </span>
+                      )}
+                    </div>
+                    {/* Parâmetros e resultados */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">LPA (EPS)</label>
+                        <input
+                          type="text"
+                          value={grahamEPSText}
+                          onChange={(e)=>setGrahamEPSText(e.target.value)}
+                          onKeyDown={(e)=>{ if (e.key==='Enter') commitGrahamEPS() }}
+                          className="w-full px-3 py-2 border border-border rounded bg-background text-foreground"
+                          placeholder="Ex.: 5.32"
+                        />
+                        <div className="text-xs text-muted-foreground mt-1">Pressione Enter para aplicar; padrão: EPS automático.</div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Crescimento (g) %</label>
+                        <input
+                          type="text"
+                          value={grahamGText}
+                          onChange={(e)=>setGrahamGText(e.target.value)}
+                          onKeyDown={(e)=>{ if (e.key==='Enter') commitGrahamG() }}
+                          className="w-full px-3 py-2 border border-border rounded bg-background text-foreground"
+                          placeholder="Ex.: 10"
+                        />
+                        <div className="text-xs text-muted-foreground mt-1">Pressione Enter para aplicar; padrão: crescimento automático.</div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Taxa de juros (Y) %</label>
+                        <input
+                          type="text"
+                          value={grahamYText}
+                          onChange={(e)=>setGrahamYText(e.target.value)}
+                          onKeyDown={(e)=>{ if (e.key==='Enter') commitGrahamY() }}
+                          className="w-full px-3 py-2 border border-border rounded bg-background text-foreground"
+                          placeholder="Ex.: 15"
+                        />
+                        <div className="text-xs text-muted-foreground mt-1">Pressione Enter para aplicar; padrão: taxa automática (SELIC se BR).</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <MetricCard title="Preço Justo (Graham)" value={formatCurrency(grahamFairPrice)} icon={DollarSign} color="green" />
+                      <MetricCard title="Preço Atual" value={formatCurrency(info.currentPrice)} icon={DollarSign} color="purple" />
+                      <MetricCard title="Margem vs Atual" value={grahamFairPrice!=null&&info.currentPrice? `${(((grahamFairPrice-info.currentPrice)/info.currentPrice)*100).toFixed(2)}%` : '-'} icon={TrendingUp} color="orange" />
+                    </div>
+                  </div>
+                </InfoSection>
+
+                {/* Método Bazin */}
+                <InfoSection title="Método Bazin (Teto por Dividendos)" icon={DollarSign} color="green">
+                  <div className="space-y-4">
+                    <div className="text-sm text-muted-foreground leading-relaxed">
+                      Fórmula: <strong>Preço Teto = Dividendos dos últimos 12 meses / (Taxa de DY desejada)</strong>.<br/>
+                      Ex.: se a empresa pagou R$ 2,00 em 12 meses e você deseja 8% ao ano, o teto seria 2 / 0,08 = R$ 25,00.
+                    </div>
+                    {/* Selo */}
+                    <div className="flex flex-wrap gap-2">
+                      {bazinBadge && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${
+                          bazinBadge.color === 'green' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-300 dark:border-green-800' :
+                          'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-300 dark:border-red-800'
+                        }`}>
+                          {bazinBadge.label}
+                        </span>
+                      )}
+                    </div>
+                    {/* Parâmetros e resultados */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Dividendos 12m</label>
+                        <div className="px-3 py-2 border border-border rounded bg-background text-foreground">
+                          {formatCurrency(dividends12m)}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">Se indisponível, usa dividendRate anual do yfinance.</div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Taxa DY desejada (%)</label>
+                        <input type="number" value={bazinRatePct} onChange={(e)=>setBazinRatePct(parseFloat(e.target.value)||0)} className="w-full px-3 py-2 border border-border rounded bg-background text-foreground" placeholder="Ex.: 8" title="Taxa mínima desejada de DY em %"/>
+                        <div className="text-xs text-muted-foreground mt-1">Ajuste conforme seu objetivo (ex.: 8% a.a.).</div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Preço Teto (Bazin)</label>
+                        <div className="px-3 py-2 border border-border rounded bg-background text-foreground">
+                          {formatCurrency(bazinCeilingPrice)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <MetricCard title="Preço Teto (Bazin)" value={formatCurrency(bazinCeilingPrice)} icon={DollarSign} color="green" />
+                      <MetricCard title="Preço Atual" value={formatCurrency(info.currentPrice)} icon={DollarSign} color="purple" />
+                      <MetricCard title="Margem vs Atual" value={bazinCeilingPrice!=null&&info.currentPrice? `${(((bazinCeilingPrice-info.currentPrice)/info.currentPrice)*100).toFixed(2)}%` : '-'} icon={TrendingUp} color="orange" />
+                    </div>
+                  </div>
                 </InfoSection>
               </motion.div>
             )}

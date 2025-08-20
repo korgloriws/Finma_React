@@ -21,7 +21,7 @@ import {
   ChevronDown,
   Edit,
   Trash2,
-  PieChart
+  PieChart,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { carteiraService } from '../services/api'
@@ -56,6 +56,35 @@ export default function CarteiraPage() {
   const [filtroMes, setFiltroMes] = useState<number>(new Date().getMonth() + 1)
   const [filtroAno, setFiltroAno] = useState<number>(new Date().getFullYear())
   const [activeTab, setActiveTab] = useState('ativos')
+  const { data: insights, isLoading: loadingInsights } = useQuery({
+    queryKey: ['carteira-insights', user],
+    queryFn: carteiraService.getInsights,
+    enabled: !!user,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  })
+  const { data: rbConfig } = useQuery({
+    queryKey: ['rebalance-config', user],
+    queryFn: carteiraService.getRebalanceConfig,
+    enabled: !!user,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+  })
+  const { data: rbStatus, refetch: refetchRbStatus } = useQuery({
+    queryKey: ['rebalance-status', user],
+    queryFn: carteiraService.getRebalanceStatus,
+    enabled: !!user,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
+  })
+  const saveRebalanceMutation = useMutation({
+    mutationFn: carteiraService.saveRebalanceConfig,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rebalance-config', user] })
+      queryClient.invalidateQueries({ queryKey: ['rebalance-status', user] })
+      refetchRbStatus()
+    },
+  })
   const [ocultarValor, setOcultarValor] = useState(true)
   const [expandedTipos, setExpandedTipos] = useState<Record<string, boolean>>({
     'Ação': true,
@@ -487,6 +516,7 @@ export default function CarteiraPage() {
         <TabButton id="ranking" label="Ranking" icon={Trophy} isActive={activeTab === 'ranking'} />
         <TabButton id="proventos" label="Proventos" icon={Calendar} isActive={activeTab === 'proventos'} />
         <TabButton id="insights" label="Insights" icon={Brain} isActive={activeTab === 'insights'} />
+        <TabButton id="rebalance" label="Rebalanceamento" icon={Target} isActive={activeTab === 'rebalance'} />
         <TabButton id="movimentacoes" label="Movimentações" icon={History} isActive={activeTab === 'movimentacoes'} />
       </div>
 
@@ -1308,7 +1338,7 @@ export default function CarteiraPage() {
 
         {activeTab === 'insights' && (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold mb-4">🤖 Insights com IA</h2>
+            <h2 className="text-xl font-semibold mb-4">🤖 Insights </h2>
             
             {carteira && carteira.length > 0 ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1318,46 +1348,86 @@ export default function CarteiraPage() {
                     <div className="bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-6">
                       <div className="flex items-center gap-3 mb-3">
                         <BarChart3 className="w-6 h-6 text-blue-600" />
-                        <h3 className="text-lg font-semibold text-blue-800">Análise de Performance</h3>
+                        <h3 className="text-lg font-semibold text-blue-800">Resumo</h3>
                       </div>
-                      <p className="text-blue-700">
-                        Sua carteira variou <strong>+2.3%</strong> no último mês, 
-                        superando o Ibovespa que teve <strong>-1.1%</strong>.
-                      </p>
-                    </div>
-
-                    <div className="bg-gradient-to-r from-green-50 to-green-100 border border-green-200 rounded-lg p-6">
-                      <div className="flex items-center gap-3 mb-3">
-                        <TrendingUp className="w-6 h-6 text-green-600" />
-                        <h3 className="text-lg font-semibold text-green-800">Distribuição de Dividendos</h3>
-                      </div>
-                      <p className="text-green-700">
-                        Você tem <strong>{ativosPositivos} ativos</strong> pagando dividendos, 
-                        representando <strong>{(ativosPositivos / (carteira?.length || 1) * 100).toFixed(1)}%</strong> da carteira.
-                      </p>
+                      {loadingInsights ? (
+                        <div className="text-blue-700">Calculando…</div>
+                      ) : insights ? (
+                        <div className="text-blue-700 space-y-1 text-sm">
+                          <div>Total investido: <strong>{formatCurrency(insights.resumo?.total_investido || 0)}</strong></div>
+                          <div>Nº ativos: <strong>{insights.resumo?.num_ativos || 0}</strong></div>
+                          <div>DY médio (pond.): <strong>{insights.resumo?.weighted_dy_pct != null ? formatPercentage(insights.resumo.weighted_dy_pct) : (insights.resumo?.weighted_dy != null ? formatPercentage((insights.resumo.weighted_dy || 0) * 100) : 'N/A')}</strong></div>
+                          <div>PL médio: <strong>{insights.resumo?.avg_pl?.toFixed?.(2) ?? 'N/A'}</strong></div>
+                          <div>P/VP médio: <strong>{insights.resumo?.avg_pvp?.toFixed?.(2) ?? 'N/A'}</strong></div>
+                          <div>ROE médio: <strong>{insights.resumo?.avg_roe != null ? formatPercentage((insights.resumo.avg_roe || 0) * 100) : 'N/A'}</strong></div>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="bg-gradient-to-r from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-6">
                       <div className="flex items-center gap-3 mb-3">
                         <Target className="w-6 h-6 text-purple-600" />
-                        <h3 className="text-lg font-semibold text-purple-800">Maior Posição</h3>
+                        <h3 className="text-lg font-semibold text-purple-800">Concentração</h3>
                       </div>
-                      <p className="text-purple-700">
-                        Sua maior posição é <strong>{topAtivos[0]?.ticker || 'N/A'}</strong> 
-                        com <strong>{formatCurrency(topAtivos[0]?.valor_total || 0)}</strong> 
-                        ({((topAtivos[0]?.valor_total || 0) / valorTotal * 100).toFixed(1)}% da carteira).
-                      </p>
+                      {loadingInsights ? (
+                        <div className="text-purple-700">Calculando…</div>
+                      ) : insights ? (
+                        <div className="text-purple-700 text-sm space-y-1">
+                          {(insights.concentracao?.top_positions || []).map((p: any) => (
+                            <div key={p.ticker} className="flex justify-between">
+                              <span>{p.ticker}</span>
+                              <span>{formatCurrency(p.valor_total)} • {((p.percentual || 0).toFixed?.(1) || '0.0')}%</span>
+                            </div>
+                          ))}
+                          {(insights.concentracao?.alerts || []).length > 0 && (
+                            <div className="text-xs text-red-600 mt-2">Alerta: posições acima de 25% detectadas.</div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="bg-gradient-to-r from-green-50 to-green-100 border border-green-200 rounded-lg p-6">
+                      <div className="flex items-center gap-3 mb-3">
+                        <TrendingUp className="w-6 h-6 text-green-600" />
+                        <h3 className="text-lg font-semibold text-green-800">Renda (DY)</h3>
+                      </div>
+                      {loadingInsights ? (
+                        <div className="text-green-700">Calculando…</div>
+                      ) : insights ? (
+                        <div className="text-green-700 text-sm space-y-1">
+                          <div>DY ponderado: <strong>{insights.renda?.weighted_dy_pct != null ? formatPercentage(insights.renda.weighted_dy_pct) : (insights.renda?.weighted_dy != null ? formatPercentage((insights.renda.weighted_dy || 0) * 100) : 'N/A')}</strong></div>
+                          <div className="mt-2 font-medium">Top DY</div>
+                          {(insights.renda?.top_dy || []).map((a: any) => (
+                            <div key={a.ticker} className="flex justify-between">
+                              <span>{a.ticker}</span>
+                              <span>{formatPercentage(a.dy_pct ?? ((a.dy || 0) * 100))} • {((a.percentual_carteira || 0).toFixed?.(1) || '0.0')}%</span>
+                            </div>
+                          ))}
+                          <div className="text-xs mt-2">Ativos sem DY: {insights.renda?.ativos_sem_dy || 0}</div>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="bg-gradient-to-r from-orange-50 to-orange-100 border border-orange-200 rounded-lg p-6">
                       <div className="flex items-center gap-3 mb-3">
                         <Activity className="w-6 h-6 text-orange-600" />
-                        <h3 className="text-lg font-semibold text-orange-800">Diversificação</h3>
+                        <h3 className="text-lg font-semibold text-orange-800">Avaliação</h3>
                       </div>
-                      <p className="text-orange-700">
-                        Sua carteira está bem diversificada com <strong>{carteira?.length || 0} ativos</strong> 
-                        em <strong>{Object.keys(ativosPorTipo).length} categorias</strong> diferentes.
-                      </p>
+                      {loadingInsights ? (
+                        <div className="text-orange-700">Calculando…</div>
+                      ) : insights ? (
+                        <div className="text-orange-700 text-sm space-y-1">
+                          <div>
+                            PL alto (&gt;25): <strong>{insights.avaliacao?.pl?.high_count || 0}</strong> • PL baixo (&le;10): <strong>{insights.avaliacao?.pl?.low_count || 0}</strong>
+                          </div>
+                          <div>
+                            Undervalued (P/VP &le; 1): <strong>{insights.avaliacao?.pvp?.undervalued_count || 0}</strong> • Overpriced (P/VP &ge; 3): <strong>{insights.avaliacao?.pvp?.overpriced_count || 0}</strong>
+                          </div>
+                          <div>
+                            ROE médio: <strong>{insights.resumo?.avg_roe != null ? formatPercentage((insights.resumo.avg_roe || 0) * 100) : 'N/A'}</strong> • ROE negativo: <strong>{insights.avaliacao?.roe?.negative_count || 0}</strong>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -1368,26 +1438,44 @@ export default function CarteiraPage() {
                     <Brain className="w-5 h-5 text-blue-500" />
                     Recomendações
                   </h3>
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-2 p-3 bg-background rounded">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                      <p className="text-sm text-muted-foreground">
-                        Considere aumentar posições em ativos com P/L baixo para melhorar a rentabilidade.
-                      </p>
+                  {loadingInsights ? (
+                    <div className="text-sm text-muted-foreground">Calculando…</div>
+                  ) : insights ? (
+                    <div className="space-y-3">
+                      {insights.avaliacao?.pvp?.undervalued_count > 0 && (
+                        <div className="flex items-start gap-2 p-3 bg-background rounded">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                          <p className="text-sm text-muted-foreground">
+                            Existem {insights.avaliacao.pvp.undervalued_count} ativos com P/VP ≤ 1, potenciais oportunidades de valor.
+                          </p>
+                        </div>
+                      )}
+                      {insights.avaliacao?.pl?.low_count > 0 && (
+                        <div className="flex items-start gap-2 p-3 bg-background rounded">
+                          <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
+                          <p className="text-sm text-muted-foreground">
+                            {insights.avaliacao.pl.low_count} ativos com P/L ≤ 10 sugerem múltiplos atrativos.
+                          </p>
+                        </div>
+                      )}
+                      {insights.avaliacao?.roe?.negative_count > 0 && (
+                        <div className="flex items-start gap-2 p-3 bg-background rounded">
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0"></div>
+                          <p className="text-sm text-muted-foreground">
+                            {insights.avaliacao.roe.negative_count} ativos com ROE negativo: avaliação de manutenção/redução recomendada.
+                          </p>
+                        </div>
+                      )}
+                      {(insights.concentracao?.alerts || []).length > 0 && (
+                        <div className="flex items-start gap-2 p-3 bg-background rounded">
+                          <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
+                          <p className="text-sm text-muted-foreground">
+                            Concentração elevada detectada em {insights.concentracao.alerts.length} posição(ões). Considere rebalanceamento.
+                          </p>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-start gap-2 p-3 bg-background rounded">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
-                      <p className="text-sm text-muted-foreground">
-                        Sua exposição a dividendos está acima da média do mercado.
-                      </p>
-                    </div>
-                    <div className="flex items-start gap-2 p-3 bg-background rounded">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0"></div>
-                      <p className="text-sm text-muted-foreground">
-                        Monitore ativos com ROE negativo para possível rebalanceamento.
-                      </p>
-                    </div>
-                  </div>
+                  ) : null}
                 </div>
 
                 <div className="bg-muted/30 rounded-lg p-6">
@@ -1416,6 +1504,30 @@ export default function CarteiraPage() {
                 Adicione ativos à sua carteira para receber insights personalizados.
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'rebalance' && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold">⚖️ Rebalanceamento da Carteira</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-muted/30 rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4">Configuração</h3>
+                <RebalanceForm
+                  defaultPeriodo={(rbConfig as any)?.periodo || 'mensal'}
+                  defaultTargets={(rbConfig as any)?.targets || { 'Ação': 50, 'FII': 20, 'BDR': 20, 'Criptomoeda': 5, 'Fixa': 5 }}
+                  onSave={(periodo, targets) => saveRebalanceMutation.mutate({ periodo, targets })}
+                />
+              </div>
+              <div className="bg-muted/30 rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4">Status</h3>
+                {rbStatus ? (
+                  <RebalanceStatus status={rbStatus} />
+                ) : (
+                  <div className="text-sm text-muted-foreground">Nenhuma configuração encontrada.</div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1564,3 +1676,141 @@ export default function CarteiraPage() {
     </div>
   )
 } 
+
+function RebalanceForm({ defaultPeriodo, defaultTargets, onSave }: {
+  defaultPeriodo: string
+  defaultTargets: Record<string, number>
+  onSave: (periodo: string, targets: Record<string, number>) => void
+}) {
+  const [periodo, setPeriodo] = useState<string>(defaultPeriodo)
+  const [targets, setTargets] = useState<Record<string, number>>(defaultTargets)
+
+  const handleChangeTarget = (key: string, val: string) => {
+    const num = parseFloat(val.replace(',', '.'))
+    setTargets(prev => ({ ...prev, [key]: isFinite(num) ? num : 0 }))
+  }
+  const handleAddClass = () => {
+    const name = prompt('Nome da classe (ex.: Ação, FII, BDR, Fixa, Criptomoeda)')
+    if (!name) return
+    if (targets[name] != null) return
+    setTargets(prev => ({ ...prev, [name]: 0 }))
+  }
+  const handleRemoveClass = (key: string) => {
+    const copy = { ...targets }
+    delete copy[key]
+    setTargets(copy)
+  }
+  const total = Object.values(targets).reduce((s, v) => s + (v || 0), 0)
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div>
+          <label htmlFor="periodo-select" className="block text-sm font-medium mb-1">Período</label>
+          <select id="periodo-select" value={periodo} onChange={(e)=>setPeriodo(e.target.value)} className="w-full px-3 py-2 border border-border rounded bg-background text-foreground">
+            <option value="mensal">Mensal</option>
+            <option value="trimestral">Trimestral</option>
+            <option value="semestral">Semestral</option>
+            <option value="anual">Anual</option>
+          </select>
+        </div>
+        <div>
+          <div className="text-sm font-medium mb-1">Classes e Pesos (%)</div>
+          <div className="space-y-2">
+            {Object.entries(targets).map(([key, val]) => (
+              <div key={key} className="flex items-center gap-2">
+                <label className="sr-only" htmlFor={`class-name-${key}`}>Nome da classe</label>
+                <input
+                  id={`class-name-${key}`}
+                  type="text"
+                  readOnly
+                  value={key}
+                  className="w-40 px-3 py-2 border border-border rounded bg-background text-foreground"
+                  title="Nome da classe"
+                  placeholder="Nome da classe"
+                />
+                <label className="sr-only" htmlFor={`class-value-${key}`}>Peso (%)</label>
+                <input
+                  id={`class-value-${key}`}
+                  type="number"
+                  value={val}
+                  onChange={(e)=>handleChangeTarget(key, e.target.value)}
+                  className="w-28 px-3 py-2 border border-border rounded bg-background text-foreground"
+                  title="Peso (%)"
+                  placeholder="Peso (%)"
+                />
+                <span className="text-sm text-muted-foreground">%</span>
+                <button onClick={()=>handleRemoveClass(key)} className="px-2 py-1 text-red-600 hover:text-red-700">Remover</button>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex items-center gap-3">
+            <button onClick={handleAddClass} className="px-3 py-2 bg-secondary text-secondary-foreground rounded hover:bg-secondary/80">Adicionar Classe</button>
+            <div className={`text-sm ${Math.abs(total-100) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>Total: {total.toFixed(2)}%</div>
+          </div>
+        </div>
+        <div className="flex items-end">
+          <button
+            onClick={()=>onSave(periodo, targets)}
+            className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            disabled={total <= 0}
+          >
+            Salvar Configuração
+          </button>
+        </div>
+      </div>
+      <div className="text-xs text-muted-foreground">Dica: idealmente a soma dos pesos deve ser 100%.</div>
+    </div>
+  )
+}
+
+function RebalanceStatus({ status }: { status: any }) {
+  const can = !!status?.can_rebalance
+  const periodDays = status?.period_days
+  const since = status?.since_start_days
+  const deviations = status?.deviations || {}
+  const current = status?.current_distribution || {}
+  const targets = status?.targets || {}
+  const suggestions = status?.suggestions || []
+  return (
+    <div className="space-y-4">
+      <div className={`p-3 rounded border ${can ? 'border-yellow-300 bg-yellow-50 text-yellow-800' : 'border-green-300 bg-green-50 text-green-800'}`}>
+        {can ? (
+          <div>
+            <strong>Atenção:</strong> Já se passaram {since} dias desde o início. Período configurado: {periodDays} dias. Avalie rebalancear.
+          </div>
+        ) : (
+          <div>
+            Próximo rebalanceamento em {Math.max(0, (periodDays || 0) - (since || 0))} dias.
+          </div>
+        )}
+      </div>
+      <div>
+        <h4 className="font-semibold mb-2">Distribuição Atual x Meta (%)</h4>
+        <div className="space-y-1">
+          {Object.keys({ ...targets, ...current }).map((k) => (
+            <div key={k} className="flex items-center justify-between text-sm bg-background border border-border rounded px-3 py-2">
+              <span className="font-medium">{k}</span>
+              <span>
+                Atual: {(current?.[k] ?? 0).toFixed(1)}% • Meta: {(targets?.[k] ?? 0).toFixed(1)}% • Desvio: {(deviations?.[k] ?? ( (current?.[k] ?? 0) - (targets?.[k] ?? 0) )).toFixed(1)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <h4 className="font-semibold mb-2">Sugestões</h4>
+        {suggestions.length === 0 ? (
+          <div className="text-sm text-muted-foreground">Sem sugestões no momento.</div>
+        ) : (
+          <ul className="list-disc pl-6 space-y-1 text-sm">
+            {suggestions.map((s: any, idx: number) => (
+              <li key={idx}>
+                {s.acao === 'comprar' ? 'Comprar' : 'Vender'} aproximadamente {s.valor?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} da classe <strong>{s.classe}</strong>.
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
