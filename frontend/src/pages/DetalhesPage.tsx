@@ -82,7 +82,7 @@ export default function DetalhesPage() {
 
 
 
-  // Input de comparação: usar input não-controlado para evitar re-render e perda de foco
+  
 
   const handleComparar = useCallback(async () => {
     const value = compararInputRef.current?.value || ''
@@ -229,7 +229,7 @@ export default function DetalhesPage() {
       <div className="text-center space-y-2">
         <p className="text-lg font-medium text-foreground">{text}</p>
         <p className="text-sm text-muted-foreground">
-          Carregando dados do Yahoo Finance...
+          Carregando dados ...
         </p>
       </div>
     </motion.div>

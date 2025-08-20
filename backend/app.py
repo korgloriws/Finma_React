@@ -42,7 +42,20 @@ try:
 except Exception:
     pass
 
-# Configurar CORS para SaaS (frontend e backend em domínios distintos)
+
+@server.after_request
+def add_http_cache_headers(response):
+    try:
+        from flask import request
+        path = request.path or ''
+        if request.method == 'GET' and path.startswith('/api/') and not path.startswith('/api/auth'):
+            response.headers['Cache-Control'] = 'private, max-age=60'
+            response.headers['Vary'] = 'Cookie'
+    except Exception:
+        pass
+    return response
+
+
 try:
     FRONTEND_ORIGIN = os.getenv('FRONTEND_ORIGIN')
     allowed_origins = set()
@@ -117,11 +130,23 @@ def api_login():
         
         # Verificar credenciais
         if verificar_senha(username, senha):
-            # Garantir que as tabelas do usuário existam (Postgres: schemas/tabelas; SQLite: arquivos/tabelas)
+            # Verificar se os bancos existem, se não, criar
             try:
-                inicializar_bancos_usuario(username)
-            except Exception:
-                # seguir mesmo que a inicialização seja redundante
+                import os
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                bancos_dir = os.path.join(current_dir, "bancos_usuarios", username)
+                
+                if not os.path.exists(bancos_dir):
+                    inicializar_bancos_usuario(username)
+                else:
+                    # Verificar se todos os 3 bancos existem
+                    bancos_necessarios = ['carteira.db', 'controle.db', 'marmitas.db']
+                    bancos_existentes = [f for f in os.listdir(bancos_dir) if f.endswith('.db')]
+                    
+                    if len(bancos_existentes) < 3:
+                        inicializar_bancos_usuario(username)
+            except Exception as e:
+                # Continuar mesmo com erro nos bancos
                 pass
             
 
