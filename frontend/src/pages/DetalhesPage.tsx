@@ -27,7 +27,7 @@ import {
   ExternalLink,
   RefreshCw,
 } from 'lucide-react'
-import { ativoService } from '../services/api'
+import { ativoService, carteiraService } from '../services/api'
 import { AtivoDetalhes, AtivoInfo } from '../types'
 import { formatCurrency, formatPercentage, formatNumber, formatDividendYield } from '../utils/formatters'
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, } from 'recharts'
@@ -41,7 +41,7 @@ export default function DetalhesPage() {
   const [, setTickersComparar] = useState<string[]>([])
   const compararInputRef = useRef<HTMLInputElement>(null)
   const [periodoDividendos, setPeriodoDividendos] = useState('1y')
-  const [activeTab, setActiveTab] = useState<'overview' | 'fundamentals' | 'charts' | 'comparison' | 'dividends' | 'history' | 'concepts'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'fundamentals' | 'charts' | 'comparison' | 'dividends' | 'history' | 'concepts' | 'fixedincome'>('overview')
 
   const ticker = searchParams.get('ticker') || ''
 
@@ -55,6 +55,18 @@ export default function DetalhesPage() {
     queryKey: ['ativo-historico', ticker, periodo],
     queryFn: () => ativoService.getHistorico(ticker, periodo),
     enabled: !!ticker,
+  })
+
+  // Indicadores e Tesouro
+  const { data: indicadores } = useQuery({
+    queryKey: ['indicadores'],
+    queryFn: carteiraService.getIndicadores,
+    staleTime: 60_000,
+  })
+  const { data: tesouro } = useQuery({
+    queryKey: ['tesouro-titulos'],
+    queryFn: carteiraService.getTesouroTitulos,
+    staleTime: 60_000,
   })
 
 
@@ -732,7 +744,8 @@ export default function DetalhesPage() {
               { id: 'dividends', label: 'Proventos', icon: DollarSign },
               { id: 'history', label: 'História', icon: FileText },
               { id: 'concepts', label: 'Conceitos', icon: Target },
-              { id: 'comparison', label: 'Comparação', icon: BarChart3 }
+              { id: 'comparison', label: 'Comparação', icon: BarChart3 },
+              { id: 'fixedincome', label: 'Renda Fixa', icon: DollarSign },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -752,6 +765,68 @@ export default function DetalhesPage() {
 
         <div className="p-6">
           <AnimatePresence mode="wait">
+            {activeTab === 'fixedincome' && (
+              <motion.div
+                key="fixedincome"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-6"
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="lg:col-span-1 bg-muted/30 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold mb-4">Indicadores (BCB)</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span>SELIC</span>
+                        <span className="font-semibold">{indicadores?.selic ? `${parseFloat(indicadores.selic.valor).toFixed(2)}%` : '-'}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>CDI</span>
+                        <span className="font-semibold">{indicadores?.cdi ? `${parseFloat(indicadores.cdi.valor).toFixed(2)}%` : '-'}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>IPCA (m/m)</span>
+                        <span className="font-semibold">{indicadores?.ipca ? `${parseFloat(indicadores.ipca.valor).toFixed(2)}%` : '-'}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">Atualização: {indicadores?.selic?.data || indicadores?.cdi?.data || indicadores?.ipca?.data || '-'}</div>
+                    </div>
+                  </div>
+                  <div className="lg:col-span-2 bg-muted/30 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold mb-4">Tesouro Direto</h3>
+                    {tesouro?.titulos?.length ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[700px] text-sm">
+                          <thead className="bg-muted/30">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Título</th>
+                              <th className="px-3 py-2 text-left">Vencimento</th>
+                              <th className="px-3 py-2 text-left">Taxa Compra</th>
+                              <th className="px-3 py-2 text-left">PU Mínimo</th>
+                              <th className="px-3 py-2 text-left">Indexador</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tesouro.titulos.map((t, idx) => (
+                              <tr key={idx} className="border-b border-border hover:bg-muted/40">
+                                <td className="px-3 py-2">{t.nome}</td>
+                                <td className="px-3 py-2">{t.vencimento}</td>
+                                <td className="px-3 py-2">{t.taxaCompra != null ? `${parseFloat(String(t.taxaCompra)).toFixed(2)}%` : '-'}</td>
+                                <td className="px-3 py-2">{t.pu != null ? formatCurrency(Number(t.pu)) : '-'}</td>
+                                <td className="px-3 py-2">{t.indexador || t.tipoRent || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">Não foi possível carregar os títulos do Tesouro agora.</div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
             {activeTab === 'overview' && (
               <motion.div
                 key="overview"

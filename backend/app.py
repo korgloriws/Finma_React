@@ -28,8 +28,19 @@ from models import (
     save_rebalance_config,
     get_rebalance_config,
     compute_rebalance_status,
+    registrar_rebalance_event,
+    get_rebalance_history,
+    list_asset_types,
+    create_asset_type,
+    rename_asset_type,
+    delete_asset_type,
 )
 from models import cache
+import requests
+try:
+    import cloudscraper # type: ignore
+except Exception:
+    cloudscraper = None
 
 FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist'))
 
@@ -936,11 +947,15 @@ def api_adicionar_ativo():
         ticker = data.get('ticker')
         quantidade = data.get('quantidade')
         tipo = data.get('tipo')
+        preco_inicial = data.get('preco_inicial')
+        nome_personalizado = data.get('nome_personalizado')
+        indexador = data.get('indexador')  # 'CDI' | 'IPCA' | 'SELIC' | None
+        indexador_pct = data.get('indexador_pct')  # percentual (ex.: 110 para 110%)
         
         if not ticker or not quantidade:
             return jsonify({"error": "Ticker e quantidade são obrigatórios"}), 400
             
-        resultado = adicionar_ativo_carteira(ticker, quantidade, tipo)
+        resultado = adicionar_ativo_carteira(ticker, quantidade, tipo, preco_inicial, nome_personalizado, indexador, indexador_pct)
         # invalidar cache simples
         try:
             if cache:
@@ -1027,7 +1042,8 @@ def api_rebalance_config():
             data = request.get_json() or {}
             periodo = str(data.get('periodo') or 'mensal').lower()
             targets = data.get('targets') or {}
-            res = save_rebalance_config(periodo, targets)
+            last_rebalance_date = data.get('last_rebalance_date')
+            res = save_rebalance_config(periodo, targets, last_rebalance_date)
             return jsonify(res)
         else:
             cfg = get_rebalance_config() or {}
@@ -1043,11 +1059,133 @@ def api_rebalance_status():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@server.route("/api/carteira/rebalance/history", methods=["GET", "POST"])
+def api_rebalance_history():
+    try:
+        if request.method == 'POST':
+            data = request.get_json() or {}
+            date_str = data.get('date')
+            res = registrar_rebalance_event(date_str)
+            return jsonify(res)
+        else:
+            hist = get_rebalance_history() or []
+            return jsonify({"history": hist})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Indicadores (SELIC, CDI, IPCA) via BCB SGS
+@server.route("/api/indicadores", methods=["GET"])
+def api_indicadores():
+    try:
+
+        def sgs_last(series_id, use_range=False):
+            if use_range:
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=90)
+                url = (f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{series_id}/dados?"
+                       f"formato=json&dataInicial={start_date.strftime('%d/%m/%Y')}"
+                       f"&dataFinal={end_date.strftime('%d/%m/%Y')}")
+                r = requests.get(url, timeout=10)
+                r.raise_for_status()
+                arr = r.json()
+                return arr[-1] if arr else None
+            else:
+                url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{series_id}/dados/ultimos/1?formato=json"
+                r = requests.get(url, timeout=10)
+                r.raise_for_status()
+                arr = r.json()
+                return arr[0] if arr else None
+
+        selic = sgs_last(432, use_range=True)
+        cdi = sgs_last(12, use_range=True)
+        ipca = sgs_last(433)
+        
+        return jsonify({
+            "selic": selic,
+            "cdi": cdi,
+            "ipca": ipca,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Tesouro Direto títulos (dados públicos)
+@server.route("/api/tesouro/titulos", methods=["GET"])
+def api_tesouro_titulos():
+    try:
+        
+        url = "https://www.tesourodireto.com.br/json/consulta/PrecoTaxaTitulo.json"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://www.tesourodireto.com.br/",
+        }
+        r = requests.get(url, timeout=15, headers=headers)
+        r.raise_for_status()
+        try:
+            data = r.json()
+        except Exception:
+            
+            r2 = requests.get(url + f"?cb={int(datetime.now().timestamp())}", timeout=15, headers=headers)
+            r2.raise_for_status()
+            data = r2.json()
+
+        # Se vier vazio, tentar cloudscraper (bypass de proteção)
+        if (not data or not data.get('response')) and cloudscraper is not None:
+            scraper = cloudscraper.create_scraper()
+            resp = scraper.get(url, timeout=20, headers=headers)
+            try:
+                data = resp.json()
+            except Exception:
+                pass
+
+        titulos = []
+        for grupo in (data.get('response', {}).get('TrsrBondMkt', []) or []):
+            for t in (grupo.get('TrsrBd', []) or []):
+                titulos.append({
+                    "nome": t.get('bond'),
+                    "vencimento": t.get('maturityDate'),
+                    "taxaCompra": t.get('invstRate'),
+                    "pu": t.get('minInvstAmt'),
+                    "indexador": t.get('index'),
+                    "tipoRent": t.get('type'),
+                })
+        return jsonify({"titulos": titulos})
+    except Exception as e:
+        try:
+            print(f"TESOURO ERROR: {e}")
+        except Exception:
+            pass
+       
+        return jsonify({"titulos": [], "fallback": True, "error": str(e)}), 200
+
+@server.route("/api/carteira/tipos", methods=["GET", "POST", "PUT", "DELETE"])
+def api_asset_types():
+    try:
+        if request.method == 'GET':
+            return jsonify({"tipos": list_asset_types()})
+        data = request.get_json() or {}
+        if request.method == 'POST':
+            nome = str(data.get('nome') or '').strip()
+            res = create_asset_type(nome)
+            return jsonify(res)
+        if request.method == 'PUT':
+            old = str(data.get('old') or '').strip()
+            new = str(data.get('new') or '').strip()
+            res = rename_asset_type(old, new)
+            return jsonify(res)
+        if request.method == 'DELETE':
+            nome = str(data.get('nome') or '').strip()
+            res = delete_asset_type(nome)
+            return jsonify(res)
+        return jsonify({"error": "Método não suportado"}), 405
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @server.route("/api/carteira/historico", methods=["GET"])
 def api_get_historico_carteira():
 
     try:
-        agregacao = request.args.get('periodo', 'mensal')  # mensal, trimestral, semestral, anual, maximo
+        agregacao = request.args.get('periodo', 'mensal')  
         print(f"DEBUG: API /api/carteira/historico chamada com agregacao: {agregacao}")
         dados = obter_historico_carteira_comparado(agregacao)
         return jsonify(dados)

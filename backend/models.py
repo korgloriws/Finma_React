@@ -73,6 +73,264 @@ def _pg_conn_for_user(username: str):
     _pg_use_schema(conn, username)
     return conn
 
+def _ensure_rebalance_schema():
+
+    usuario = get_usuario_atual()
+    if not usuario:
+        return
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                try:
+                    c.execute('''
+                        CREATE TABLE IF NOT EXISTS rebalance_config (
+                            id SERIAL PRIMARY KEY,
+                            periodo TEXT NOT NULL,
+                            targets_json TEXT NOT NULL,
+                            start_date TEXT,
+                            last_rebalance_date TEXT,
+                            updated_at TEXT NOT NULL
+                        )
+                    ''')
+                except Exception:
+                    pass
+                try:
+                    c.execute('ALTER TABLE rebalance_config ADD COLUMN IF NOT EXISTS last_rebalance_date TEXT')
+                except Exception:
+                    pass
+                try:
+                    c.execute('''
+                        CREATE TABLE IF NOT EXISTS rebalance_history (
+                            id SERIAL PRIMARY KEY,
+                            data TEXT NOT NULL,
+                            created_at TEXT NOT NULL
+                        )
+                    ''')
+                except Exception:
+                    pass
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cur = conn.cursor()
+            try:
+                cur.execute('''
+                    CREATE TABLE IF NOT EXISTS rebalance_config (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        periodo TEXT NOT NULL,
+                        targets_json TEXT NOT NULL,
+                        start_date TEXT,
+                        last_rebalance_date TEXT,
+                        updated_at TEXT NOT NULL
+                    )
+                ''')
+            except Exception:
+                pass
+            try:
+                cur.execute('ALTER TABLE rebalance_config ADD COLUMN last_rebalance_date TEXT')
+            except Exception:
+                pass
+            try:
+                cur.execute('''
+                    CREATE TABLE IF NOT EXISTS rebalance_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        data TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    )
+                ''')
+            except Exception:
+                pass
+            conn.commit()
+        finally:
+            conn.close()
+
+def _ensure_asset_types_schema():
+    usuario = get_usuario_atual()
+    if not usuario:
+        return
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('''
+                    CREATE TABLE IF NOT EXISTS asset_types (
+                        id SERIAL PRIMARY KEY,
+                        nome TEXT UNIQUE NOT NULL,
+                        created_at TEXT NOT NULL
+                    )
+                ''')
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS asset_types (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nome TEXT UNIQUE NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            ''')
+            conn.commit()
+        finally:
+            conn.close()
+
+def list_asset_types():
+    usuario = get_usuario_atual()
+    if not usuario:
+        return []
+    _ensure_asset_types_schema()
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('SELECT nome FROM asset_types ORDER BY nome ASC')
+                rows = c.fetchall()
+                return [r[0] for r in rows]
+        finally:
+            conn.close()
+    db_path = get_db_path(usuario, "carteira")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT nome FROM asset_types ORDER BY nome ASC')
+        rows = cur.fetchall()
+        return [r[0] for r in rows]
+    finally:
+        conn.close()
+
+def _ensure_indexador_schema():
+    """Garante colunas de indexação na tabela carteira: indexador (TEXT) e indexador_pct (REAL)."""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                try:
+                    c.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS indexador TEXT')
+                except Exception:
+                    pass
+                try:
+                    c.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS indexador_pct NUMERIC')
+                except Exception:
+                    pass
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cur = conn.cursor()
+            try:
+                cur.execute('ALTER TABLE carteira ADD COLUMN indexador TEXT')
+            except Exception:
+                pass
+            try:
+                cur.execute('ALTER TABLE carteira ADD COLUMN indexador_pct REAL')
+            except Exception:
+                pass
+            conn.commit()
+        finally:
+            conn.close()
+
+def create_asset_type(nome: str):
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Não autenticado"}
+    if not nome or not nome.strip():
+        return {"success": False, "message": "Nome inválido"}
+    _ensure_asset_types_schema()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('INSERT INTO asset_types (nome, created_at) VALUES (%s, %s) ON CONFLICT (nome) DO NOTHING', (nome.strip(), now))
+        finally:
+            conn.close()
+        return {"success": True}
+    db_path = get_db_path(usuario, "carteira")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        cur = conn.cursor()
+        try:
+            cur.execute('INSERT OR IGNORE INTO asset_types (nome, created_at) VALUES (?, ?)', (nome.strip(), now))
+            conn.commit()
+        finally:
+            conn.close()
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+def rename_asset_type(old: str, new: str):
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Não autenticado"}
+    if not old or not new or not new.strip():
+        return {"success": False, "message": "Nome inválido"}
+    _ensure_asset_types_schema()
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('UPDATE asset_types SET nome=%s WHERE nome=%s', (new.strip(), old))
+                # Atualizar carteira para refletir novo nome
+                c.execute('UPDATE carteira SET tipo=%s WHERE tipo=%s', (new.strip(), old))
+        finally:
+            conn.close()
+        return {"success": True}
+    db_path = get_db_path(usuario, "carteira")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        cur = conn.cursor()
+        cur.execute('UPDATE asset_types SET nome=? WHERE nome=?', (new.strip(), old))
+        cur.execute('UPDATE carteira SET tipo=? WHERE tipo=?', (new.strip(), old))
+        conn.commit()
+        return {"success": True}
+    finally:
+        conn.close()
+
+def delete_asset_type(nome: str):
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Não autenticado"}
+    if not nome:
+        return {"success": False, "message": "Nome inválido"}
+    _ensure_asset_types_schema()
+    # Só permitir exclusão se não houver ativos na carteira com esse tipo
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('SELECT COUNT(1) FROM carteira WHERE tipo=%s', (nome,))
+                cnt = c.fetchone()[0]
+                if cnt and int(cnt) > 0:
+                    return {"success": False, "message": "Existem ativos com esse tipo"}
+                c.execute('DELETE FROM asset_types WHERE nome=%s', (nome,))
+        finally:
+            conn.close()
+        return {"success": True}
+    db_path = get_db_path(usuario, "carteira")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT COUNT(1) FROM carteira WHERE tipo=?', (nome,))
+        cnt = cur.fetchone()[0]
+        if cnt and int(cnt) > 0:
+            conn.close()
+            return {"success": False, "message": "Existem ativos com esse tipo"}
+        cur.execute('DELETE FROM asset_types WHERE nome=?', (nome,))
+        conn.commit()
+        return {"success": True}
+    finally:
+        conn.close()
 def set_usuario_atual(username):
    
     global USUARIO_ATUAL
@@ -2085,7 +2343,15 @@ def init_carteira_db(usuario=None):
                         periodo TEXT NOT NULL,
                         targets_json TEXT NOT NULL,
                         start_date TEXT,
+                        last_rebalance_date TEXT,
                         updated_at TEXT NOT NULL
+                    )
+                ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS rebalance_history (
+                        id SERIAL PRIMARY KEY,
+                        data TEXT NOT NULL,
+                        created_at TEXT NOT NULL
                     )
                 ''')
         finally:
@@ -2148,7 +2414,15 @@ def init_carteira_db(usuario=None):
                 periodo TEXT NOT NULL,
                 targets_json TEXT NOT NULL,
                 start_date TEXT,
+                last_rebalance_date TEXT,
                 updated_at TEXT NOT NULL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS rebalance_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data TEXT NOT NULL,
+                created_at TEXT NOT NULL
             )
         ''')
         conn.commit()
@@ -2204,22 +2478,34 @@ def obter_informacoes_ativo(ticker):
         print(f"Erro ao obter informações de {ticker}: {e}")
         return None
 
-def adicionar_ativo_carteira(ticker, quantidade, tipo=None):
+def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, nome_personalizado=None, indexador=None, indexador_pct=None):
 
     try:
         info = obter_informacoes_ativo(ticker)
         if not info:
-            return {"success": False, "message": "Não foi possível obter informações do ativo"}
+            # Fallback: criar ativo manual
+            preco_base = float(preco_inicial) if preco_inicial is not None else 0.0
+            info = {
+                "ticker": (ticker or "").upper(),
+                "nome_completo": nome_personalizado or (ticker or "Personalizado").upper(),
+                "preco_atual": preco_base,
+                "tipo": tipo or "Personalizado",
+                "dy": None,
+                "pl": None,
+                "pvp": None,
+                "roe": None,
+            }
             
         if tipo:
             info["tipo"] = tipo
             
-        valor_total = info["preco_atual"] * quantidade
+        valor_total = float(info["preco_atual"] or 0) * float(quantidade or 0)
         data_adicao = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         usuario = get_usuario_atual()
         if not usuario:
             return {"success": False, "message": "Usuário não autenticado"}
+        _ensure_indexador_schema()
         if _is_postgres():
             conn = _pg_conn_for_user(usuario)
             try:
@@ -2231,8 +2517,8 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None):
                     )
                     # carteira
                     cursor.execute(
-                        'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, data_adicao, tipo, dy, pl, pvp, roe) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-                        (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], valor_total, data_adicao, info["tipo"], info["dy"], info["pl"], info["pvp"], info["roe"]) 
+                        'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                        (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct) 
                     )
             finally:
                 conn.close()
@@ -2248,11 +2534,11 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None):
                 return resultado_movimentacao
             cursor.execute('''
                 INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, 
-                                    data_adicao, tipo, dy, pl, pvp, roe)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], 
-                  valor_total, data_adicao, info["tipo"], info["dy"], info["pl"], 
-                  info["pvp"], info["roe"]))
+                  valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), 
+                  info.get("pvp"), info.get("roe"), indexador, indexador_pct))
             conn.commit()
             conn.close()
         
@@ -2360,13 +2646,19 @@ def obter_carteira():
         if not usuario:
             return {"success": False, "message": "Usuário não autenticado"}
 
+        # Garantir que colunas de indexação existam antes dos SELECTs
+        try:
+            _ensure_indexador_schema()
+        except Exception:
+            pass
+
         if _is_postgres():
             conn = _pg_conn_for_user(usuario)
             try:
                 with conn.cursor() as cursor:
                     cursor.execute('''
                         SELECT id, ticker, nome_completo, quantidade, preco_atual, valor_total,
-                               data_adicao, tipo, dy, pl, pvp, roe
+                               data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct
                         FROM carteira
                         ORDER BY valor_total DESC
                     ''')
@@ -2388,6 +2680,8 @@ def obter_carteira():
                     "pl": float(row[9]) if row[9] is not None else None,
                     "pvp": float(row[10]) if row[10] is not None else None,
                     "roe": float(row[11]) if row[11] is not None else None,
+                    "indexador": row[12],
+                    "indexador_pct": float(row[13]) if (len(row) > 13 and row[13] is not None) else None,
                 })
             return ativos
         db_path = get_db_path(usuario, "carteira")
@@ -2395,13 +2689,14 @@ def obter_carteira():
         cursor = conn.cursor()
         cursor.execute('''
             SELECT id, ticker, nome_completo, quantidade, preco_atual, valor_total,
-                   data_adicao, tipo, dy, pl, pvp, roe
+                   data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct
             FROM carteira
             ORDER BY valor_total DESC
         ''')
         
         ativos = []
         for row in cursor.fetchall():
+            row_len = len(row)
             ativos.append({
                 "id": row[0],
                 "ticker": row[1],
@@ -2414,7 +2709,9 @@ def obter_carteira():
                 "dy": row[8],
                 "pl": row[9],
                 "pvp": row[10],
-                "roe": row[11]
+                "roe": row[11],
+                "indexador": row[12] if row_len > 12 else None,
+                "indexador_pct": row[13] if row_len > 13 else None,
             })
         
         conn.close()
@@ -2425,11 +2722,12 @@ def obter_carteira():
 
 # ==================== REBALANCEAMENTO ====================
 
-def save_rebalance_config(periodo: str, targets: dict):
+def save_rebalance_config(periodo: str, targets: dict, last_rebalance_date: str | None = None):
     import json as _json
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
+    _ensure_rebalance_schema()
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     targets_json = _json.dumps(targets or {})
     # start_date: se não existe, define como agora; se existe, mantém
@@ -2441,11 +2739,11 @@ def save_rebalance_config(periodo: str, targets: dict):
                 row = c.fetchone()
                 if row:
                     start = row[1] or now
-                    c.execute('UPDATE rebalance_config SET periodo=%s, targets_json=%s, updated_at=%s WHERE id=%s',
-                              (periodo, targets_json, now, row[0]))
+                    c.execute('UPDATE rebalance_config SET periodo=%s, targets_json=%s, last_rebalance_date=%s, updated_at=%s WHERE id=%s',
+                              (periodo, targets_json, last_rebalance_date, now, row[0]))
                 else:
-                    c.execute('INSERT INTO rebalance_config (periodo, targets_json, start_date, updated_at) VALUES (%s, %s, %s, %s)',
-                              (periodo, targets_json, now, now))
+                    c.execute('INSERT INTO rebalance_config (periodo, targets_json, start_date, last_rebalance_date, updated_at) VALUES (%s, %s, %s, %s, %s)',
+                              (periodo, targets_json, now, last_rebalance_date, now))
         finally:
             conn.close()
         return {"success": True}
@@ -2458,11 +2756,11 @@ def save_rebalance_config(periodo: str, targets: dict):
         row = c.fetchone()
         if row:
             start = row[1] or now
-            c.execute('UPDATE rebalance_config SET periodo=?, targets_json=?, updated_at=? WHERE id=?',
-                      (periodo, targets_json, now, row[0]))
+            c.execute('UPDATE rebalance_config SET periodo=?, targets_json=?, last_rebalance_date=?, updated_at=? WHERE id=?',
+                      (periodo, targets_json, last_rebalance_date, now, row[0]))
         else:
-            c.execute('INSERT INTO rebalance_config (periodo, targets_json, start_date, updated_at) VALUES (?, ?, ?, ?)',
-                      (periodo, targets_json, now, now))
+            c.execute('INSERT INTO rebalance_config (periodo, targets_json, start_date, last_rebalance_date, updated_at) VALUES (?, ?, ?, ?, ?)',
+                      (periodo, targets_json, now, last_rebalance_date, now))
         conn.commit()
     finally:
         conn.close()
@@ -2473,19 +2771,21 @@ def get_rebalance_config():
     usuario = get_usuario_atual()
     if not usuario:
         return None
+    _ensure_rebalance_schema()
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
-                c.execute('SELECT periodo, targets_json, start_date, updated_at FROM rebalance_config LIMIT 1')
+                c.execute('SELECT periodo, targets_json, start_date, last_rebalance_date, updated_at FROM rebalance_config LIMIT 1')
                 row = c.fetchone()
                 if not row:
                     return None
-                periodo, targets_json, start_date, updated_at = row
+                periodo, targets_json, start_date, last_rebalance_date, updated_at = row
                 return {
                     'periodo': periodo,
                     'targets': _json.loads(targets_json or '{}'),
                     'start_date': start_date,
+                    'last_rebalance_date': last_rebalance_date,
                     'updated_at': updated_at,
                 }
         finally:
@@ -2494,15 +2794,16 @@ def get_rebalance_config():
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
         c = conn.cursor()
-        c.execute('SELECT periodo, targets_json, start_date, updated_at FROM rebalance_config LIMIT 1')
+        c.execute('SELECT periodo, targets_json, start_date, last_rebalance_date, updated_at FROM rebalance_config LIMIT 1')
         row = c.fetchone()
         if not row:
             return None
-        periodo, targets_json, start_date, updated_at = row
+        periodo, targets_json, start_date, last_rebalance_date, updated_at = row
         return {
             'periodo': periodo,
             'targets': json.loads(targets_json or '{}'),
             'start_date': start_date,
+            'last_rebalance_date': last_rebalance_date,
             'updated_at': updated_at,
         }
     finally:
@@ -2513,6 +2814,7 @@ def compute_rebalance_status():
     usuario = get_usuario_atual()
     if not usuario:
         return {"error": "Não autenticado"}
+    _ensure_rebalance_schema()
     cfg = get_rebalance_config()
     carteira = obter_carteira() or []
     if not cfg or not carteira:
@@ -2542,14 +2844,29 @@ def compute_rebalance_status():
         deviations[tipo] = cur - float(tgt or 0.0)
     # datas e janela
     start_str = cfg.get('start_date')
+    last_str = cfg.get('last_rebalance_date')
     try:
         since_days = ( _dt.now() - _dt.strptime(start_str[:19], '%Y-%m-%d %H:%M:%S') ).days if start_str else None
     except Exception:
         since_days = None
     periodo = (cfg.get('periodo') or 'mensal').lower()
     period_days = {'mensal': 30, 'trimestral': 90, 'semestral': 180, 'anual': 365}.get(periodo, 30)
-    can_rebalance = since_days is not None and since_days >= period_days
-    # sugestões simples: comprar classes abaixo da meta; vender classes acima
+ 
+    base_date = None
+    try:
+        if last_str:
+            base_date = _dt.strptime(last_str[:19], '%Y-%m-%d %H:%M:%S')
+        elif start_str:
+            base_date = _dt.strptime(start_str[:19], '%Y-%m-%d %H:%M:%S')
+    except Exception:
+        base_date = None
+    next_due = None
+    days_until_next = None
+    if base_date:
+        next_due = base_date + timedelta(days=period_days)
+        days_until_next = (next_due - _dt.now()).days
+    can_rebalance = (days_until_next is not None) and (days_until_next <= 0)
+    
     suggestions = []
     for tipo, tgt in targets.items():
         cur_val = dist.get(tipo, 0.0)
@@ -2573,7 +2890,60 @@ def compute_rebalance_status():
         'targets': targets,
         'deviations': deviations,
         'suggestions': suggestions,
+        'last_rebalance_date': last_str,
+        'next_due_date': next_due.strftime('%Y-%m-%d %H:%M:%S') if next_due else None,
+        'days_until_next': days_until_next,
     }
+
+def registrar_rebalance_event(date_str: str | None = None):
+    
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+    _ensure_rebalance_schema()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    event_date = date_str or now
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('INSERT INTO rebalance_history (data, created_at) VALUES (%s, %s)', (event_date, now))
+                c.execute('UPDATE rebalance_config SET last_rebalance_date=%s, updated_at=%s', (event_date, now))
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cur = conn.cursor()
+            cur.execute('INSERT INTO rebalance_history (data, created_at) VALUES (?, ?)', (event_date, now))
+            cur.execute('UPDATE rebalance_config SET last_rebalance_date=?, updated_at=?', (event_date, now))
+            conn.commit()
+        finally:
+            conn.close()
+    return {"success": True}
+
+def get_rebalance_history():
+    usuario = get_usuario_atual()
+    if not usuario:
+        return []
+    _ensure_rebalance_schema()
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('SELECT data FROM rebalance_history ORDER BY id DESC')
+                return [r[0] for r in c.fetchall()]
+        finally:
+            conn.close()
+    db_path = get_db_path(usuario, "carteira")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT data FROM rebalance_history ORDER BY id DESC')
+        return [r[0] for r in cur.fetchall()]
+    finally:
+        conn.close()
 
 def registrar_movimentacao(data, ticker, nome_completo, quantidade, preco, tipo, conn=None):
 

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 
@@ -33,8 +34,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
-  // Verificar se há usuário logado ao carregar a aplicação
+  
   useEffect(() => {
     checkCurrentUser()
   }, [])
@@ -85,7 +87,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       })
       
       if (response.status === 201) {
-        // Após registro bem-sucedido, fazer login automaticamente
+      
         await login(username, password)
       } else {
         throw new Error('Erro no registro')
@@ -164,14 +166,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // Invalidar todo o cache do React Query para forçar recarregamento
       queryClient.clear()
       
-      // Forçar recarregamento da página para garantir limpeza completa
-      window.location.reload()
+      // Navegar para a tela de login sem recarregar a página
+      navigate('/login', { replace: true })
     } catch (error) {
       console.error('Erro ao fazer logout:', error)
       // Mesmo com erro, limpar o estado local
       setUser(null)
       queryClient.clear()
-      window.location.reload()
+      navigate('/login', { replace: true })
     }
   }
 

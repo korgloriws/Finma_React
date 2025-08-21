@@ -90,18 +90,58 @@ export const carteiraService = {
     return response.data
   },
 
+  // Indicadores e Tesouro Direto
+  getIndicadores: async (): Promise<{ selic?: any; cdi?: any; ipca?: any }> => {
+    const response = await api.get('/indicadores')
+    return response.data
+  },
+  getTesouroTitulos: async (): Promise<{ titulos: Array<{ nome: string; vencimento: string; taxaCompra: number; pu: number; indexador?: string; tipoRent?: string }> }> => {
+    const response = await api.get('/tesouro/titulos')
+    return response.data
+  },
+
+  // Tipos de Ativo (CRUD)
+  getTipos: async (): Promise<string[]> => {
+    const response = await api.get('/carteira/tipos')
+    return response.data?.tipos || []
+  },
+  criarTipo: async (nome: string): Promise<any> => {
+    const response = await api.post('/carteira/tipos', { nome })
+    return response.data
+  },
+  renomearTipo: async (oldName: string, newName: string): Promise<any> => {
+    const response = await api.put('/carteira/tipos', { old: oldName, new: newName })
+    return response.data
+  },
+  excluirTipo: async (nome: string): Promise<any> => {
+    const response = await api.delete('/carteira/tipos', { data: { nome } })
+    return response.data
+  },
+
   getInsights: async (): Promise<any> => {
     const response = await api.get('/carteira/insights')
     return response.data
   },
 
 
-  adicionarAtivo: async (ticker: string, quantidade: number, tipo?: string): Promise<any> => {
+  adicionarAtivo: async (
+    ticker: string,
+    quantidade: number,
+    tipo?: string,
+    preco_inicial?: number,
+    nome_personalizado?: string,
+    indexador?: 'CDI' | 'IPCA' | 'SELIC',
+    indexador_pct?: number,
+  ): Promise<any> => {
     const normalizedTicker = normalizeTicker(ticker)
     const response = await api.post('/carteira/adicionar', {
       ticker: normalizedTicker,
       quantidade,
-      tipo
+      tipo,
+      preco_inicial,
+      nome_personalizado,
+      indexador,
+      indexador_pct,
     })
     return response.data
   },
@@ -131,16 +171,24 @@ export const carteiraService = {
   },
 
   // Rebalanceamento
-  getRebalanceConfig: async (): Promise<{ periodo?: string; targets?: Record<string, number>; start_date?: string } | {}> => {
+  getRebalanceConfig: async (): Promise<{ periodo?: string; targets?: Record<string, number>; start_date?: string; last_rebalance_date?: string } | {}> => {
     const response = await api.get('/carteira/rebalance/config')
     return response.data
   },
-  saveRebalanceConfig: async (payload: { periodo: string; targets: Record<string, number> }): Promise<any> => {
+  saveRebalanceConfig: async (payload: { periodo: string; targets: Record<string, number>; last_rebalance_date?: string }): Promise<any> => {
     const response = await api.post('/carteira/rebalance/config', payload)
     return response.data
   },
   getRebalanceStatus: async (): Promise<any> => {
     const response = await api.get('/carteira/rebalance/status')
+    return response.data
+  },
+  getRebalanceHistory: async (): Promise<{ history: string[] }> => {
+    const response = await api.get('/carteira/rebalance/history')
+    return response.data
+  },
+  addRebalanceHistory: async (date: string): Promise<any> => {
+    const response = await api.post('/carteira/rebalance/history', { date })
     return response.data
   },
 

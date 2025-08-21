@@ -1,10 +1,10 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { toast } from 'react-hot-toast'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { 
   Plus, 
   Minus, 
- 
   Target, 
   BarChart3, 
   Trophy, 
@@ -14,7 +14,6 @@ import {
   TrendingUp,
   Activity,
   DollarSign,
-
   ArrowUpRight,
   ArrowDownRight,
   ChevronUp,
@@ -22,6 +21,7 @@ import {
   Edit,
   Trash2,
   PieChart,
+  Settings,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { carteiraService } from '../services/api'
@@ -50,12 +50,17 @@ export default function CarteiraPage() {
   const { user } = useAuth()
   const [inputTicker, setInputTicker] = useState('')
   const [inputQuantidade, setInputQuantidade] = useState('')
-  const [inputTipo, setInputTipo] = useState('Ação')
+  const [inputTipo, setInputTipo] = useState('')
+  const [inputPreco, setInputPreco] = useState('')
+  const [inputIndexador, setInputIndexador] = useState<'CDI' | 'IPCA' | 'SELIC' | ''>('')
+  const [inputIndexadorPct, setInputIndexadorPct] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editQuantidade, setEditQuantidade] = useState('')
   const [filtroMes, setFiltroMes] = useState<number>(new Date().getMonth() + 1)
   const [filtroAno, setFiltroAno] = useState<number>(new Date().getFullYear())
   const [activeTab, setActiveTab] = useState('ativos')
+  const [manageTipoOpen, setManageTipoOpen] = useState<{open: boolean; tipo?: string}>({open: false})
+  const [renameTipoValue, setRenameTipoValue] = useState('')
   const { data: insights, isLoading: loadingInsights } = useQuery({
     queryKey: ['carteira-insights', user],
     queryFn: carteiraService.getInsights,
@@ -77,15 +82,50 @@ export default function CarteiraPage() {
     refetchOnWindowFocus: false,
     staleTime: 30_000,
   })
+  const { data: rbHistory } = useQuery({
+    queryKey: ['rebalance-history', user],
+    queryFn: carteiraService.getRebalanceHistory,
+    enabled: !!user,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+  })
   const saveRebalanceMutation = useMutation({
     mutationFn: carteiraService.saveRebalanceConfig,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rebalance-config', user] })
       queryClient.invalidateQueries({ queryKey: ['rebalance-status', user] })
+      queryClient.invalidateQueries({ queryKey: ['rebalance-history', user] })
       refetchRbStatus()
+      toast.success('Configuração salva')
     },
+    onError: (err: any) => {
+      if (err?.response?.status === 401) {
+        toast.error('Sessão expirada. Faça login novamente.')
+      } else {
+        toast.error('Falha ao salvar configuração')
+      }
+    }
   })
+  const [idealPreview, setIdealPreview] = useState<{ periodo: string; targets: Record<string, number> } | null>(null)
+  useEffect(() => {
+    if (!idealPreview) {
+      const cfg: any = rbConfig as any
+      const initTargets = cfg?.targets || { 'Ação': 20, 'FII': 20, 'BDR': 20, 'Criptomoeda': 20, 'Fixa': 20 }
+      const initPeriodo = cfg?.periodo || 'mensal'
+      setIdealPreview({ periodo: initPeriodo, targets: initTargets })
+    }
+  }, [rbConfig, idealPreview])
+  const idealTargets = useMemo(() => {
+    return idealPreview?.targets ?? (rbConfig as any)?.targets ?? { 'Ação': 20, 'FII': 20, 'BDR': 20, 'Criptomoeda': 20, 'Fixa': 20 }
+  }, [idealPreview, rbConfig])
+  const idealChartData = useMemo(() => {
+    return Object.entries(idealTargets).map(([name, value]) => ({ name, value: Number(value) || 0 }))
+  }, [idealTargets])
+  const idealSum = useMemo(() => idealChartData.reduce((acc, d) => acc + d.value, 0), [idealChartData])
+  const idealPieColors = useMemo(() => ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F43F5E'], [])
+  const idealPieColorClasses = useMemo(() => ['bg-indigo-500','bg-emerald-500','bg-amber-500','bg-rose-500','bg-violet-500','bg-cyan-500','bg-lime-500','bg-pink-500'], [])
   const [ocultarValor, setOcultarValor] = useState(true)
+ 
   const [expandedTipos, setExpandedTipos] = useState<Record<string, boolean>>({
     'Ação': true,
     'FII': true,
@@ -105,22 +145,44 @@ export default function CarteiraPage() {
     enabled: !!user, 
   })
 
+ 
+  const { data: tiposApi } = useQuery({
+    queryKey: ['tipos-ativos', user],
+    queryFn: carteiraService.getTipos,
+    enabled: !!user,
+    refetchOnWindowFocus: false,
+    staleTime: 60000,
+  })
+  const tiposDisponiveisComputed = useMemo(() => {
+    const fromCarteira = (carteira || []).map(a => (a?.tipo || 'Desconhecido')).filter(Boolean) as string[]
+    const fromApi = (tiposApi || []) as string[]
+    return Array.from(new Set([ ...fromApi, ...fromCarteira ]))
+  }, [carteira, tiposApi])
+
   const { data: movimentacoes, isLoading: loadingMovimentacoes } = useQuery<Movimentacao[]>({
     queryKey: ['movimentacoes', user, filtroMes, filtroAno], 
     queryFn: () => carteiraService.getMovimentacoes(filtroMes, filtroAno),
-    enabled: !!user, // Só executar se houver usuário logado
+    enabled: !!user, 
   })
 
-  // Query para proventos dos ativos da carteira com filtro
+  
   const { data: proventos, isLoading: loadingProventos, error: proventosError } = useQuery({
-    queryKey: ['proventos', user, carteira?.map(ativo => ativo?.ticker), filtroProventos], // Incluir filtro na chave
+    queryKey: ['proventos', user, carteira?.map(ativo => ativo?.ticker), filtroProventos], 
     queryFn: () => carteiraService.getProventosComFiltro(carteira?.map(ativo => ativo?.ticker || '') || [], filtroProventos),
-    enabled: !!user && !!carteira && carteira.length > 0, // Só executar se houver usuário logado e carteira
+    enabled: !!user && !!carteira && carteira.length > 0, 
     retry: 1,
     refetchOnWindowFocus: false,
   })
 
-  // Query para proventos recebidos baseado na carteira
+  // Indicadores para estimativa de indexados
+  const { data: indicadores } = useQuery({
+    queryKey: ['indicadores'],
+    queryFn: carteiraService.getIndicadores,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  })
+
+  
   const { data: proventosRecebidos, isLoading: loadingProventosRecebidos } = useQuery({
     queryKey: ['proventos-recebidos', user, filtroProventos],
     queryFn: () => carteiraService.getProventosRecebidos(filtroProventos),
@@ -129,7 +191,7 @@ export default function CarteiraPage() {
     refetchOnWindowFocus: false,
   })
 
-  // Query para histórico da carteira
+
   const { data: historicoCarteira, isLoading: loadingHistorico } = useQuery({
     queryKey: ['historico-carteira', user, filtroPeriodo],
     queryFn: () => carteiraService.getHistorico(filtroPeriodo),
@@ -138,20 +200,17 @@ export default function CarteiraPage() {
     refetchOnWindowFocus: false,
   })
 
-  // Debug: verificar dados recebidos
+
   console.log('DEBUG: historicoCarteira recebido:', historicoCarteira)
   if (historicoCarteira && historicoCarteira.datas && historicoCarteira.datas.length > 0) {
     console.log('DEBUG: Primeiros 3 datas do histórico:', historicoCarteira.datas.slice(0, 3))
   }
 
 
-
-
-
-  // Mutations
+  
   const adicionarMutation = useMutation({
-    mutationFn: ({ ticker, quantidade, tipo }: { ticker: string; quantidade: number; tipo: string }) =>
-      carteiraService.adicionarAtivo(ticker, quantidade, tipo),
+    mutationFn: ({ ticker, quantidade, tipo, preco_inicial, nome_personalizado, indexador, indexador_pct }: { ticker: string; quantidade: number; tipo: string; preco_inicial?: number; nome_personalizado?: string; indexador?: 'CDI'|'IPCA'|'SELIC'; indexador_pct?: number }) =>
+      carteiraService.adicionarAtivo(ticker, quantidade, tipo, preco_inicial, nome_personalizado, indexador, indexador_pct),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['carteira', user] })
       queryClient.invalidateQueries({ queryKey: ['movimentacoes', user] })
@@ -160,7 +219,10 @@ export default function CarteiraPage() {
       queryClient.invalidateQueries({ queryKey: ['proventos-recebidos', user] })
       setInputTicker('')
       setInputQuantidade('')
-      setInputTipo('Ação')
+      setInputTipo('')
+      setInputPreco('')
+      setInputIndexador('')
+      setInputIndexadorPct('')
     },
   })
 
@@ -197,12 +259,24 @@ export default function CarteiraPage() {
     
     const normalizedTicker = normalizeTicker(inputTicker.trim())
     
+    // Usar o campo de preço opcional do formulário
+    let precoInicialNum: number | undefined
+    if (inputPreco && inputPreco.trim() !== '') {
+      const pn = parseFloat(inputPreco.replace(',', '.'))
+      if (!isNaN(pn)) precoInicialNum = pn
+    }
+    const finalTipo = inputTipo || ''
+    const finalTicker = getDisplayTicker(normalizedTicker)
     adicionarMutation.mutate({
-      ticker: getDisplayTicker(normalizedTicker),
+      ticker: finalTicker,
       quantidade,
-      tipo: inputTipo
+      tipo: finalTipo,
+      preco_inicial: precoInicialNum,
+      nome_personalizado: undefined,
+      indexador: (inputIndexador || undefined) as any,
+      indexador_pct: inputIndexadorPct && !isNaN(parseFloat(inputIndexadorPct.replace(',', '.'))) ? parseFloat(inputIndexadorPct.replace(',', '.')) : undefined,
     })
-  }, [inputTicker, inputQuantidade, inputTipo, adicionarMutation])
+  }, [inputTicker, inputQuantidade, inputTipo, inputPreco, inputIndexador, inputIndexadorPct, adicionarMutation])
 
   const handleRemover = useCallback((id: number) => {
     if (confirm('Tem certeza que deseja remover este ativo?')) {
@@ -324,6 +398,7 @@ export default function CarteiraPage() {
     const totalTipo = ativosDoTipo.reduce((total, ativo) => total + (ativo?.valor_total || 0), 0)
     const porcentagemTipo = valorTotal > 0 ? (totalTipo / valorTotal * 100).toFixed(1) : '0.0'
     const isExpanded = expandedTipos[tipo] || false
+    const podeRemoverTipo = ativosDoTipo.length === 0
 
     return (
       <div className="bg-card border border-border rounded-lg overflow-hidden shadow-lg mb-6">
@@ -351,9 +426,33 @@ export default function CarteiraPage() {
                 </div>
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-right flex items-center gap-3">
               <div className="text-lg font-bold">{formatCurrency(totalTipo)}</div>
               <div className="text-sm text-muted-foreground">{porcentagemTipo}% do total</div>
+              <button
+                onClick={(e)=>{ e.stopPropagation(); setManageTipoOpen({open: true, tipo}); setRenameTipoValue(tipo) }}
+                className="p-2 rounded hover:bg-white/20"
+                title="Gerenciar tipo"
+              >
+                <Settings size={18} />
+              </button>
+              {podeRemoverTipo && (
+                <button
+                  onClick={(e)=>{
+                    e.stopPropagation()
+                    // Esconder seção ao remover tipo sem ativos
+                    setExpandedTipos(prev => {
+                      const copy = { ...prev }
+                      delete copy[tipo]
+                      return copy
+                    })
+                  }}
+                  className="px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200"
+                  title="Remover seção (somente tipos sem ativos)"
+                >
+                  Remover seção
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -370,6 +469,8 @@ export default function CarteiraPage() {
                       <th className="px-4 py-3 text-left font-medium">Quantidade</th>
                       <th className="px-4 py-3 text-left font-medium">Preço Atual</th>
                       <th className="px-4 py-3 text-left font-medium">Valor Total</th>
+                      <th className="px-4 py-3 text-left font-medium">Indexado</th>
+                      <th className="px-4 py-3 text-left font-medium">Rentab. Estimada</th>
                       <th className="px-4 py-3 text-left font-medium">% Carteira</th>
                       <th className="px-4 py-3 text-left font-medium">DY</th>
                       <th className="px-4 py-3 text-left font-medium">ROE</th>
@@ -403,6 +504,27 @@ export default function CarteiraPage() {
                           </td>
                           <td className="px-4 py-3 font-semibold">{formatCurrency(ativo?.preco_atual)}</td>
                           <td className="px-4 py-3 font-semibold">{formatCurrency(ativo?.valor_total)}</td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {ativo?.indexador ? `${ativo.indexador} ${ativo.indexador_pct ? `${ativo.indexador_pct}%` : ''}` : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {(() => {
+                              const pct = (ativo?.indexador_pct || 0)
+                              const idx = (ativo?.indexador || '') as 'CDI'|'IPCA'|'SELIC'|''
+                              const getVal = (d:any) => {
+                                if (!d) return null
+                                const v = parseFloat(String(d.valor))
+                                return isFinite(v) ? v : null
+                              }
+                              const base = idx === 'CDI' ? getVal(indicadores?.cdi)
+                                : idx === 'IPCA' ? getVal(indicadores?.ipca)
+                                : idx === 'SELIC' ? getVal(indicadores?.selic)
+                                : null
+                              if (!idx || base == null || !pct) return '-'
+                              const anual = (pct/100) * base
+                              return `${anual.toFixed(2)}% a.a.`
+                            })()}
+                          </td>
                           <td className="px-4 py-3 text-sm text-muted-foreground">{porcentagemAtivo}%</td>
                           <td className="px-4 py-3 text-green-600 font-medium">
                             {formatDividendYield(ativo?.dy)}
@@ -522,6 +644,51 @@ export default function CarteiraPage() {
 
       {/* Conteúdo das Abas */}
       <div className="bg-card border border-border rounded-lg p-6 shadow-lg">
+        {/* Modal de gerenciamento de tipo */}
+        {manageTipoOpen.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/50" onClick={()=>setManageTipoOpen({open:false})}></div>
+            <div className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-semibold mb-4">Gerenciar tipo: {manageTipoOpen.tipo}</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Renomear para</label>
+                  <input
+                    type="text"
+                    value={renameTipoValue}
+                    onChange={(e)=>setRenameTipoValue(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded bg-background text-foreground"
+                    placeholder="Novo nome do tipo"
+                    aria-label="Novo nome do tipo"
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={()=>setManageTipoOpen({open:false})}
+                    className="px-3 py-2 rounded bg-muted text-foreground hover:bg-muted/80"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={async ()=>{
+                      if (!manageTipoOpen.tipo) return
+                      try {
+                        await carteiraService.renomearTipo(manageTipoOpen.tipo, renameTipoValue)
+                        queryClient.invalidateQueries({ queryKey: ['tipos-ativos', user] })
+                        queryClient.invalidateQueries({ queryKey: ['carteira', user] })
+                        setManageTipoOpen({open:false})
+                      } catch {}
+                    }}
+                    className="px-3 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    Salvar
+                  </button>
+                  {/* Exclusão removida do modal conforme solicitado */}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {activeTab === 'ativos' && (
           <div className="space-y-6">
             {/* Formulário de Adição */}
@@ -556,18 +723,57 @@ export default function CarteiraPage() {
                 
                 <div>
                   <label className="block text-sm font-medium mb-2">Tipo</label>
-                  <select
+                  <input
+                    list="tipos-ativos"
                     value={inputTipo}
                     onChange={(e) => setInputTipo(e.target.value)}
+                    placeholder="Ex.: Ação, FII, Criptomoeda, ..."
                     className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    aria-label="Selecionar tipo de ativo"
-                  >
-                    <option value="Ação">Ação</option>
-                    <option value="FII">FII</option>
-                    <option value="BDR">BDR</option>
-                    <option value="Criptomoeda">Criptomoeda</option>
-                    <option value="Fixa">Fixa</option>
-                  </select>
+                    aria-label="Selecionar ou digitar tipo de ativo"
+                  />
+                  <datalist id="tipos-ativos">
+                    {(tiposDisponiveisComputed || []).map(t => (
+                      <option key={t} value={t} />
+                    ))}
+                  </datalist>
+                  
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-2">Preço (opcional)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Ex: 10,50 (se vazio tenta buscar)"
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    value={inputPreco}
+                    onChange={(e)=>setInputPreco(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Indexador (opcional)</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={inputIndexador}
+                      onChange={(e)=>setInputIndexador(e.target.value as any)}
+                      className="px-3 py-2 border border-border rounded-lg bg-background text-foreground"
+                      aria-label="Selecionar indexador"
+                    >
+                      <option value="">Sem indexador</option>
+                      <option value="CDI">CDI</option>
+                      <option value="IPCA">IPCA</option>
+                      <option value="SELIC">SELIC</option>
+                    </select>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Ex.: 110 (para 110%)"
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      value={inputIndexadorPct}
+                      onChange={(e)=>setInputIndexadorPct(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Use N% do CDI/IPCA/SELIC. Ex.: 110 = 110%.</p>
                 </div>
                 
                 <div className="flex items-end">
@@ -624,7 +830,7 @@ export default function CarteiraPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                {['Ação', 'FII', 'BDR', 'Criptomoeda', 'Fixa'].map(tipo => (
+                {Object.keys(ativosPorTipo).sort().map(tipo => (
                   <TabelaAtivosPorTipo key={tipo} tipo={tipo} />
                 ))}
               </div>
@@ -1515,8 +1721,25 @@ export default function CarteiraPage() {
                 <h3 className="text-lg font-semibold mb-4">Configuração</h3>
                 <RebalanceForm
                   defaultPeriodo={(rbConfig as any)?.periodo || 'mensal'}
-                  defaultTargets={(rbConfig as any)?.targets || { 'Ação': 50, 'FII': 20, 'BDR': 20, 'Criptomoeda': 5, 'Fixa': 5 }}
-                  onSave={(periodo, targets) => saveRebalanceMutation.mutate({ periodo, targets })}
+                  defaultTargets={(rbConfig as any)?.targets || { 'Ação': 20, 'FII': 20, 'BDR': 20, 'Criptomoeda': 20, 'Fixa': 20}}
+                  defaultLastRebalanceDate={(rbConfig as any)?.last_rebalance_date}
+                  onSave={(periodo, targets, last) => saveRebalanceMutation.mutate({ periodo, targets, last_rebalance_date: last })}
+                  onChange={(periodo, targets) => setIdealPreview({ periodo, targets })}
+                  onRegisterHistory={(date)=>{
+                    carteiraService.addRebalanceHistory(date)
+                      .then(()=>{
+                        toast.success('Histórico registrado')
+                        queryClient.invalidateQueries({ queryKey: ['rebalance-history', user] })
+                        queryClient.invalidateQueries({ queryKey: ['rebalance-status', user] })
+                      })
+                      .catch((err)=>{
+                        if (err?.response?.status === 401) {
+                          toast.error('Sessão expirada. Faça login novamente.')
+                        } else {
+                          toast.error('Falha ao registrar histórico')
+                        }
+                      })
+                  }}
                 />
               </div>
               <div className="bg-muted/30 rounded-lg p-6">
@@ -1525,6 +1748,67 @@ export default function CarteiraPage() {
                   <RebalanceStatus status={rbStatus} />
                 ) : (
                   <div className="text-sm text-muted-foreground">Nenhuma configuração encontrada.</div>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-muted/30 rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <PieChart className="w-5 h-5 text-purple-600" />
+                  Carteira Ideal (Pré-visualização)
+                </h3>
+                {idealSum <= 0 ? (
+                  <div className="text-sm text-muted-foreground">Defina pesos para visualizar a distribuição ideal.</div>
+                ) : (
+                  <div className="w-full h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsPieChart>
+                        <Pie
+                          data={idealChartData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={100}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {idealChartData.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={idealPieColors[index % idealPieColors.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v: number, n: string) => [`${v.toFixed(2)}%`, n]} />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+              <div className="bg-muted/30 rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4">Legenda</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                  {idealChartData.map((d, i) => (
+                    <div key={d.name} className="flex items-center justify-between gap-3 border border-border rounded px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-3 h-3 inline-block rounded ${idealPieColorClasses[i % idealPieColorClasses.length]}`}></span>
+                        <span className="truncate" title={d.name}>{d.name}</span>
+                      </div>
+                      <span className="whitespace-nowrap">{(d.value || 0).toFixed(1)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-muted/30 rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4">Histórico de Rebalanceamentos</h3>
+                {rbHistory?.history?.length ? (
+                  <ul className="space-y-2 text-sm">
+                    {rbHistory.history.map((d: string, idx: number) => (
+                      <li key={idx} className="flex items-center justify-between border border-border rounded px-3 py-2">
+                        <span>{new Date(d).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                        <span className="text-muted-foreground">{new Date(d).toLocaleDateString('pt-BR')}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-sm text-muted-foreground">Sem histórico registrado.</div>
                 )}
               </div>
             </div>
@@ -1677,13 +1961,22 @@ export default function CarteiraPage() {
   )
 } 
 
-function RebalanceForm({ defaultPeriodo, defaultTargets, onSave }: {
+function RebalanceForm({ defaultPeriodo, defaultTargets, onSave, onChange, defaultLastRebalanceDate, onRegisterHistory }: {
   defaultPeriodo: string
   defaultTargets: Record<string, number>
-  onSave: (periodo: string, targets: Record<string, number>) => void
+  onSave: (periodo: string, targets: Record<string, number>, last_rebalance_date?: string) => void
+  onChange?: (periodo: string, targets: Record<string, number>) => void
+  defaultLastRebalanceDate?: string
+  onRegisterHistory?: (date: string) => void
 }) {
   const [periodo, setPeriodo] = useState<string>(defaultPeriodo)
   const [targets, setTargets] = useState<Record<string, number>>(defaultTargets)
+  const [lastMonth, setLastMonth] = useState<string>(() => {
+    if (!defaultLastRebalanceDate) return ''
+    const d = new Date(defaultLastRebalanceDate)
+    if (isNaN(d.getTime())) return ''
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+  })
 
   const handleChangeTarget = (key: string, val: string) => {
     const num = parseFloat(val.replace(',', '.'))
@@ -1701,72 +1994,113 @@ function RebalanceForm({ defaultPeriodo, defaultTargets, onSave }: {
     setTargets(copy)
   }
   const total = Object.values(targets).reduce((s, v) => s + (v || 0), 0)
+  useEffect(() => {
+    onChange?.(periodo, targets)
+    
+  }, [periodo, targets])
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-        <div>
-          <label htmlFor="periodo-select" className="block text-sm font-medium mb-1">Período</label>
-          <select id="periodo-select" value={periodo} onChange={(e)=>setPeriodo(e.target.value)} className="w-full px-3 py-2 border border-border rounded bg-background text-foreground">
-            <option value="mensal">Mensal</option>
-            <option value="trimestral">Trimestral</option>
-            <option value="semestral">Semestral</option>
-            <option value="anual">Anual</option>
-          </select>
-        </div>
-        <div>
-          <div className="text-sm font-medium mb-1">Classes e Pesos (%)</div>
-          <div className="space-y-2">
-            {Object.entries(targets).map(([key, val]) => (
-              <div key={key} className="flex items-center gap-2">
-                <label className="sr-only" htmlFor={`class-name-${key}`}>Nome da classe</label>
-                <input
-                  id={`class-name-${key}`}
-                  type="text"
-                  readOnly
-                  value={key}
-                  className="w-40 px-3 py-2 border border-border rounded bg-background text-foreground"
-                  title="Nome da classe"
-                  placeholder="Nome da classe"
-                />
-                <label className="sr-only" htmlFor={`class-value-${key}`}>Peso (%)</label>
-                <input
-                  id={`class-value-${key}`}
-                  type="number"
-                  value={val}
-                  onChange={(e)=>handleChangeTarget(key, e.target.value)}
-                  className="w-28 px-3 py-2 border border-border rounded bg-background text-foreground"
-                  title="Peso (%)"
-                  placeholder="Peso (%)"
-                />
-                <span className="text-sm text-muted-foreground">%</span>
-                <button onClick={()=>handleRemoveClass(key)} className="px-2 py-1 text-red-600 hover:text-red-700">Remover</button>
-              </div>
-            ))}
+      <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+          <div className="min-w-0">
+            <label htmlFor="periodo-select" className="block text-sm font-medium mb-1">Período</label>
+            <select id="periodo-select" value={periodo} onChange={(e)=>setPeriodo(e.target.value)} className="w-full px-3 py-2 border border-border rounded bg-background text-foreground">
+              <option value="mensal">Mensal</option>
+              <option value="trimestral">Trimestral</option>
+              <option value="semestral">Semestral</option>
+              <option value="anual">Anual</option>
+            </select>
           </div>
-          <div className="mt-2 flex items-center gap-3">
-            <button onClick={handleAddClass} className="px-3 py-2 bg-secondary text-secondary-foreground rounded hover:bg-secondary/80">Adicionar Classe</button>
-            <div className={`text-sm ${Math.abs(total-100) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>Total: {total.toFixed(2)}%</div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Último Rebalanceamento</label>
+            <div className="flex gap-2">
+              <select
+                aria-label="Mês"
+                value={lastMonth ? lastMonth.split('-')[1] : ''}
+                onChange={(e)=>{
+                  const m = e.target.value
+                  const y = lastMonth ? lastMonth.split('-')[0] : String(new Date().getFullYear())
+                  setLastMonth(`${y}-${m}`)
+                }}
+                className="px-3 py-2 border border-border rounded bg-background text-foreground"
+              >
+                <option value="">Mês</option>
+                {Array.from({length:12}, (_,i)=>String(i+1).padStart(2,'0')).map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <select
+                aria-label="Ano"
+                value={lastMonth ? lastMonth.split('-')[0] : ''}
+                onChange={(e)=>{
+                  const y = e.target.value
+                  const m = lastMonth ? lastMonth.split('-')[1] : String(new Date().getMonth()+1).padStart(2,'0')
+                  setLastMonth(`${y}-${m}`)
+                }}
+                className="px-3 py-2 border border-border rounded bg-background text-foreground"
+              >
+                <option value="">Ano</option>
+                {Array.from({length:8}, (_,i)=>String(new Date().getFullYear()-i)).map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="sm:col-span-2 lg:col-span-2">
+            <div className="text-sm font-medium mb-2">Classes e Pesos (%)</div>
+            <div className="flex flex-col gap-2 max-h-[260px] overflow-auto pr-1">
+              {Object.entries(targets).map(([key, val]) => (
+                <div key={key} className="flex flex-wrap items-center gap-2">
+                  <label className="sr-only" htmlFor={`class-name-${key}`}>Nome da classe</label>
+                  <input id={`class-name-${key}`} type="text" readOnly value={key} className="flex-1 min-w-[140px] px-3 py-2 border border-border rounded bg-background text-foreground" />
+                  <div className="flex items-center gap-1">
+                    <label className="sr-only" htmlFor={`class-value-${key}`}>Peso (%)</label>
+                    <input id={`class-value-${key}`} type="number" value={val} onChange={(e)=>handleChangeTarget(key, e.target.value)} className="w-[100px] px-3 py-2 border border-border rounded bg-background text-foreground" />
+                    <span className="text-sm text-muted-foreground">%</span>
+                  </div>
+                  <button onClick={()=>handleRemoveClass(key)} className="px-2 py-1 text-red-600 hover:text-red-700">Remover</button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <button onClick={handleAddClass} className="px-3 py-2 bg-secondary text-secondary-foreground rounded hover:bg-secondary/80">Adicionar Classe</button>
+              <div className={`text-sm ${Math.abs(total-100) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>Total: {total.toFixed(2)}%</div>
+            </div>
+          </div>
+          <div className="sm:col-span-2 lg:col-span-1 flex flex-wrap items-end gap-2">
+            <button
+              onClick={()=>{
+                const payloadLast = lastMonth ? `${lastMonth}-01 00:00:00` : undefined
+                onSave(periodo, targets, payloadLast)
+              }}
+              className="flex-1 min-w-[200px] px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              disabled={total <= 0}
+            >
+              Salvar Configuração
+            </button>
+            {lastMonth && (
+              <button
+                onClick={()=>{
+                  const payloadDate = `${lastMonth}-01 00:00:00`
+                  onRegisterHistory?.(payloadDate)
+                }}
+                className="flex-1 min-w-[200px] px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
+              >
+                Registrar Histórico
+              </button>
+            )}
           </div>
         </div>
-        <div className="flex items-end">
-          <button
-            onClick={()=>onSave(periodo, targets)}
-            className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-            disabled={total <= 0}
-          >
-            Salvar Configuração
-          </button>
-        </div>
+        <div className="text-xs text-muted-foreground">Dica: idealmente a soma dos pesos deve ser 100%.</div>
       </div>
-      <div className="text-xs text-muted-foreground">Dica: idealmente a soma dos pesos deve ser 100%.</div>
     </div>
   )
 }
 
 function RebalanceStatus({ status }: { status: any }) {
   const can = !!status?.can_rebalance
-  const periodDays = status?.period_days
-  const since = status?.since_start_days
+  const nextDue = status?.next_due_date
+  const daysUntilNext = status?.days_until_next
   const deviations = status?.deviations || {}
   const current = status?.current_distribution || {}
   const targets = status?.targets || {}
@@ -1776,23 +2110,27 @@ function RebalanceStatus({ status }: { status: any }) {
       <div className={`p-3 rounded border ${can ? 'border-yellow-300 bg-yellow-50 text-yellow-800' : 'border-green-300 bg-green-50 text-green-800'}`}>
         {can ? (
           <div>
-            <strong>Atenção:</strong> Já se passaram {since} dias desde o início. Período configurado: {periodDays} dias. Avalie rebalancear.
+            <strong>Atenção:</strong> Rebalanceamento devido. Próxima data sugerida: {nextDue ? new Date(nextDue).toLocaleDateString('pt-BR') : '—'}
           </div>
         ) : (
           <div>
-            Próximo rebalanceamento em {Math.max(0, (periodDays || 0) - (since || 0))} dias.
+            Próximo rebalanceamento em {Math.max(0, daysUntilNext ?? 0)} dias {nextDue ? `(${new Date(nextDue).toLocaleDateString('pt-BR')})` : ''}.
           </div>
         )}
       </div>
       <div>
         <h4 className="font-semibold mb-2">Distribuição Atual x Meta (%)</h4>
-        <div className="space-y-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {Object.keys({ ...targets, ...current }).map((k) => (
-            <div key={k} className="flex items-center justify-between text-sm bg-background border border-border rounded px-3 py-2">
-              <span className="font-medium">{k}</span>
-              <span>
-                Atual: {(current?.[k] ?? 0).toFixed(1)}% • Meta: {(targets?.[k] ?? 0).toFixed(1)}% • Desvio: {(deviations?.[k] ?? ( (current?.[k] ?? 0) - (targets?.[k] ?? 0) )).toFixed(1)}%
-              </span>
+            <div key={k} className="text-sm bg-background border border-border rounded px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium truncate">{k}</span>
+                <span className="whitespace-nowrap">Meta: {(targets?.[k] ?? 0).toFixed(1)}%</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 mt-1">
+                <span className="whitespace-nowrap">Atual: {(current?.[k] ?? 0).toFixed(1)}%</span>
+                <span className="whitespace-nowrap">Desvio: {(deviations?.[k] ?? ( (current?.[k] ?? 0) - (targets?.[k] ?? 0) )).toFixed(1)}%</span>
+              </div>
             </div>
           ))}
         </div>
@@ -1802,13 +2140,13 @@ function RebalanceStatus({ status }: { status: any }) {
         {suggestions.length === 0 ? (
           <div className="text-sm text-muted-foreground">Sem sugestões no momento.</div>
         ) : (
-          <ul className="list-disc pl-6 space-y-1 text-sm">
+          <div className="space-y-2 text-sm">
             {suggestions.map((s: any, idx: number) => (
-              <li key={idx}>
+              <div key={idx} className="bg-background border border-border rounded px-3 py-2">
                 {s.acao === 'comprar' ? 'Comprar' : 'Vender'} aproximadamente {s.valor?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} da classe <strong>{s.classe}</strong>.
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>

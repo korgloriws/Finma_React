@@ -54,6 +54,8 @@ export interface AtivoCarteira {
   pl: number | null
   pvp: number | null
   roe: number | null
+  indexador?: 'CDI' | 'IPCA' | 'SELIC' | null
+  indexador_pct?: number | null
 }
 
 export interface Movimentacao {

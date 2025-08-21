@@ -31,9 +31,9 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar desktop */}
-      <div className="hidden md:flex w-64 bg-card border-r border-border flex-col">
+      <div className="hidden md:flex w-64 bg-card border-r border-border flex-col h-screen sticky top-0 overflow-hidden">
         <div className="p-6">
           <h1 className="text-2xl font-bold text-foreground">Finma</h1>
           <hr className="my-4 border-border" />
@@ -89,7 +89,7 @@ export default function Layout({ children }: LayoutProps) {
             className="absolute inset-0 bg-black/50"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 w-72 max-w-[85%] bg-card border-r border-border shadow-xl p-4 flex flex-col">
+          <div className="absolute inset-y-0 left-0 w-72 max-w-[85%] bg-card border-r border-border shadow-xl p-4 flex flex-col overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-xl font-bold text-foreground">FinMa</h1>
               <button
