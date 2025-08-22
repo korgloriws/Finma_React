@@ -199,6 +199,7 @@ export const carteiraService = {
     ivvb11: (number|null)[]
     ifix: (number|null)[]
     ipca: (number|null)[]
+    cdi: (number|null)[]
     carteira_valor: number[]
   }> => {
     const response = await api.get(`/carteira/historico?periodo=${periodo}`)

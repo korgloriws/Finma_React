@@ -110,13 +110,13 @@ export default function CarteiraPage() {
   useEffect(() => {
     if (!idealPreview) {
       const cfg: any = rbConfig as any
-      const initTargets = cfg?.targets || { 'Ação': 20, 'FII': 20, 'BDR': 20, 'Criptomoeda': 20, 'Fixa': 20 }
+      const initTargets = cfg?.targets || {}
       const initPeriodo = cfg?.periodo || 'mensal'
       setIdealPreview({ periodo: initPeriodo, targets: initTargets })
     }
   }, [rbConfig, idealPreview])
   const idealTargets = useMemo(() => {
-    return idealPreview?.targets ?? (rbConfig as any)?.targets ?? { 'Ação': 20, 'FII': 20, 'BDR': 20, 'Criptomoeda': 20, 'Fixa': 20 }
+    return idealPreview?.targets ?? (rbConfig as any)?.targets ?? {}
   }, [idealPreview, rbConfig])
   const idealChartData = useMemo(() => {
     return Object.entries(idealTargets).map(([name, value]) => ({ name, value: Number(value) || 0 }))
@@ -1721,7 +1721,7 @@ export default function CarteiraPage() {
                 <h3 className="text-lg font-semibold mb-4">Configuração</h3>
                 <RebalanceForm
                   defaultPeriodo={(rbConfig as any)?.periodo || 'mensal'}
-                  defaultTargets={(rbConfig as any)?.targets || { 'Ação': 20, 'FII': 20, 'BDR': 20, 'Criptomoeda': 20, 'Fixa': 20}}
+                  defaultTargets={(rbConfig as any)?.targets || {}}
                   defaultLastRebalanceDate={(rbConfig as any)?.last_rebalance_date}
                   onSave={(periodo, targets, last) => saveRebalanceMutation.mutate({ periodo, targets, last_rebalance_date: last })}
                   onChange={(periodo, targets) => setIdealPreview({ periodo, targets })}
@@ -1996,8 +1996,13 @@ function RebalanceForm({ defaultPeriodo, defaultTargets, onSave, onChange, defau
   const total = Object.values(targets).reduce((s, v) => s + (v || 0), 0)
   useEffect(() => {
     onChange?.(periodo, targets)
-    
   }, [periodo, targets])
+
+  // Syncar alterações do servidor nas props default quando rbConfig mudar
+  useEffect(() => {
+    setPeriodo(defaultPeriodo)
+    setTargets(defaultTargets || {})
+  }, [defaultPeriodo, defaultTargets])
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4">

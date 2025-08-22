@@ -1,4 +1,4 @@
-import  { useState,  } from 'react'
+import  { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { motion, } from 'framer-motion'
@@ -64,12 +64,39 @@ export default function HomePage() {
     enabled: !!user
   })
 
-  // Extrair dados do resumo consolidado
+
+  const [filtroPeriodo, setFiltroPeriodo] = useState<'mensal' | 'semanal' | 'trimestral' | 'semestral' | 'anual'>('mensal')
+
+
+  const prev = useMemo(() => {
+    const m = mesAtual - 1
+    if (m >= 1) return { mes: m, ano: anoAtual }
+    return { mes: 12, ano: anoAtual - 1 }
+  }, [mesAtual, anoAtual])
+
+  const { data: resumoAnterior } = useQuery({
+    queryKey: ['home-resumo', user, prev.mes, prev.ano],
+    queryFn: () => homeService.getResumo(prev.mes.toString(), prev.ano.toString()),
+    retry: 3,
+    refetchOnWindowFocus: false,
+    enabled: !!user
+  })
+
+ 
+  const { data: historicoCarteira } = useQuery({
+    queryKey: ['carteira-historico', user, filtroPeriodo],
+    queryFn: () => carteiraService.getHistorico(filtroPeriodo),
+    retry: 3,
+    refetchOnWindowFocus: false,
+    enabled: !!user
+  })
+
+
   const receitas = resumoHome?.receitas?.registros || []
   const cartoes = resumoHome?.cartoes?.registros || []
   const outros = resumoHome?.outros?.registros || []
   const marmitas = resumoHome?.marmitas?.registros || []
-  const evolucaoFinanceira = resumoHome?.evolucao_financeira || []
+
   
   
 
@@ -109,12 +136,8 @@ export default function HomePage() {
     percentage: totalInvestido > 0 ? ((valor / totalInvestido) * 100).toFixed(1) : '0'
   }))
 
-  const dadosEvolucao = evolucaoFinanceira?.map((item: any) => ({
-    data: new Date(item.data).getDate(),
-    receitas: item.receitas,
-    despesas: item.despesas,
-    saldo: item.saldo_acumulado
-  })) || []
+  // Evolução financeira diária (não usada no gráfico principal; mantida para futuras seções)
+  // removido: dadosEvolucao não é usado neste card
 
   const dadosGastos = [
     { name: 'Cartões', valor: totalCartoes, cor: '#ef4444' },
@@ -137,6 +160,60 @@ export default function HomePage() {
     if (ocultarValor) return "•••••••"
     return `${prefixo} ${formatCurrency(valor)}`
   }
+
+  // Helpers para tendências
+  const calcTrend = (atual: number, anterior: number | undefined | null): { value: number; isPositive: boolean } | undefined => {
+    if (anterior === undefined || anterior === null) return undefined
+    if (anterior === 0) {
+      if (atual === 0) return { value: 0, isPositive: false }
+      return { value: 100, isPositive: atual > 0 }
+    }
+    const change = ((atual - anterior) / Math.abs(anterior)) * 100
+    const value = Math.round(change * 10) / 10
+    return { value, isPositive: change >= 0 }
+  }
+
+  // Tendência Carteira (via histórico mensal)
+  const carteiraTrend = useMemo(() => {
+    const arr = historicoCarteira?.carteira_valor as Array<number | null> | undefined
+    if (!arr || arr.length < 2) return undefined
+    // pegar os dois últimos valores não-nulos
+    let cur: number | undefined
+    let prevVal: number | undefined
+    for (let i = arr.length - 1; i >= 0; i--) {
+      const v = arr[i]
+      if (v != null) {
+        if (cur === undefined) cur = v
+        else { prevVal = v; break }
+      }
+    }
+    if (cur === undefined || prevVal === undefined) return undefined
+    return calcTrend(cur, prevVal)
+  }, [historicoCarteira])
+
+  // Totais anteriores para Receitas/Despesas/Saldo
+  const totalReceitasAnterior = useMemo(() => {
+    const rec = resumoAnterior?.receitas
+    if (!rec) return undefined
+    if (typeof rec.total === 'number') return rec.total
+    const regs = rec.registros || []
+    return regs.reduce((sum: number, r: any) => sum + (r?.valor || 0), 0)
+  }, [resumoAnterior])
+
+  const totalDespesasAnterior = useMemo(() => {
+    if (typeof resumoAnterior?.total_despesas === 'number') return resumoAnterior.total_despesas
+    const cart = resumoAnterior?.cartoes?.registros || []
+    const out = resumoAnterior?.outros?.registros || []
+    const marm = resumoAnterior?.marmitas?.registros || []
+    const soma = (arr: any[]) => arr.reduce((s, it) => s + (it?.valor || 0), 0)
+    return soma(cart) + soma(out) + soma(marm)
+  }, [resumoAnterior])
+
+  const saldoAnterior = useMemo(() => {
+    if (typeof resumoAnterior?.saldo === 'number') return resumoAnterior.saldo
+    if (totalReceitasAnterior === undefined || totalDespesasAnterior === undefined) return undefined
+    return totalReceitasAnterior - totalDespesasAnterior
+  }, [resumoAnterior, totalReceitasAnterior, totalDespesasAnterior])
 
   const getNomeMes = (mes: number) => {
     const meses = [
@@ -368,7 +445,7 @@ export default function HomePage() {
             icon={Building2}
             color="blue"
             to="/carteira"
-            trend={{ value: 2.5, isPositive: true }}
+            trend={carteiraTrend}
             loading={loadingCarteira}
             delay={0.1}
           />
@@ -380,6 +457,7 @@ export default function HomePage() {
             icon={ArrowUpRight}
             color="green"
             to="/controle"
+            trend={calcTrend(totalReceitas, totalReceitasAnterior)}
             loading={loadingResumo}
             delay={0.2}
           />
@@ -391,10 +469,7 @@ export default function HomePage() {
             icon={Wallet}
             color={saldoCalculado >= 0 ? 'green' : 'red'}
             to="/controle"
-            trend={{ 
-              value: saldoCalculado >= 0 ? 1.2 : -0.8, 
-              isPositive: saldoCalculado >= 0 
-            }}
+            trend={calcTrend(saldoCalculado, saldoAnterior)}
             loading={loadingResumo}
             delay={0.3}
           />
@@ -406,6 +481,7 @@ export default function HomePage() {
             icon={CreditCard}
             color="red"
             to="/controle"
+            trend={calcTrend(totalDespesas, totalDespesasAnterior)}
             loading={loadingResumo}
             delay={0.4}
           />
@@ -424,14 +500,39 @@ export default function HomePage() {
               <div className="p-2 rounded-lg bg-primary/10">
                 <LineChart className="w-6 h-6 text-primary" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground">Evolução Financeira</h2>
+              <h2 className="text-xl font-semibold text-foreground">Evolução da Carteira</h2>
+              <div className="ml-auto">
+                <select
+                  value={filtroPeriodo}
+                  onChange={(e)=>{
+                    const val = e.target.value as any
+                    setFiltroPeriodo(val)
+                  }}
+                  className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
+                  aria-label="Período do gráfico"
+                >
+                  <option value="mensal">Mensal</option>
+                  <option value="semanal">Semanal</option>
+                  <option value="trimestral">Trimestral</option>
+                  <option value="semestral">Semestral</option>
+                  <option value="anual">Anual</option>
+                </select>
+              </div>
             </div>
             
             {loadingResumo ? (
               <div className="animate-pulse h-64 bg-muted rounded-lg"></div>
-            ) : dadosEvolucao.length > 0 ? (
+            ) : (historicoCarteira?.datas?.length || 0) > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
-                <AreaChart data={dadosEvolucao}>
+                <AreaChart data={(historicoCarteira?.datas || []).map((d: string, i: number) => ({
+                  data: d,
+                  carteira: historicoCarteira?.carteira?.[i] ?? null,
+                  ibov: historicoCarteira?.ibov?.[i] ?? null,
+                  ivvb11: historicoCarteira?.ivvb11?.[i] ?? null,
+                  ifix: historicoCarteira?.ifix?.[i] ?? null,
+                  ipca: historicoCarteira?.ipca?.[i] ?? null,
+                  cdi: historicoCarteira?.cdi?.[i] ?? null,
+                }))}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="data" stroke="hsl(var(--muted-foreground))" />
                   <YAxis stroke="hsl(var(--muted-foreground))" />
@@ -443,22 +544,12 @@ export default function HomePage() {
                       color: 'hsl(var(--foreground))'
                     }}
                   />
-                  <Area 
-                    type="monotone" 
-                    dataKey="receitas" 
-                    stackId="1" 
-                    stroke="#10b981" 
-                    fill="#10b981" 
-                    fillOpacity={0.6}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="despesas" 
-                    stackId="1" 
-                    stroke="#ef4444" 
-                    fill="#ef4444" 
-                    fillOpacity={0.6}
-                  />
+                  <Area type="monotone" dataKey="carteira" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.12} strokeWidth={2} name="Carteira" />
+                  <Area type="monotone" dataKey="ibov" stroke="#22c55e" fill="#22c55e" fillOpacity={0.08} strokeWidth={1.5} name="Ibovespa" />
+                  <Area type="monotone" dataKey="ivvb11" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.08} strokeWidth={1.5} name="IVVB11" />
+                  <Area type="monotone" dataKey="ifix" stroke="#a855f7" fill="#a855f7" fillOpacity={0.08} strokeWidth={1.5} name="IFIX" />
+                  <Area type="monotone" dataKey="ipca" stroke="#ef4444" fill="#ef4444" fillOpacity={0.05} strokeWidth={1.2} name="IPCA" />
+                  <Area type="monotone" dataKey="cdi" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.06} strokeWidth={1.2} name="CDI" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (

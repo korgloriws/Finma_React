@@ -3175,9 +3175,19 @@ def _month_end(dt: datetime) -> datetime:
     return ((dt.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1))
 
 
-def _gerar_pontos_tempo(_: str, data_inicio: datetime, data_fim: datetime) -> list:
-   
+def _gerar_pontos_tempo(gran: str, data_inicio: datetime, data_fim: datetime) -> list:
+
     pontos = []
+    if gran == 'semanal':
+        # Normalizar para a segunda-feira da semana de data_inicio
+        start_day = datetime(data_inicio.year, data_inicio.month, data_inicio.day)
+        start_monday = start_day - timedelta(days=start_day.weekday())
+        atual = datetime(start_monday.year, start_monday.month, start_monday.day)
+        while atual <= data_fim:
+            pontos.append(datetime(atual.year, atual.month, atual.day))
+            atual = atual + timedelta(days=7)
+        return pontos
+    # Default: pontos mensais
     atual = datetime(data_inicio.year, data_inicio.month, 1)
     fim = datetime(data_fim.year, data_fim.month, 1)
     while atual <= fim:
@@ -3224,7 +3234,9 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
         data_ini = min(datas_mov)
         data_fim = datetime.now()
 
-        pontos = _gerar_pontos_tempo('mensal', data_ini, data_fim)
+        # granularidade pedida via agregacao
+        gran = agregacao if agregacao in ('mensal','trimestral','semestral','anual','maximo','semanal') else 'mensal'
+        pontos = _gerar_pontos_tempo(gran, data_ini, data_fim)
 
 
         tickers = sorted(list({m[1] for m in movimentos}))
@@ -3286,7 +3298,10 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
                     continue
                 total += q * price
             carteira_vals.append(total)
-            datas_labels.append(pt.strftime('%Y-%m'))
+            if gran == 'semanal':
+                datas_labels.append(pt.strftime('%Y-%m-%d'))
+            else:
+                datas_labels.append(pt.strftime('%Y-%m'))
 
  
         indices_map = {
@@ -3339,6 +3354,58 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
         except Exception:
             ipca_series = [None for _ in datas_labels]
 
+        # CDI acumulado (base 100) por mês usando série diária (SGS 12)
+        cdi_series = []
+        try:
+            import requests
+            start_date = data_ini.strftime('%d/%m/%Y')
+            end_date = data_fim.strftime('%d/%m/%Y')
+            url_cdi = (
+                f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados?formato=json"
+                f"&dataInicial={start_date}&dataFinal={end_date}"
+            )
+            r = requests.get(url_cdi, timeout=10)
+            if r.ok:
+                arr = r.json() or []
+                # Ordenar por data
+                def _parse_br_date(d):
+                    try:
+                        dd, mm, yy = d.split('/')
+                        return datetime(int(yy), int(mm), int(dd))
+                    except Exception:
+                        return None
+                arr_sorted = sorted(
+                    [( _parse_br_date(it.get('data')), it.get('valor') ) for it in arr if it.get('data') and it.get('valor')],
+                    key=lambda x: (x[0] or datetime.min)
+                )
+                base = 100.0
+                last_by_month = {}
+                for dt, valor in arr_sorted:
+                    if dt is None:
+                        continue
+                    try:
+                        taxa_aa = float(str(valor).replace(',', '.'))
+                    except Exception:
+                        continue
+                    # Fator diário aproximado com base 252
+                    try:
+                        daily_factor = (1.0 + taxa_aa/100.0) ** (1.0/252.0)
+                    except Exception:
+                        daily_factor = 1.0
+                    base *= daily_factor
+                    lab = f"{dt.year}-{str(dt.month).zfill(2)}"
+                    last_by_month[lab] = base
+                # Montar série mensal alinhada a datas_labels, com carry-forward
+                for i, lab in enumerate(datas_labels):
+                    if lab in last_by_month:
+                        cdi_series.append(last_by_month[lab])
+                    else:
+                        cdi_series.append(cdi_series[-1] if cdi_series else None)
+            else:
+                cdi_series = [None for _ in datas_labels]
+        except Exception:
+            cdi_series = [None for _ in datas_labels]
+
 
         def rebase(series):
             vals = [v for v in series if v is not None and v > 0]
@@ -3349,7 +3416,8 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
 
 
         def reduce_by_granularity(labels, series_dict, gran):
-            if gran in ('mensal', 'maximo'):
+            # semanal não reduz; mensal/maximo não reduzem
+            if gran in ('mensal', 'maximo', 'semanal'):
                 return labels, series_dict
             keep_months = {
                 'trimestral': {3, 6, 9, 12},
@@ -3361,8 +3429,13 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
             idxs = []
             for i, lab in enumerate(labels):
                 try:
-                    y, m = lab.split('-')
-                    m_int = int(m)
+                    if '-' in lab and len(lab) == 7:  # YYYY-MM
+                        _, m = lab.split('-')
+                        m_int = int(m)
+                    else:
+                        # weekly labels YYYY-MM-DD -> usar mês
+                        parts = lab.split('-')
+                        m_int = int(parts[1]) if len(parts) >= 2 else 12
                 except Exception:
                     m_int = 12
                 if m_int in keep_months or i == len(labels) - 1:
@@ -3376,9 +3449,10 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
             'ibov': indices_vals['ibov'],
             'ivvb11': indices_vals['ivvb11'],
             'ifix': indices_vals['ifix'],
-            'ipca': ipca_series if ipca_series else [None for _ in datas_labels]
+            'ipca': ipca_series if ipca_series else [None for _ in datas_labels],
+            'cdi': cdi_series if cdi_series else [None for _ in datas_labels]
         }
-        datas_labels, series_dict = reduce_by_granularity(datas_labels, series_dict, agregacao)
+        datas_labels, series_dict = reduce_by_granularity(datas_labels, series_dict, gran)
 
 
         carteira_rebased = rebase(series_dict['carteira'])
@@ -3386,6 +3460,7 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
         ivvb_rebased = rebase(series_dict['ivvb11'])
         ifix_rebased = rebase(series_dict['ifix'])
         ipca_rebased = rebase(series_dict['ipca']) if series_dict['ipca'] else [None for _ in datas_labels]
+        cdi_rebased = rebase(series_dict['cdi']) if series_dict['cdi'] else [None for _ in datas_labels]
 
         return {
             "datas": datas_labels,
@@ -3394,6 +3469,7 @@ def obter_historico_carteira_comparado(agregacao: str = 'mensal'):
             "ivvb11": ivvb_rebased,
             "ifix": ifix_rebased,
             "ipca": ipca_rebased,
+            "cdi": cdi_rebased,
             "carteira_valor": series_dict['carteira'],
         }
     except Exception as e:
