@@ -259,7 +259,7 @@ export default function CarteiraPage() {
     
     const normalizedTicker = normalizeTicker(inputTicker.trim())
     
-    // Usar o campo de preço opcional do formulário
+
     let precoInicialNum: number | undefined
     if (inputPreco && inputPreco.trim() !== '') {
       const pn = parseFloat(inputPreco.replace(',', '.'))
@@ -314,7 +314,7 @@ export default function CarteiraPage() {
   const topAtivos = carteira?.slice(0, 5) || []
   const ativosPositivos = carteira?.filter(ativo => ativo?.dy && ativo.dy > 0).length || 0
 
-  // Dados para gráfico de proventos por mês
+
   const dadosGraficoProventos = useMemo(() => {
     if (!proventosRecebidos || proventosRecebidos.length === 0) return []
     

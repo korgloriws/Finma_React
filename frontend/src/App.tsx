@@ -12,6 +12,7 @@ const DetalhesPage = lazy(() => import('./pages/DetalhesPage'))
 const AnalisePage = lazy(() => import('./pages/AnalisePage'))
 const CarteiraPage = lazy(() => import('./pages/CarteiraPage'))
 const ControlePage = lazy(() => import('./pages/ControlePage'))
+const JurosCompostosPage = lazy(() => import('./pages/JurosCompostosPage'))
 
 const HomePage = lazy(() => import('./pages/HomePage'))
 
@@ -71,6 +72,16 @@ function App() {
               <SecurityCheck>
                 <Layout>
                   <Suspense fallback={<div />}> <ControlePage /> </Suspense>
+                </Layout>
+              </SecurityCheck>
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/juros-compostos" element={
+            <ProtectedRoute>
+              <SecurityCheck>
+                <Layout>
+                  <Suspense fallback={<div />}> <JurosCompostosPage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>

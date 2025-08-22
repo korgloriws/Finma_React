@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
-import { Moon, Sun, BarChart3, Wallet, Calculator, Home, Search, LogOut, User, Menu, X } from 'lucide-react'
+import { Moon, Sun, BarChart3, Wallet, Calculator, Home, Search, LogOut, User, Menu, X, TrendingUp } from 'lucide-react'
 
 interface LayoutProps {
   children: ReactNode
@@ -13,6 +13,7 @@ const menuItems = [
   { path: '/analise', label: 'Análise', icon: BarChart3 },
   { path: '/detalhes', label: 'Detalhes', icon: Search },
   { path: '/carteira', label: 'Carteira', icon: Wallet },
+  { path: '/juros-compostos', label: 'Juros Compostos', icon: TrendingUp },
   { path: '/controle', label: 'Controle Financeiro', icon: Calculator },
 ]
 
@@ -33,7 +34,7 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar desktop */}
-      <div className="hidden md:flex w-64 bg-card border-r border-border flex-col h-screen sticky top-0 overflow-hidden">
+      <div className="hidden md:flex w-64 bg-card border-r border-border shadow-lg flex-col h-screen sticky top-0 overflow-hidden">
         <div className="p-6">
           <h1 className="text-2xl font-bold text-foreground">Finma</h1>
           <hr className="my-4 border-border" />
@@ -148,7 +149,7 @@ export default function Layout({ children }: LayoutProps) {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         {/* Mobile top bar */}
-        <div className="md:hidden sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+        <div className="md:hidden sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
           <button
             onClick={() => setMobileMenuOpen(true)}
             className="p-2 rounded hover:bg-accent text-muted-foreground"
