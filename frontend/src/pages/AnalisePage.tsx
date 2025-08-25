@@ -1,5 +1,6 @@
 import { useState, useCallback,  } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import HelpTips from '../components/HelpTips'
 import { useQuery } from '@tanstack/react-query'
 
 import {
@@ -750,7 +751,18 @@ export default function AnalisePage() {
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between flex-wrap gap-3"
       >
-        <h1 className="text-3xl font-bold text-foreground">Análise de Oportunidades</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold text-foreground">Análise de Oportunidades</h1>
+          <HelpTips
+            title="Como usar a Análise"
+            tips={[
+              { title: 'Tabs', content: 'Use Lista ou Gráficos conforme a necessidade.' },
+              { title: 'Tipos', content: 'Selecione Ações, BDRs ou FIIs para filtrar o universo.' },
+              { title: 'Filtros', content: 'Ajuste ROE, DY, P/L, P/VP e liquidez para refinar os resultados.' },
+              { title: 'Carteira', content: 'Itens marcados como “Na carteira” já existem na sua carteira.' },
+            ]}
+          />
+        </div>
         {loadingCarteira && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />

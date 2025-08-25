@@ -28,8 +28,7 @@ export default function JurosCompostosPage() {
       // depósitos ao longo do ano
       saldoSem += am * 12
 
-      // juros compostos com aportes mensais:
-      // iteramos mês a mês para maior realismo
+
       let saldoComAno = saldoCom
       const taxaMensal = Math.pow(1 + t, 1 / 12) - 1
       for (let m = 0; m < 12; m++) {

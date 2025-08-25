@@ -9,6 +9,7 @@ import {
   Edit, Save, X, Plus, Calendar, ChefHat, Calculator
 } from 'lucide-react'
 import { controleService, marmitasService } from '../services/api'
+import HelpTips from '../components/HelpTips'
 import { formatCurrency } from '../utils/formatters'
 import { Cartao, OutroGasto, EvolucaoFinanceira, ReceitasDespesas, Receita, Marmita, GastoMensal } from '../types'
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,  Line, PieChart as RechartsPieChart, Pie, Cell, Area, ComposedChart, BarChart, Bar } from 'recharts'
@@ -486,10 +487,22 @@ export default function ControlePage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Controle Financeiro</h1>
-          <p className="text-muted-foreground">Gerencie suas receitas, despesas e alimentação</p>
-      </div>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Controle Financeiro</h1>
+            <p className="text-muted-foreground">Gerencie suas receitas, despesas e alimentação</p>
+          </div>
+          <HelpTips
+            title="Como usar o Controle"
+            tips={[
+              { title: 'Filtros de período', content: 'Use mês/ano no topo para filtrar todos os dados da tela.' },
+              { title: 'Receitas e Despesas', content: 'Adicione receitas, cartões e outros gastos. Edite e remova quando necessário.' },
+              { title: 'Ocultar valores', content: 'Use o botão para ocultar/mostrar valores sensíveis.' },
+              { title: 'Gastos e evolução', content: 'Acompanhe a evolução diária e compare receitas vs. despesas nos gráficos.' },
+              { title: 'Marmitas', content: 'Na aba Alimentação, registre marmitas para acompanhar seus gastos no período.' },
+            ]}
+          />
+        </div>
 
         <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
         {/* Filtros */}

@@ -19,7 +19,9 @@ import {
   Zap,
   Award,
   LineChart,
-  PieChartIcon
+  PieChartIcon,
+  Calendar,
+  
 } from 'lucide-react'
 import { 
   AreaChart, 
@@ -45,6 +47,7 @@ export default function HomePage() {
   const [ocultarValor, setOcultarValor] = useState(true) 
   const [mesAtual, setMesAtual] = useState(new Date().getMonth() + 1)
   const [anoAtual, setAnoAtual] = useState(new Date().getFullYear())
+  const [abrirMesPicker, setAbrirMesPicker] = useState(false)
 
 
   const { data: carteira, isLoading: loadingCarteira } = useQuery({
@@ -382,55 +385,60 @@ export default function HomePage() {
             Visão geral completa do seu sistema financeiro e patrimonial
           </p>
           
-          {/* Controles melhorados */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <div className="flex items-center gap-3 bg-card border border-border rounded-xl p-3 shadow-lg">
-              <span className="text-sm font-medium text-muted-foreground">Período:</span>
-              <span className="text-sm font-semibold text-foreground">
-                {getNomeMes(mesAtual)}/{anoAtual}
-              </span>
-              
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => {
-                    if (mesAtual > 1) {
-                      setMesAtual(mesAtual - 1)
-                    } else {
-                      setMesAtual(12)
-                      setAnoAtual(anoAtual - 1)
-                    }
-                  }}
-                  className="p-1 hover:bg-muted rounded transition-colors"
-                >
-                  ←
-                </button>
-                <button
-                  onClick={() => {
-                    if (mesAtual < 12) {
-                      setMesAtual(mesAtual + 1)
-                    } else {
-                      setMesAtual(1)
-                      setAnoAtual(anoAtual + 1)
-                    }
-                  }}
-                  className="p-1 hover:bg-muted rounded transition-colors"
-                >
-                  →
-                </button>
-              </div>
+          {/* Controles: calendário discreto à esquerda, mostrar/ocultar à direita */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="relative">
+              <button
+                aria-haspopup="dialog"
+                onClick={() => setAbrirMesPicker(v => !v)}
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-card/60 backdrop-blur border border-border rounded-full text-sm hover:bg-card/80 transition shadow-sm"
+              >
+                <Calendar className="w-4 h-4" />
+                <span className="hidden sm:inline select-none">{getNomeMes(mesAtual)} {anoAtual}</span>
+              </button>
+              {abrirMesPicker && (
+                <div className="absolute left-0 mt-2 w-64 bg-popover text-popover-foreground border border-border rounded-lg shadow-lg p-3 z-20">
+                  <div className="flex items-center gap-2">
+                    <select
+                      aria-label="Selecionar mês"
+                      value={mesAtual}
+                      onChange={(e)=>setMesAtual(parseInt(e.target.value))}
+                      className="flex-1 px-2 py-1 border border-border rounded bg-background text-foreground text-sm"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                        <option key={m} value={m}>{getNomeMes(m)}</option>
+                      ))}
+                    </select>
+                    <select
+                      aria-label="Selecionar ano"
+                      value={anoAtual}
+                      onChange={(e)=>setAnoAtual(parseInt(e.target.value))}
+                      className="w-[90px] px-2 py-1 border border-border rounded bg-background text-foreground text-sm"
+                    >
+                      {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + i).map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={()=>setAbrirMesPicker(false)}
+                      className="px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90"
+                    >
+                      OK
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            
+
             <div className="flex items-center gap-2">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setOcultarValor(!ocultarValor)}
-                className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-xl hover:bg-secondary/80 transition-colors"
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-full hover:bg-secondary/80 transition shadow-sm"
               >
                 {ocultarValor ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                <span className="hidden sm:inline">
-                  {ocultarValor ? 'Mostrar' : 'Ocultar'}
-                </span>
+                <span className="hidden sm:inline select-none">{ocultarValor ? 'Mostrar' : 'Ocultar'}</span>
               </motion.button>
             </div>
           </div>

@@ -10,10 +10,10 @@ interface LayoutProps {
 
 const menuItems = [
   { path: '/', label: 'Home', icon: Home },
-  { path: '/analise', label: 'Análise', icon: BarChart3 },
+  { path: '/analise', label: 'Análise de oportunidades', icon: BarChart3 },
   { path: '/detalhes', label: 'Detalhes', icon: Search },
   { path: '/carteira', label: 'Carteira', icon: Wallet },
-  { path: '/juros-compostos', label: 'Juros Compostos', icon: TrendingUp },
+  { path: '/juros-compostos', label: 'Calculadora de Juros Compostos', icon: TrendingUp },
   { path: '/controle', label: 'Controle Financeiro', icon: Calculator },
 ]
 

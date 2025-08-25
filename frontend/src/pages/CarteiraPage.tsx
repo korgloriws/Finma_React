@@ -28,6 +28,7 @@ import { carteiraService } from '../services/api'
 import { AtivoCarteira, Movimentacao } from '../types'
 import { formatCurrency, formatPercentage, formatDividendYield, formatNumber } from '../utils/formatters'
 import TickerWithLogo from '../components/TickerWithLogo'
+import HelpTips from '../components/HelpTips'
 import { normalizeTicker, getDisplayTicker } from '../utils/tickerUtils'
 import { 
 
@@ -174,7 +175,7 @@ export default function CarteiraPage() {
     refetchOnWindowFocus: false,
   })
 
-  // Indicadores para estimativa de indexados
+  
   const { data: indicadores } = useQuery({
     queryKey: ['indicadores'],
     queryFn: carteiraService.getIndicadores,
@@ -250,7 +251,7 @@ export default function CarteiraPage() {
     },
   })
 
-  // Handlers
+
   const handleAdicionar = useCallback(() => {
     if (!inputTicker.trim() || !inputQuantidade.trim()) return
     
@@ -303,7 +304,7 @@ export default function CarteiraPage() {
     setEditQuantidade('')
   }, [])
 
-  // Cálculos
+
   const valorTotal = carteira?.reduce((total, ativo) => total + (ativo?.valor_total || 0), 0) || 0
   const ativosPorTipo = carteira?.reduce((acc, ativo) => {
     const tipo = ativo?.tipo || 'Desconhecido'
@@ -338,10 +339,10 @@ export default function CarteiraPage() {
         valor: valor
       }))
       .sort((a, b) => a.mes.localeCompare(b.mes))
-      .slice(-12) // Últimos 12 meses
+      .slice(-12) 
   }, [proventosRecebidos])
 
-  // Componente de indicador visual
+
   const IndicadorVisual = ({ 
     label, 
     valor, 
@@ -374,7 +375,7 @@ export default function CarteiraPage() {
     </div>
   )
 
-  // Componente de aba
+
   const TabButton = ({ id, label, icon: Icon, isActive }: { id: string; label: string; icon: any; isActive: boolean }) => (
     <button
       onClick={() => setActiveTab(id)}
@@ -392,7 +393,7 @@ export default function CarteiraPage() {
 
 
 
-  // Componente de tabela de ativos por tipo
+
   const TabelaAtivosPorTipo = ({ tipo }: { tipo: string }) => {
     const ativosDoTipo = carteira?.filter(ativo => ativo?.tipo === tipo) || []
     const totalTipo = ativosDoTipo.reduce((total, ativo) => total + (ativo?.valor_total || 0), 0)
@@ -440,7 +441,7 @@ export default function CarteiraPage() {
                 <button
                   onClick={(e)=>{
                     e.stopPropagation()
-                    // Esconder seção ao remover tipo sem ativos
+                   
                     setExpandedTipos(prev => {
                       const copy = { ...prev }
                       delete copy[tipo]
@@ -516,13 +517,15 @@ export default function CarteiraPage() {
                                 const v = parseFloat(String(d.valor))
                                 return isFinite(v) ? v : null
                               }
-                              const base = idx === 'CDI' ? getVal(indicadores?.cdi)
+                              const raw = idx === 'CDI' ? getVal(indicadores?.cdi)
                                 : idx === 'IPCA' ? getVal(indicadores?.ipca)
                                 : idx === 'SELIC' ? getVal(indicadores?.selic)
                                 : null
-                              if (!idx || base == null || !pct) return '-'
-                              const anual = (pct/100) * base
-                              return `${anual.toFixed(2)}% a.a.`
+                              if (!idx || raw == null || !pct) return '-'
+              
+                              const baseAnual = raw <= 2 ? ((Math.pow(1 + (raw/100), 12) - 1) * 100) : raw
+                              const anual = (pct/100) * baseAnual
+                              return `${anual.toFixed(2)}% a.m.`
                             })()}
                           </td>
                           <td className="px-4 py-3 text-sm text-muted-foreground">{porcentagemAtivo}%</td>
@@ -593,7 +596,18 @@ export default function CarteiraPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-3xl font-bold">Minha Carteira</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold">Minha Carteira</h1>
+          <HelpTips
+            title="Como usar a Carteira"
+            tips={[
+              { title: 'Adicionar ativos', content: 'Use o formulário para incluir ticker, quantidade, tipo e opcionalmente preço e indexador (CDI/IPCA/SELIC). Itens sem dados do yfinance também são aceitos.' },
+              { title: 'Tipos dinâmicos', content: 'Crie/renomeie tipos. As tabelas se adaptam automaticamente aos tipos existentes na carteira.' },
+              { title: 'Indexados', content: 'Preencha % do indexador para ver a rentabilidade estimada anual, calculada com base em CDI/IPCA/SELIC reais.' },
+              { title: 'Rebalanceamento', content: 'Na aba Rebalanceamento, defina metas por classe, período e registre histórico. O status mostra desvios e sugestões.' },
+            ]}
+          />
+        </div>
         <button
           onClick={() => setOcultarValor(!ocultarValor)}
           className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted/50 transition-colors"
@@ -1971,6 +1985,8 @@ function RebalanceForm({ defaultPeriodo, defaultTargets, onSave, onChange, defau
 }) {
   const [periodo, setPeriodo] = useState<string>(defaultPeriodo)
   const [targets, setTargets] = useState<Record<string, number>>(defaultTargets)
+  const queryClient = useQueryClient()
+  const [novoTipo, setNovoTipo] = useState<string>('')
   const [lastMonth, setLastMonth] = useState<string>(() => {
     if (!defaultLastRebalanceDate) return ''
     const d = new Date(defaultLastRebalanceDate)
@@ -1982,11 +1998,30 @@ function RebalanceForm({ defaultPeriodo, defaultTargets, onSave, onChange, defau
     const num = parseFloat(val.replace(',', '.'))
     setTargets(prev => ({ ...prev, [key]: isFinite(num) ? num : 0 }))
   }
-  const handleAddClass = () => {
-    const name = prompt('Nome da classe (ex.: Ação, FII, BDR, Fixa, Criptomoeda)')
+  
+
+  
+  const handleCreateTypePersisted = async () => {
+    const name = (novoTipo || '').trim()
     if (!name) return
-    if (targets[name] != null) return
-    setTargets(prev => ({ ...prev, [name]: 0 }))
+    if (targets[name] != null) {
+      toast.error('Tipo já existe na configuração')
+      return
+    }
+    try {
+      await carteiraService.criarTipo(name)
+      setTargets(prev => ({ ...prev, [name]: 0 }))
+      setNovoTipo('')
+      queryClient.invalidateQueries({ queryKey: ['tipos-ativos'] })
+      queryClient.invalidateQueries({ queryKey: ['carteira'] })
+      toast.success('Tipo criado')
+    } catch (e: any) {
+      if (e?.response?.status === 401) {
+        toast.error('Sessão expirada. Faça login novamente.')
+      } else {
+        toast.error('Falha ao criar tipo')
+      }
+    }
   }
   const handleRemoveClass = (key: string) => {
     const copy = { ...targets }
@@ -1998,10 +2033,15 @@ function RebalanceForm({ defaultPeriodo, defaultTargets, onSave, onChange, defau
     onChange?.(periodo, targets)
   }, [periodo, targets])
 
-  // Syncar alterações do servidor nas props default quando rbConfig mudar
+
   useEffect(() => {
-    setPeriodo(defaultPeriodo)
-    setTargets(defaultTargets || {})
+    const noLocalChanges = Object.keys(targets || {}).length === 0 ||
+      (Object.keys(targets || {}).length === Object.keys(defaultTargets || {}).length &&
+       Object.entries(targets || {}).every(([k,v]) => (defaultTargets || {})[k] === v))
+    if (noLocalChanges) {
+      setPeriodo(defaultPeriodo)
+      setTargets(defaultTargets || {})
+    }
   }, [defaultPeriodo, defaultTargets])
   return (
     <div className="space-y-4">
@@ -2068,7 +2108,18 @@ function RebalanceForm({ defaultPeriodo, defaultTargets, onSave, onChange, defau
               ))}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <button onClick={handleAddClass} className="px-3 py-2 bg-secondary text-secondary-foreground rounded hover:bg-secondary/80">Adicionar Classe</button>
+              {/* Removido: botão baseado em prompt. Agora usamos criação persistente inline. */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={novoTipo}
+                  onChange={(e)=>setNovoTipo(e.target.value)}
+                  placeholder="Novo tipo (persiste no sistema)"
+                  className="px-3 py-2 border border-border rounded bg-background text-foreground"
+                  aria-label="Novo tipo"
+                />
+                <button onClick={handleCreateTypePersisted} className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90">Criar tipo</button>
+              </div>
               <div className={`text-sm ${Math.abs(total-100) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>Total: {total.toFixed(2)}%</div>
             </div>
           </div>
