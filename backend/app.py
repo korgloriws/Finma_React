@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, make_response, send_from_directory
+from flask import Flask, jsonify, request, make_response, send_from_directory, send_file
 from flask_cors import CORS
 import pandas as pd
 import yfinance as yf
@@ -34,6 +34,7 @@ from models import (
     create_asset_type,
     rename_asset_type,
     delete_asset_type,
+    atualizar_precos_indicadores_carteira,
 )
 from models import cache
 import requests
@@ -773,11 +774,21 @@ def serve_frontend(path):
 def api_get_carteira():
     """API para obter todos os ativos da carteira"""
     try:
+        refresh = request.args.get('refresh') in ('1', 'true', 'True')
         # Debug: verificar qual usuário está sendo usado
         usuario_atual = get_usuario_atual()
         print(f"DEBUG - Carteira: Usuário atual = {usuario_atual}")
+        # Refresh solicitado: atualiza preços/indicadores e ignora cache
+        if refresh:
+            try:
+                atualizar_precos_indicadores_carteira()
+                if usuario_atual and cache:
+                    cache.delete(f"carteira:{usuario_atual}")
+                    cache.delete(f"carteira_insights:{usuario_atual}")
+            except Exception as _:
+                pass
         # Cache por usuário (30s)
-        cache_key = f"carteira:{usuario_atual}" if usuario_atual else None
+        cache_key = f"carteira:{usuario_atual}" if (usuario_atual and not refresh) else None
         if cache_key and cache:
             cached = cache.get(cache_key)
             if cached is not None:
@@ -791,6 +802,24 @@ def api_get_carteira():
         return jsonify(carteira)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@server.route("/api/carteira/refresh", methods=["POST"])
+def api_refresh_carteira():
+    try:
+        result = atualizar_precos_indicadores_carteira()
+        # Invalida caches relacionados
+        try:
+            usuario_atual = get_usuario_atual()
+            if usuario_atual and cache:
+                cache.delete(f"carteira:{usuario_atual}")
+                cache.delete(f"carteira_insights:{usuario_atual}")
+        except Exception:
+            pass
+        if not result.get("success"):
+            return jsonify(result), 500
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 @server.route("/api/carteira/insights", methods=["GET"])
 def api_carteira_insights():
@@ -938,6 +967,246 @@ def api_carteira_insights():
         return jsonify(payload)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ==================== EXPORT RELATÓRIOS ====================
+
+def _parse_periodo_args():
+    mes = request.args.get('mes')
+    ano = request.args.get('ano')
+    inicio = request.args.get('inicio')
+    fim = request.args.get('fim')
+    return mes, ano, inicio, fim
+
+
+@server.route('/api/relatorios/movimentacoes.csv', methods=['GET'])
+def export_movimentacoes_csv():
+    try:
+        usuario = get_usuario_atual()
+        if not usuario:
+            return jsonify({"error": "Não autenticado"}), 401
+        mes, ano, inicio, fim = _parse_periodo_args()
+        if inicio or fim:
+            movs = obter_movimentacoes() or []
+            def to_date(s):
+                from datetime import datetime
+                try:
+                    return datetime.strptime(s[:10], '%Y-%m-%d')
+                except Exception:
+                    return None
+            di = to_date(inicio) if inicio else None
+            df = to_date(fim) if fim else None
+            filtered = []
+            for m in movs:
+                dt = to_date(m.get('data') or '')
+                if dt is None:
+                    continue
+                if di and dt < di:
+                    continue
+                if df and dt > df:
+                    continue
+                filtered.append(m)
+            rows = filtered
+        else:
+            rows = obter_movimentacoes(mes, ano) or []
+
+        import csv, io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['data', 'ticker', 'nome', 'quantidade', 'preco', 'tipo'])
+        for r in rows:
+            writer.writerow([
+                r.get('data'), r.get('ticker'), r.get('nome_completo'), r.get('quantidade'), r.get('preco'), r.get('tipo')
+            ])
+        resp = make_response(output.getvalue())
+        resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        resp.headers['Content-Disposition'] = 'attachment; filename="movimentacoes.csv"'
+        return resp
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@server.route('/api/relatorios/posicoes.csv', methods=['GET'])
+def export_posicoes_csv():
+    try:
+        usuario = get_usuario_atual()
+        if not usuario:
+            return jsonify({"error": "Não autenticado"}), 401
+        itens = obter_carteira() or []
+        import csv, io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['ticker', 'nome', 'quantidade', 'preco_atual', 'valor_total', 'tipo', 'dy', 'pl', 'pvp', 'roe'])
+        for it in itens:
+            writer.writerow([
+                it.get('ticker'), it.get('nome_completo'), it.get('quantidade'), it.get('preco_atual'),
+                it.get('valor_total'), it.get('tipo'), it.get('dy'), it.get('pl'), it.get('pvp'), it.get('roe')
+            ])
+        resp = make_response(output.getvalue())
+        resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        resp.headers['Content-Disposition'] = 'attachment; filename="posicoes.csv"'
+        return resp
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@server.route('/api/relatorios/rendimentos.csv', methods=['GET'])
+def export_rendimentos_csv():
+    try:
+        usuario = get_usuario_atual()
+        if not usuario:
+            return jsonify({"error": "Não autenticado"}), 401
+        periodo = request.args.get('periodo', 'mensal')
+        hist = obter_historico_carteira_comparado(periodo or 'mensal') or {}
+        datas = hist.get('datas') or []
+        carteira = hist.get('carteira_valor') or []
+        import csv, io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['periodo', 'valor_carteira'])
+        for i, d in enumerate(datas):
+            writer.writerow([d, carteira[i] if i < len(carteira) else None])
+        resp = make_response(output.getvalue())
+        resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        resp.headers['Content-Disposition'] = 'attachment; filename="rendimentos.csv"'
+        return resp
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@server.route('/api/relatorios/movimentacoes.pdf', methods=['GET'])
+def export_movimentacoes_pdf():
+    try:
+        usuario = get_usuario_atual()
+        if not usuario:
+            return jsonify({"error": "Não autenticado"}), 401
+        mes, ano, inicio, fim = _parse_periodo_args()
+        if inicio or fim:
+            rows = obter_movimentacoes() or []
+        else:
+            rows = obter_movimentacoes(mes, ano) or []
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+            from io import BytesIO
+        except Exception:
+            return jsonify({"error": "PDF indisponível no momento (dependência ausente)"}), 500
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=A4)
+        width, height = A4
+        y = height - 40
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(40, y, "Relatório de Movimentações")
+        y -= 20
+        c.setFont("Helvetica", 9)
+        for r in rows:
+            if y < 40:
+                c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+            line = f"{r.get('data','')}  {r.get('ticker',''):8}  {r.get('tipo',''):7}  qtd={r.get('quantidade','')}  preco={r.get('preco','')}"
+            c.drawString(40, y, line)
+            y -= 14
+        c.showPage()
+        c.save()
+        buffer.seek(0)
+        return send_file(buffer, as_attachment=True, download_name='movimentacoes.pdf', mimetype='application/pdf')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@server.route('/api/relatorios/posicoes.pdf', methods=['GET'])
+def export_posicoes_pdf():
+    try:
+        usuario = get_usuario_atual()
+        if not usuario:
+            return jsonify({"error": "Não autenticado"}), 401
+        itens = obter_carteira() or []
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+            from io import BytesIO
+        except Exception:
+            return jsonify({"error": "PDF indisponível no momento (dependência ausente)"}), 500
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=A4)
+        width, height = A4
+        y = height - 40
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(40, y, "Relatório de Posições")
+        y -= 20
+        c.setFont("Helvetica", 9)
+        for it in itens:
+            if y < 40:
+                c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+            line = f"{it.get('ticker',''):8}  {it.get('nome_completo','')[:40]}  qtd={it.get('quantidade','')}  val={it.get('valor_total','')}"
+            c.drawString(40, y, line)
+            y -= 14
+        c.showPage()
+        c.save()
+        buffer.seek(0)
+        return send_file(buffer, as_attachment=True, download_name='posicoes.pdf', mimetype='application/pdf')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@server.route('/api/relatorios/rendimentos.pdf', methods=['GET'])
+def export_rendimentos_pdf():
+    try:
+        usuario = get_usuario_atual()
+        if not usuario:
+            return jsonify({"error": "Não autenticado"}), 401
+        periodo = request.args.get('periodo', 'mensal')
+        hist = obter_historico_carteira_comparado(periodo or 'mensal') or {}
+        datas = hist.get('datas') or []
+        carteira = hist.get('carteira_valor') or []
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+            from io import BytesIO
+        except Exception:
+            return jsonify({"error": "PDF indisponível no momento (dependência ausente)"}), 500
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=A4)
+        width, height = A4
+        y = height - 40
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(40, y, "Relatório de Rendimentos")
+        y -= 20
+        c.setFont("Helvetica", 9)
+        for i, d in enumerate(datas):
+            if y < 40:
+                c.showPage(); y = height - 40; c.setFont("Helvetica", 9)
+            val = carteira[i] if i < len(carteira) else None
+            line = f"{d}: {val}"
+            c.drawString(40, y, line)
+            y -= 14
+        c.showPage()
+        c.save()
+        buffer.seek(0)
+        return send_file(buffer, as_attachment=True, download_name='rendimentos.pdf', mimetype='application/pdf')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Rotas sem extensão para evitar conflitos com estáticos
+@server.route('/api/relatorios/movimentacoes', methods=['GET'])
+def export_movimentacoes_generic():
+    formato = (request.args.get('formato') or 'csv').lower()
+    if formato == 'pdf':
+        return export_movimentacoes_pdf()
+    return export_movimentacoes_csv()
+
+@server.route('/api/relatorios/posicoes', methods=['GET'])
+def export_posicoes_generic():
+    formato = (request.args.get('formato') or 'csv').lower()
+    if formato == 'pdf':
+        return export_posicoes_pdf()
+    return export_posicoes_csv()
+
+@server.route('/api/relatorios/rendimentos', methods=['GET'])
+def export_rendimentos_generic():
+    formato = (request.args.get('formato') or 'csv').lower()
+    if formato == 'pdf':
+        return export_rendimentos_pdf()
+    return export_rendimentos_csv()
 
 @server.route("/api/carteira/adicionar", methods=["POST"])
 def api_adicionar_ativo():

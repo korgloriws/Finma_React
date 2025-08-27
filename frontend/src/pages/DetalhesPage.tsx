@@ -27,10 +27,10 @@ import {
   ExternalLink,
   RefreshCw,
 } from 'lucide-react'
-import { ativoService, carteiraService } from '../services/api'
+import { ativoService } from '../services/api'
 import { AtivoDetalhes, AtivoInfo } from '../types'
 import { formatCurrency, formatPercentage, formatNumber, formatDividendYield } from '../utils/formatters'
-import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, } from 'recharts'
+import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts'
 import TickerWithLogo from '../components/TickerWithLogo'
 import { normalizeTicker, getDisplayTicker } from '../utils/tickerUtils'
 
@@ -38,6 +38,7 @@ export default function DetalhesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputTicker, setInputTicker] = useState('')
   const [periodo, setPeriodo] = useState('1y')
+  const [fiPeriodo, setFiPeriodo] = useState<'6m' | '1y' | '3y' | '5y' | 'max'>('1y')
   const [, setTickersComparar] = useState<string[]>([])
   const compararInputRef = useRef<HTMLInputElement>(null)
   const [periodoDividendos, setPeriodoDividendos] = useState('1y')
@@ -57,17 +58,33 @@ export default function DetalhesPage() {
     enabled: !!ticker,
   })
 
+  // Histórico dedicado para comparação com RF (pode ter período diferente do de charts)
+  const yfPeriodMap: Record<typeof fiPeriodo, string> = {
+    '6m': '6mo',
+    '1y': '1y',
+    '3y': '3y',
+    '5y': '5y',
+    'max': 'max',
+  }
+  const { data: historicoFI } = useQuery<Array<Record<string, any>>>({
+    queryKey: ['ativo-historico-fi', ticker, fiPeriodo],
+    queryFn: () => ativoService.getHistorico(ticker, yfPeriodMap[fiPeriodo]),
+    enabled: !!ticker,
+    staleTime: 60_000,
+  })
+
   // Indicadores e Tesouro
-  const { data: indicadores } = useQuery({
-    queryKey: ['indicadores'],
-    queryFn: carteiraService.getIndicadores,
-    staleTime: 60_000,
-  })
-  const { data: tesouro } = useQuery({
-    queryKey: ['tesouro-titulos'],
-    queryFn: carteiraService.getTesouroTitulos,
-    staleTime: 60_000,
-  })
+  // Indicadores/Tesouro (mantidos para futuras expansões)
+  // const { data: indicadores } = useQuery({
+  //   queryKey: ['indicadores'],
+  //   queryFn: carteiraService.getIndicadores,
+  //   staleTime: 60_000,
+  // })
+  // const { data: tesouro } = useQuery({
+  //   queryKey: ['tesouro-titulos'],
+  //   queryFn: carteiraService.getTesouroTitulos,
+  //   staleTime: 60_000,
+  // })
 
 
 
@@ -236,7 +253,7 @@ export default function DetalhesPage() {
   })
   const grahamYieldPctValue = selicPct ?? 6.0
   const [bazinRatePct, setBazinRatePct] = useState<number>(8.0)
-  // Overrides e campos editáveis (mantém automático por padrão; usuário pode sobrescrever)
+ 
   const [grahamEPSOverride, setGrahamEPSOverride] = useState<number | null>(null)
   const [grahamGOverride, setGrahamGOverride] = useState<number | null>(null)
   const [grahamYOverride, setGrahamYOverride] = useState<number | null>(null)
@@ -257,6 +274,188 @@ export default function DetalhesPage() {
     const factor = 4.4 / Y
     return effectiveEPS * base * factor
   }, [effectiveEPS, effectiveG, effectiveY])
+
+  // ===== Renda Fixa: Comparativo SELIC x CDI x IPCA x Ativo =====
+  const fiStartDate = useMemo(() => {
+    const now = new Date()
+    const d = new Date(now)
+    if (fiPeriodo === '6m') d.setMonth(d.getMonth() - 6)
+    else if (fiPeriodo === '1y') d.setFullYear(d.getFullYear() - 1)
+    else if (fiPeriodo === '3y') d.setFullYear(d.getFullYear() - 3)
+    else if (fiPeriodo === '5y') d.setFullYear(d.getFullYear() - 5)
+    else d.setFullYear(d.getFullYear() - 10)
+    return d
+  }, [fiPeriodo])
+  const fiEndDate = useMemo(() => new Date(), [])
+  const toBr = (dt: Date) => {
+    const day = String(dt.getDate()).padStart(2, '0')
+    const mm = String(dt.getMonth() + 1).padStart(2, '0')
+    const yy = dt.getFullYear()
+    return `${day}/${mm}/${yy}`
+  }
+  const toLabel = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
+  const monthEnds = useMemo(() => {
+    const out: Date[] = []
+    const cur = new Date(fiStartDate.getFullYear(), fiStartDate.getMonth(), 1)
+    const end = new Date(fiEndDate.getFullYear(), fiEndDate.getMonth(), 1)
+    const nextMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 1)
+    const monthEnd = (d: Date) => new Date(new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() - 24 * 3600 * 1000)
+    let it = new Date(cur)
+    while (it <= end) {
+      out.push(monthEnd(it))
+      it = nextMonth(it)
+    }
+    return out
+  }, [fiStartDate, fiEndDate])
+
+  // CDI diário (BCB 12) → índice base 100 → mensal por último valor do mês
+  const { data: cdiDaily } = useQuery<{ date: Date; idx: number }[]>({
+    queryKey: ['cdi-daily', fiPeriodo],
+    enabled: true,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados?formato=json&dataInicial=${toBr(fiStartDate)}&dataFinal=${toBr(fiEndDate)}`
+      const r = await fetch(url)
+      if (!r.ok) return []
+      const arr: Array<{ data: string; valor: string }> = await r.json()
+      const parsed = arr
+        .map(it => ({ dt: it.data.split('/').map(Number) as any, v: parseFloat(String(it.valor).replace(',', '.')) }))
+        .filter(it => isFinite(it.v) && Array.isArray(it.dt) && it.dt.length === 3)
+        .map(it => ({ date: new Date(it.dt[2], it.dt[1] - 1, it.dt[0]), taxaAA: it.v }))
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
+      let base = 100
+      const out: { date: Date; idx: number }[] = []
+      for (const p of parsed) {
+        const daily = Math.pow(1 + p.taxaAA / 100, 1 / 252)
+        base *= daily
+        out.push({ date: p.date, idx: base })
+      }
+      return out
+    }
+  })
+  const cdiMonthly = useMemo(() => {
+    if (!cdiDaily || cdiDaily.length === 0) return [] as { label: string; value: number | null }[]
+    const byMonth = new Map<string, number>()
+    for (const pt of cdiDaily) {
+      const lab = toLabel(pt.date)
+      byMonth.set(lab, pt.idx)
+    }
+    return monthEnds.map(me => ({ label: toLabel(me), value: byMonth.get(toLabel(me)) ?? null }))
+  }, [cdiDaily, monthEnds])
+
+  // SELIC aproximada: usa taxa anual (selicPct) constante no período → compõe mês a mês
+  const selicMonthly = useMemo(() => {
+    const taxa = typeof selicPct === 'number' && isFinite(selicPct) && selicPct > 0 ? selicPct : undefined
+    let base = 100
+    const out: { label: string; value: number | null }[] = []
+    for (let i = 0; i < monthEnds.length; i++) {
+      if (i === 0) {
+        out.push({ label: toLabel(monthEnds[i]), value: base })
+      } else {
+        if (taxa != null) base *= Math.pow(1 + taxa / 100, 1 / 12)
+        out.push({ label: toLabel(monthEnds[i]), value: taxa != null ? base : null })
+      }
+    }
+    return out
+  }, [monthEnds, selicPct])
+
+  // IPCA mensal (BCB 433) → índice base 100
+  const { data: ipcaRaw } = useQuery<Array<{ label: string; value: number }>>({
+    queryKey: ['ipca-monthly', fiPeriodo],
+    enabled: true,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json`
+      const r = await fetch(url)
+      if (!r.ok) return []
+      const arr: Array<{ data: string; valor: string }> = await r.json()
+      const map = new Map<string, number>()
+      for (const it of arr) {
+        const [_, mm, yy] = it.data.split('/')
+        const key = `${yy}-${mm}`
+        const v = parseFloat(String(it.valor).replace(',', '.'))
+        if (isFinite(v)) map.set(key, v)
+      }
+      // Recorta só o período solicitado
+      const labels = monthEnds.map(d => toLabel(d))
+      return labels.map(lab => ({ label: lab, value: map.get(lab) ?? NaN }))
+    }
+  })
+  const ipcaMonthly = useMemo(() => {
+    if (!ipcaRaw || ipcaRaw.length === 0) return [] as { label: string; value: number | null }[]
+    let base = 100
+    const out: { label: string; value: number | null }[] = []
+    for (const row of ipcaRaw) {
+      const v = row.value
+      if (isFinite(v)) base *= (1 + v / 100)
+      out.push({ label: row.label, value: isFinite(v) ? base : null })
+    }
+    return out
+  }, [ipcaRaw])
+
+  // Ativo → último fechamento de cada mês rebase 100
+  const ativoMonthly = useMemo(() => {
+    const series = Array.isArray(historicoFI) ? historicoFI : []
+    if (series.length === 0) return [] as { label: string; value: number | null }[]
+    // Mapear último close por mês
+    const byMonth = new Map<string, number>()
+    for (const r of series) {
+      const dateStr = r.Date || r.date || r.DateTime || r.time || null
+      const close = r.Close ?? r.close ?? r.price
+      if (!dateStr || !isFinite(Number(close))) continue
+      const dt = new Date(dateStr)
+      const lab = toLabel(dt)
+      byMonth.set(lab, Number(close))
+    }
+    const labels = monthEnds.map(d => toLabel(d))
+    const vals = labels.map(lab => byMonth.get(lab)).filter(v => typeof v === 'number') as number[]
+    if (vals.length === 0) return labels.map(lab => ({ label: lab, value: null }))
+    const first = vals[0]!
+    return labels.map(lab => {
+      const v = byMonth.get(lab)
+      return { label: lab, value: typeof v === 'number' ? (v / first) * 100 : null }
+    })
+  }, [historicoFI, monthEnds])
+
+  const fiChartData = useMemo(() => {
+    const labels = monthEnds.map(d => toLabel(d))
+    const toMap = (rows: { label: string; value: number | null }[]) => {
+      const m = new Map<string, number | null>()
+      for (const r of rows) m.set(r.label, r.value)
+      return m
+    }
+    const mAtivo = toMap(ativoMonthly)
+    const mCDI = toMap(cdiMonthly)
+    const mSELIC = toMap(selicMonthly)
+    const mIPCA = toMap(ipcaMonthly)
+    return labels.map(lab => ({
+      label: lab,
+      Ativo: mAtivo.get(lab) ?? null,
+      CDI: mCDI.get(lab) ?? null,
+      SELIC: mSELIC.get(lab) ?? null,
+      IPCA: mIPCA.get(lab) ?? null,
+    }))
+  }, [monthEnds, ativoMonthly, cdiMonthly, selicMonthly, ipcaMonthly])
+
+  const fiResumo = useMemo(() => {
+    const series = fiChartData
+    if (!series || series.length < 2) return null as null | Record<string, number>
+    const first = series.find(r => r.Ativo != null || r.CDI != null || r.SELIC != null || r.IPCA != null)
+    const last = [...series].reverse().find(r => r.Ativo != null || r.CDI != null || r.SELIC != null || r.IPCA != null)
+    if (!first || !last) return null
+    const calc = (k: 'Ativo'|'CDI'|'SELIC'|'IPCA') => {
+      const a = first[k]
+      const b = last[k]
+      if (a == null || b == null) return NaN
+      return (b / a - 1) * 100
+    }
+    return {
+      Ativo: calc('Ativo'),
+      CDI: calc('CDI'),
+      SELIC: calc('SELIC'),
+      IPCA: calc('IPCA'),
+    }
+  }, [fiChartData])
 
   const dividends12m = useMemo(() => {
     try {
@@ -774,57 +973,63 @@ export default function DetalhesPage() {
                 transition={{ duration: 0.2 }}
                 className="space-y-6"
               >
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-1 bg-muted/30 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold mb-4">Indicadores (BCB)</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span>SELIC</span>
-                        <span className="font-semibold">{indicadores?.selic ? `${parseFloat(indicadores.selic.valor).toFixed(2)}%` : '-'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>CDI</span>
-                        <span className="font-semibold">{indicadores?.cdi ? `${parseFloat(indicadores.cdi.valor).toFixed(2)}%` : '-'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>IPCA (m/m)</span>
-                        <span className="font-semibold">{indicadores?.ipca ? `${parseFloat(indicadores.ipca.valor).toFixed(2)}%` : '-'}</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">Atualização: {indicadores?.selic?.data || indicadores?.cdi?.data || indicadores?.ipca?.data || '-'}</div>
-                    </div>
-                  </div>
-                  <div className="lg:col-span-2 bg-muted/30 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold mb-4">Tesouro Direto</h3>
-                    {tesouro?.titulos?.length ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-[700px] text-sm">
-                          <thead className="bg-muted/30">
-                            <tr>
-                              <th className="px-3 py-2 text-left">Título</th>
-                              <th className="px-3 py-2 text-left">Vencimento</th>
-                              <th className="px-3 py-2 text-left">Taxa Compra</th>
-                              <th className="px-3 py-2 text-left">PU Mínimo</th>
-                              <th className="px-3 py-2 text-left">Indexador</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {tesouro.titulos.map((t, idx) => (
-                              <tr key={idx} className="border-b border-border hover:bg-muted/40">
-                                <td className="px-3 py-2">{t.nome}</td>
-                                <td className="px-3 py-2">{t.vencimento}</td>
-                                <td className="px-3 py-2">{t.taxaCompra != null ? `${parseFloat(String(t.taxaCompra)).toFixed(2)}%` : '-'}</td>
-                                <td className="px-3 py-2">{t.pu != null ? formatCurrency(Number(t.pu)) : '-'}</td>
-                                <td className="px-3 py-2">{t.indexador || t.tipoRent || '-'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="text-muted-foreground">Não foi possível carregar os títulos do Tesouro agora.</div>
-                    )}
+                {/* Filtro de período */}
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-muted-foreground">Período:</label>
+                  <select
+                    className="px-3 py-2 border border-border rounded bg-background text-foreground"
+                    value={fiPeriodo}
+                    onChange={(e) => setFiPeriodo(e.target.value as any)}
+                    aria-label="Selecionar período de comparação"
+                  >
+                    <option value="6m">6 meses</option>
+                    <option value="1y">1 ano</option>
+                    <option value="3y">3 anos</option>
+                    <option value="5y">5 anos</option>
+                    <option value="max">Máximo</option>
+                  </select>
+                </div>
+
+                {/* Gráfico comparativo rebase 100 */}
+                <div className="bg-muted/30 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4">Crescimento Comparado (Ativo x CDI x SELIC x IPCA)</h3>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsLineChart data={fiChartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="label" tick={{ fontSize: 12 }} angle={-12} textAnchor="end" height={50} />
+                        <YAxis tick={{ fontSize: 12 }} domain={[0, 'auto']} />
+                        <Tooltip formatter={(v: any) => (v != null ? `${Number(v).toFixed(2)}%` : '-')} />
+                        <Legend />
+                        <Line type="monotone" dataKey="Ativo" stroke="#2563eb" dot={false} strokeWidth={2} />
+                        <Line type="monotone" dataKey="CDI" stroke="#16a34a" dot={false} strokeWidth={2} />
+                        <Line type="monotone" dataKey="SELIC" stroke="#f59e0b" dot={false} strokeWidth={2} />
+                        <Line type="monotone" dataKey="IPCA" stroke="#ef4444" dot={false} strokeWidth={2} />
+                      </RechartsLineChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
+
+                {/* Resumo textual da comparação */}
+                {fiResumo && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {[
+                      { k: 'Ativo', label: 'Ativo', color: 'text-blue-600' },
+                      { k: 'CDI', label: 'CDI', color: 'text-emerald-600' },
+                      { k: 'SELIC', label: 'SELIC', color: 'text-amber-600' },
+                      { k: 'IPCA', label: 'IPCA', color: 'text-rose-600' },
+                    ].map((it) => (
+                      <div key={it.k} className="bg-card border border-border rounded-lg p-4">
+                        <div className="text-sm text-muted-foreground">{it.label} ({fiPeriodo})</div>
+                        <div className={`text-xl font-bold ${it.color}`}>
+                          {isFinite(Number((fiResumo as any)[it.k]))
+                            ? `${Number((fiResumo as any)[it.k]).toFixed(2)}%`
+                            : '-'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </motion.div>
             )}
             {activeTab === 'overview' && (

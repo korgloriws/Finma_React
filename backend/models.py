@@ -2436,12 +2436,33 @@ def obter_cotacao_dolar():
     except:
         return 5.0
 
+def _normalize_ticker_for_yf(ticker: str) -> str:
+
+    try:
+        t = (ticker or "").strip().upper()
+        if not t:
+            return t
+
+        if '-' in t or '.' in t:
+            return t
+        
+        if len(t) <= 6:
+            return t + '.SA'
+        return t
+    except Exception:
+        return (ticker or "").upper()
+
 def obter_informacoes_ativo(ticker):
 
     try:
-        # Não acrescentar .SA aqui; API já envia normalizado
-        acao = yf.Ticker(ticker)
-        info = acao.info
+       
+        normalized = _normalize_ticker_for_yf(ticker)
+        acao = yf.Ticker(normalized)
+        info = acao.info or {}
+        
+        if not info and normalized != ticker:
+            acao = yf.Ticker(ticker)
+            info = acao.info or {}
         preco_atual = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
         
         tipo_map = {
@@ -2477,6 +2498,76 @@ def obter_informacoes_ativo(ticker):
     except Exception as e:
         print(f"Erro ao obter informações de {ticker}: {e}")
         return None
+
+def atualizar_precos_indicadores_carteira():
+
+    try:
+        usuario = get_usuario_atual()
+        if not usuario:
+            return {"success": False, "message": "Usuário não autenticado"}
+        _ensure_indexador_schema()
+        atualizados = 0
+        erros = []
+        if _is_postgres():
+            conn = _pg_conn_for_user(usuario)
+            try:
+                with conn.cursor() as c:
+                    c.execute('SELECT id, ticker, quantidade FROM carteira')
+                    rows = c.fetchall()
+                    for row in rows:
+                        _id, _ticker, _qtd = row[0], str(row[1] or ''), float(row[2] or 0)
+                        if not _ticker:
+                            continue
+                        info = obter_informacoes_ativo(_ticker)
+                        if not info:
+                            erros.append(_ticker)
+                            continue
+                        preco_atual = float(info.get('preco_atual') or 0.0)
+                        dy = info.get('dy')
+                        pl = info.get('pl')
+                        pvp = info.get('pvp')
+                        roe = info.get('roe')
+                        valor_total = preco_atual * _qtd
+                        c.execute(
+                            'UPDATE carteira SET preco_atual=%s, valor_total=%s, dy=%s, pl=%s, pvp=%s, roe=%s WHERE id=%s',
+                            (preco_atual, valor_total, dy, pl, pvp, roe, _id)
+                        )
+                        atualizados += 1
+                conn.commit()
+            finally:
+                conn.close()
+        else:
+            db_path = get_db_path(usuario, "carteira")
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            try:
+                cur = conn.cursor()
+                cur.execute('SELECT id, ticker, quantidade FROM carteira')
+                rows = cur.fetchall()
+                for row in rows:
+                    _id, _ticker, _qtd = row[0], str(row[1] or ''), float(row[2] or 0)
+                    if not _ticker:
+                        continue
+                    info = obter_informacoes_ativo(_ticker)
+                    if not info:
+                        erros.append(_ticker)
+                        continue
+                    preco_atual = float(info.get('preco_atual') or 0.0)
+                    dy = info.get('dy')
+                    pl = info.get('pl')
+                    pvp = info.get('pvp')
+                    roe = info.get('roe')
+                    valor_total = preco_atual * _qtd
+                    cur.execute(
+                        'UPDATE carteira SET preco_atual = ?, valor_total = ?, dy = ?, pl = ?, pvp = ?, roe = ? WHERE id = ?',
+                        (preco_atual, valor_total, dy, pl, pvp, roe, _id)
+                    )
+                    atualizados += 1
+                conn.commit()
+            finally:
+                conn.close()
+        return {"success": True, "updated": atualizados, "errors": erros}
+    except Exception as e:
+        return {"success": False, "message": f"Erro ao atualizar carteira: {str(e)}"}
 
 def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, nome_personalizado=None, indexador=None, indexador_pct=None):
 

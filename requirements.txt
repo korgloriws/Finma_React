@@ -8,3 +8,4 @@ gunicorn
 psycopg[binary]
 flask-compress
 cloudscraper
+reportlab

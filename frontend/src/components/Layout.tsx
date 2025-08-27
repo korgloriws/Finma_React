@@ -2,7 +2,7 @@ import { ReactNode, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
-import { Moon, Sun, BarChart3, Wallet, Calculator, Home, Search, LogOut, User, Menu, X, TrendingUp } from 'lucide-react'
+import { Moon, Sun, BarChart3, Wallet, Calculator, Home, Search, LogOut, User, Menu, X, TrendingUp, BookOpen } from 'lucide-react'
 
 interface LayoutProps {
   children: ReactNode
@@ -11,9 +11,10 @@ interface LayoutProps {
 const menuItems = [
   { path: '/', label: 'Home', icon: Home },
   { path: '/analise', label: 'Análise de oportunidades', icon: BarChart3 },
-  { path: '/detalhes', label: 'Detalhes', icon: Search },
+  { path: '/detalhes', label: 'Detalhes dos ativos', icon: Search },
   { path: '/carteira', label: 'Carteira', icon: Wallet },
   { path: '/juros-compostos', label: 'Calculadora de Juros Compostos', icon: TrendingUp },
+  { path: '/guia', label: 'Guia do Mercado', icon: BookOpen },
   { path: '/controle', label: 'Controle Financeiro', icon: Calculator },
 ]
 

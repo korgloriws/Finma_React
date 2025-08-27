@@ -11,6 +11,7 @@ import {
   Calendar, 
   Brain, 
   History,
+  FileText,
   TrendingUp,
   Activity,
   DollarSign,
@@ -60,6 +61,14 @@ export default function CarteiraPage() {
   const [filtroMes, setFiltroMes] = useState<number>(new Date().getMonth() + 1)
   const [filtroAno, setFiltroAno] = useState<number>(new Date().getFullYear())
   const [activeTab, setActiveTab] = useState('ativos')
+  const now = new Date()
+  const [repMes, setRepMes] = useState<string>(String(now.getMonth() + 1).padStart(2, '0'))
+  const [repAno, setRepAno] = useState<string>(String(now.getFullYear()))
+  const [repRendPeriodo, setRepRendPeriodo] = useState<'mensal'|'trimestral'|'semestral'|'anual'|'maximo'>('mensal')
+  const [previewMovs, setPreviewMovs] = useState<Movimentacao[] | null>(null)
+  const [loadingPreviewMovs, setLoadingPreviewMovs] = useState(false)
+  const [previewRend, setPreviewRend] = useState<{ datas: string[]; carteira_valor: number[] } | null>(null)
+  const [loadingPreviewRend, setLoadingPreviewRend] = useState(false)
   const [manageTipoOpen, setManageTipoOpen] = useState<{open: boolean; tipo?: string}>({open: false})
   const [renameTipoValue, setRenameTipoValue] = useState('')
   const { data: insights, isLoading: loadingInsights } = useQuery({
@@ -126,6 +135,7 @@ export default function CarteiraPage() {
   const idealPieColors = useMemo(() => ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F43F5E'], [])
   const idealPieColorClasses = useMemo(() => ['bg-indigo-500','bg-emerald-500','bg-amber-500','bg-rose-500','bg-violet-500','bg-cyan-500','bg-lime-500','bg-pink-500'], [])
   const [ocultarValor, setOcultarValor] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
  
   const [expandedTipos, setExpandedTipos] = useState<Record<string, boolean>>({
     'Ação': true,
@@ -140,11 +150,42 @@ export default function CarteiraPage() {
   const queryClient = useQueryClient()
 
 
+  const [didInitialRefresh, setDidInitialRefresh] = useState(false)
+  useEffect(() => {
+    if (!user) return
+    const keyBase = typeof user === 'string' ? user : 'auth'
+    const flagKey = `finma_carteira_refreshed_${keyBase}`
+    const already = sessionStorage.getItem(flagKey)
+    if (already) return
+    ;(async () => {
+      try {
+        sessionStorage.setItem(flagKey, '1')
+        await carteiraService.refreshCarteira()
+      } catch (_) {}
+      finally {
+        queryClient.invalidateQueries({ queryKey: ['carteira', user] })
+        queryClient.invalidateQueries({ queryKey: ['carteira-insights', user] })
+      }
+    })()
+  }, [user, queryClient])
   const { data: carteira, isLoading: loadingCarteira } = useQuery<AtivoCarteira[]>({
     queryKey: ['carteira', user], 
-    queryFn: carteiraService.getCarteira,
+    queryFn: async () => {
+      const flagKey = `finma_carteira_refreshed_${user || 'anon'}`
+      const already = sessionStorage.getItem(flagKey)
+      if (!already && !didInitialRefresh) {
+        sessionStorage.setItem(flagKey, '1')
+        setDidInitialRefresh(true)
+        return await carteiraService.getCarteiraRefresh()
+      }
+      return await carteiraService.getCarteira()
+    },
     enabled: !!user, 
+    staleTime: 0,
   })
+
+ 
+ 
 
  
   const { data: tiposApi } = useQuery({
@@ -164,6 +205,14 @@ export default function CarteiraPage() {
     queryKey: ['movimentacoes', user, filtroMes, filtroAno], 
     queryFn: () => carteiraService.getMovimentacoes(filtroMes, filtroAno),
     enabled: !!user, 
+  })
+
+
+  const { data: movimentacoesAll } = useQuery<Movimentacao[]>({
+    queryKey: ['movimentacoes-all', user],
+    queryFn: () => carteiraService.getMovimentacoes(),
+    enabled: !!user,
+    refetchOnWindowFocus: false,
   })
 
   
@@ -429,6 +478,47 @@ export default function CarteiraPage() {
             </div>
             <div className="text-right flex items-center gap-3">
               <div className="text-lg font-bold">{formatCurrency(totalTipo)}</div>
+              {(() => {
+                const movs = movimentacoesAll || []
+                let somaValoresAtuais = 0
+                let somaValoresInvestidos = 0
+                for (const a of ativosDoTipo) {
+                  const mlist = movs
+                    .filter(m => m.ticker?.toUpperCase?.() === (a?.ticker || '').toUpperCase())
+                    .sort((x, y) => String(x.data).localeCompare(String(y.data)))
+                  type Lot = { qty: number; price: number; date: string }
+                  const lots: Lot[] = []
+                  for (const m of mlist) {
+                    const q = Number(m.quantidade || 0)
+                    const p = Number(m.preco || 0)
+                    if (m.tipo === 'compra') {
+                      lots.push({ qty: q, price: p, date: m.data })
+                    } else if (m.tipo === 'venda') {
+                      let remaining = q
+                      while (remaining > 0 && lots.length > 0) {
+                        const lot = lots[0]
+                        const consume = Math.min(lot.qty, remaining)
+                        lot.qty -= consume
+                        remaining -= consume
+                        if (lot.qty <= 0) lots.shift()
+                      }
+                    }
+                  }
+                  const qtd = lots.reduce((s, l) => s + l.qty, 0)
+                  const val = lots.reduce((s, l) => s + l.qty * l.price, 0)
+                  const precoMed = qtd > 0 ? (val / qtd) : null
+                  if (precoMed != null) {
+                    somaValoresInvestidos += precoMed * (a?.quantidade || 0)
+                    somaValoresAtuais += (a?.preco_atual || 0) * (a?.quantidade || 0)
+                  }
+                }
+                const rendTipo = (somaValoresInvestidos > 0) ? ((somaValoresAtuais - somaValoresInvestidos) / somaValoresInvestidos) * 100 : null
+                return (
+                  <div className={`text-sm font-medium ${rendTipo != null ? (rendTipo >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-muted-foreground'}`}>
+                    {rendTipo != null ? `${rendTipo.toFixed(2).replace('.', ',')}%` : '-'}
+                  </div>
+                )
+              })()}
               <div className="text-sm text-muted-foreground">{porcentagemTipo}% do total</div>
               <button
                 onClick={(e)=>{ e.stopPropagation(); setManageTipoOpen({open: true, tipo}); setRenameTipoValue(tipo) }}
@@ -472,6 +562,9 @@ export default function CarteiraPage() {
                       <th className="px-4 py-3 text-left font-medium">Valor Total</th>
                       <th className="px-4 py-3 text-left font-medium">Indexado</th>
                       <th className="px-4 py-3 text-left font-medium">Rentab. Estimada</th>
+                      <th className="px-4 py-3 text-left font-medium">Preço Médio</th>
+                      <th className="px-4 py-3 text-left font-medium">Valorização</th>
+                      <th className="px-4 py-3 text-left font-medium">Rendimento do Ticket</th>
                       <th className="px-4 py-3 text-left font-medium">% Carteira</th>
                       <th className="px-4 py-3 text-left font-medium">DY</th>
                       <th className="px-4 py-3 text-left font-medium">ROE</th>
@@ -482,6 +575,38 @@ export default function CarteiraPage() {
                   </thead>
                   <tbody>
                     {ativosDoTipo.map((ativo) => {
+                      const movsDoTicker = (movimentacoesAll || [])
+                        .filter(m => m.ticker?.toUpperCase?.() === (ativo?.ticker || '').toUpperCase())
+                        .sort((a, b) => String(a.data).localeCompare(String(b.data)))
+
+                      type Lot = { qty: number; price: number; date: string }
+                      const lots: Lot[] = []
+                      for (const m of movsDoTicker) {
+                        const qty = Number(m.quantidade || 0)
+                        const price = Number(m.preco || 0)
+                        if (m.tipo === 'compra') {
+                          lots.push({ qty, price, date: m.data })
+                        } else if (m.tipo === 'venda') {
+                          let remaining = qty
+                          while (remaining > 0 && lots.length > 0) {
+                            const lot = lots[0]
+                            const consume = Math.min(lot.qty, remaining)
+                            lot.qty -= consume
+                            remaining -= consume
+                            if (lot.qty <= 0) lots.shift()
+                          }
+                          // Se vendeu mais do que possuía, ignorar excedente (sem posição short)
+                        }
+                      }
+                      const totalQtd = lots.reduce((s, l) => s + l.qty, 0)
+                      const totalValor = lots.reduce((s, l) => s + l.qty * l.price, 0)
+                      const precoMedio = totalQtd > 0 ? (totalValor / totalQtd) : null
+                      const rendimentoPct = (precoMedio != null && ativo?.preco_atual)
+                        ? ((ativo.preco_atual - precoMedio) / precoMedio) * 100
+                        : null
+                      const valorizacaoAbs = (precoMedio != null && ativo?.preco_atual && totalQtd > 0)
+                        ? (ativo.preco_atual - precoMedio) * totalQtd
+                        : null
                       const porcentagemAtivo = valorTotal > 0 ? ((ativo?.valor_total || 0) / valorTotal * 100).toFixed(1) : '0.0'
                       return (
                         <tr key={ativo?.id} className="hover:bg-muted/40 transition-colors">
@@ -527,6 +652,13 @@ export default function CarteiraPage() {
                               const anual = (pct/100) * baseAnual
                               return `${anual.toFixed(2)}% a.m.`
                             })()}
+                          </td>
+                          <td className="px-4 py-3 text-sm">{precoMedio != null ? formatCurrency(precoMedio) : '-'}</td>
+                          <td className={`px-4 py-3 text-sm font-medium ${valorizacaoAbs != null ? (valorizacaoAbs >= 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
+                            {valorizacaoAbs != null ? formatCurrency(valorizacaoAbs) : '-'}
+                          </td>
+                          <td className={`px-4 py-3 text-sm font-medium ${rendimentoPct != null ? (rendimentoPct >= 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
+                            {rendimentoPct != null ? `${rendimentoPct.toFixed(2).replace('.', ',')}%` : '-'}
                           </td>
                           <td className="px-4 py-3 text-sm text-muted-foreground">{porcentagemAtivo}%</td>
                           <td className="px-4 py-3 text-green-600 font-medium">
@@ -608,13 +740,38 @@ export default function CarteiraPage() {
             ]}
           />
         </div>
-        <button
-          onClick={() => setOcultarValor(!ocultarValor)}
-          className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted/50 transition-colors"
-          title={ocultarValor ? 'Mostrar valor' : 'Ocultar valor'}
-        >
-          {ocultarValor ? '👁 Mostrar Valor' : '🔒 Ocultar Valor'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setOcultarValor(!ocultarValor)}
+            className="flex items-center gap-2 px-3 py-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted/50 transition-colors"
+            title={ocultarValor ? 'Mostrar valor' : 'Ocultar valor'}
+          >
+            {ocultarValor ? '👁 Mostrar Valor' : '🔒 Ocultar Valor'}
+          </button>
+          <button
+            onClick={async () => {
+              if (isRefreshing) return
+              setIsRefreshing(true)
+              try {
+                const res = await carteiraService.refreshCarteira()
+                const n = (res && typeof res.updated === 'number') ? res.updated : undefined
+                toast.success(n != null ? `Preços atualizados (${n})` : 'Preços atualizados')
+              } catch (e: any) {
+                if (e?.response?.status === 401) toast.error('Sessão expirada. Faça login novamente.')
+                else toast.error('Falha ao atualizar preços')
+              } finally {
+                setIsRefreshing(false)
+                queryClient.invalidateQueries({ queryKey: ['carteira', user] })
+                queryClient.invalidateQueries({ queryKey: ['carteira-insights', user] })
+              }
+            }}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${isRefreshing ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'}`}
+            title="Atualizar preços agora"
+            aria-label="Atualizar preços agora"
+          >
+            <Activity className="w-4 h-4" /> {isRefreshing ? 'Atualizando...' : 'Atualizar preços'}
+          </button>
+        </div>
       </div>
 
       {/* Indicadores Visuais */}
@@ -645,6 +802,7 @@ export default function CarteiraPage() {
         />
       </div>
 
+      
       {/* Navegação por Abas */}
       <div className="flex gap-2 overflow-x-auto pb-2">
         <TabButton id="ativos" label="Ativos" icon={Target} isActive={activeTab === 'ativos'} />
@@ -654,6 +812,7 @@ export default function CarteiraPage() {
         <TabButton id="insights" label="Insights" icon={Brain} isActive={activeTab === 'insights'} />
         <TabButton id="rebalance" label="Rebalanceamento" icon={Target} isActive={activeTab === 'rebalance'} />
         <TabButton id="movimentacoes" label="Movimentações" icon={History} isActive={activeTab === 'movimentacoes'} />
+        <TabButton id="relatorios" label="Relatórios" icon={FileText} isActive={activeTab === 'relatorios'} />
       </div>
 
       {/* Conteúdo das Abas */}
@@ -1968,6 +2127,257 @@ export default function CarteiraPage() {
             )}
               </>
             )}
+          </div>
+        )}
+
+        {activeTab === 'relatorios' && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold mb-4">📄 Relatórios</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Movimentações */}
+              <div className="bg-muted/30 rounded-lg p-4">
+                <h3 className="font-semibold mb-2">Movimentações</h3>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex items-center gap-2">
+                    <select aria-label="Selecione o mês" className="px-3 py-2 border border-border rounded bg-background text-foreground" value={repMes} onChange={e=>setRepMes(e.target.value)}>
+                      {Array.from({ length: 12 }).map((_, i) => {
+                        const v = String(i+1).padStart(2, '0')
+                        return <option key={v} value={v}>{v}</option>
+                      })}
+                    </select>
+                    <select aria-label="Selecione o ano" className="px-3 py-2 border border-border rounded bg-background text-foreground" value={repAno} onChange={e=>setRepAno(e.target.value)}>
+                      {Array.from({ length: 10 }).map((_, i) => {
+                        const y = new Date().getFullYear() - i
+                        return <option key={y} value={String(y)}>{y}</option>
+                      })}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const blob = await carteiraService.downloadMovimentacoesCSV({ mes: repMes, ano: repAno })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url; a.download = 'movimentacoes.csv'
+                          document.body.appendChild(a)
+                          a.click()
+                          a.remove(); URL.revokeObjectURL(url)
+                        } catch (e: any) {
+                          toast.error('Falha ao baixar CSV')
+                        }
+                      }}
+                      className="px-3 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                    >CSV</button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const blob = await carteiraService.downloadMovimentacoesPDF({ mes: repMes, ano: repAno })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url; a.download = 'movimentacoes.pdf'
+                          document.body.appendChild(a)
+                          a.click()
+                          a.remove(); URL.revokeObjectURL(url)
+                        } catch (e: any) {
+                          toast.error('Falha ao baixar PDF')
+                        }
+                      }}
+                      className="px-3 py-2 rounded bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                    >PDF</button>
+                    <button
+                      onClick={async () => {
+                        setLoadingPreviewMovs(true)
+                        try {
+                          const data = await carteiraService.getMovimentacoes(Number(repMes), Number(repAno))
+                          setPreviewMovs(data)
+                        } catch {
+                          toast.error('Falha ao carregar prévia')
+                          setPreviewMovs([])
+                        } finally {
+                          setLoadingPreviewMovs(false)
+                        }
+                      }}
+                      className="px-3 py-2 rounded bg-muted text-foreground hover:bg-muted/80"
+                    >Prévia</button>
+                  </div>
+                </div>
+                {/* Prévia Movimentações */}
+                <div className="mt-3">
+                  {loadingPreviewMovs ? (
+                    <div className="text-sm text-muted-foreground">Carregando…</div>
+                  ) : previewMovs && previewMovs.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[700px] text-sm">
+                        <thead className="bg-muted/30">
+                          <tr>
+                            <th className="px-3 py-2 text-left">Data</th>
+                            <th className="px-3 py-2 text-left">Ticker</th>
+                            <th className="px-3 py-2 text-left">Tipo</th>
+                            <th className="px-3 py-2 text-left">Quantidade</th>
+                            <th className="px-3 py-2 text-left">Preço</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {previewMovs.slice(0, 50).map((m) => (
+                            <tr key={m.id} className="border-b border-border">
+                              <td className="px-3 py-2">{String(m.data).slice(0,10)}</td>
+                              <td className="px-3 py-2">{m.ticker}</td>
+                              <td className="px-3 py-2">{m.tipo}</td>
+                              <td className="px-3 py-2">{m.quantidade}</td>
+                              <td className="px-3 py-2">{formatCurrency(m.preco)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {previewMovs.length > 50 && (
+                        <div className="text-xs text-muted-foreground mt-2">Mostrando 50 de {previewMovs.length} registros.</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Sem dados para o período.</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Posições atuais */}
+              <div className="bg-muted/30 rounded-lg p-4">
+                <h3 className="font-semibold mb-2">Posições (Atual)</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const blob = await carteiraService.downloadPosicoesCSV()
+                        const url = URL.createObjectURL(blob); const a = document.createElement('a')
+                        a.href = url; a.download = 'posicoes.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+                      } catch {
+                        toast.error('Falha ao baixar CSV')
+                      }
+                    }}
+                    className="px-3 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                  >CSV</button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const blob = await carteiraService.downloadPosicoesPDF()
+                        const url = URL.createObjectURL(blob); const a = document.createElement('a')
+                        a.href = url; a.download = 'posicoes.pdf'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+                      } catch {
+                        toast.error('Falha ao baixar PDF')
+                      }
+                    }}
+                    className="px-3 py-2 rounded bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                  >PDF</button>
+                </div>
+                {/* Prévia Posições */}
+                <div className="mt-3 overflow-x-auto">
+                  {carteira && carteira.length > 0 ? (
+                    <table className="w-full min-w-[700px] text-sm">
+                      <thead className="bg-muted/30">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Ticker</th>
+                          <th className="px-3 py-2 text-left">Nome</th>
+                          <th className="px-3 py-2 text-left">Quantidade</th>
+                          <th className="px-3 py-2 text-left">Preço</th>
+                          <th className="px-3 py-2 text-left">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {carteira.slice(0, 50).map((it) => (
+                          <tr key={it.id} className="border-b border-border">
+                            <td className="px-3 py-2">{it.ticker}</td>
+                            <td className="px-3 py-2">{it.nome_completo}</td>
+                            <td className="px-3 py-2">{it.quantidade}</td>
+                            <td className="px-3 py-2">{formatCurrency(it.preco_atual)}</td>
+                            <td className="px-3 py-2">{formatCurrency(it.valor_total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Sem posições.</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Rendimentos no período */}
+              <div className="bg-muted/30 rounded-lg p-4">
+                <h3 className="font-semibold mb-2">Rendimentos (Período)</h3>
+                <div className="flex items-center gap-2">
+                  <select aria-label="Período dos rendimentos" className="px-3 py-2 border border-border rounded bg-background text-foreground" value={repRendPeriodo} onChange={e=>setRepRendPeriodo(e.target.value as any)}>
+                    <option value="mensal">Mensal</option>
+                    <option value="trimestral">Trimestral</option>
+                    <option value="semestral">Semestral</option>
+                    <option value="anual">Anual</option>
+                    <option value="maximo">Máximo</option>
+                  </select>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const blob = await carteiraService.downloadRendimentosCSV(repRendPeriodo)
+                        const url = URL.createObjectURL(blob); const a = document.createElement('a')
+                        a.href = url; a.download = 'rendimentos.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+                      } catch {
+                        toast.error('Falha ao baixar CSV')
+                      }
+                    }}
+                    className="px-3 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                  >CSV</button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const blob = await carteiraService.downloadRendimentosPDF(repRendPeriodo)
+                        const url = URL.createObjectURL(blob); const a = document.createElement('a')
+                        a.href = url; a.download = 'rendimentos.pdf'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+                      } catch {
+                        toast.error('Falha ao baixar PDF')
+                      }
+                    }}
+                    className="px-3 py-2 rounded bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                  >PDF</button>
+                  <button
+                    onClick={async () => {
+                      setLoadingPreviewRend(true)
+                      try {
+                        const data = await carteiraService.getHistorico(repRendPeriodo)
+                        setPreviewRend({ datas: data.datas || [], carteira_valor: data.carteira_valor || [] })
+                      } catch {
+                        toast.error('Falha ao carregar prévia')
+                        setPreviewRend({ datas: [], carteira_valor: [] })
+                      } finally {
+                        setLoadingPreviewRend(false)
+                      }
+                    }}
+                    className="px-3 py-2 rounded bg-muted text-foreground hover:bg-muted/80"
+                  >Prévia</button>
+                </div>
+                {/* Prévia Rendimentos */}
+                <div className="mt-3 overflow-x-auto">
+                  {loadingPreviewRend ? (
+                    <div className="text-sm text-muted-foreground">Carregando…</div>
+                  ) : previewRend && previewRend.datas.length > 0 ? (
+                    <table className="w-full min-w-[500px] text-sm">
+                      <thead className="bg-muted/30">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Período</th>
+                          <th className="px-3 py-2 text-left">Valor Carteira</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewRend.datas.slice(-50).map((d, i) => (
+                          <tr key={`${d}-${i}`} className="border-b border-border">
+                            <td className="px-3 py-2">{d}</td>
+                            <td className="px-3 py-2">{formatCurrency(previewRend.carteira_valor[Math.max(0, previewRend.carteira_valor.length - previewRend.datas.slice(-50).length + i)])}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Sem dados para o período.</div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

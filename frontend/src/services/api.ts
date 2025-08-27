@@ -89,6 +89,15 @@ export const carteiraService = {
     const response = await api.get('/carteira')
     return response.data
   },
+  getCarteiraRefresh: async (): Promise<AtivoCarteira[]> => {
+    const response = await api.get('/carteira?refresh=1')
+    return response.data
+  },
+
+  refreshCarteira: async (): Promise<{ success: boolean; updated?: number; errors?: string[]; message?: string }> => {
+    const response = await api.post('/carteira/refresh')
+    return response.data
+  },
 
   // Indicadores e Tesouro Direto
   getIndicadores: async (): Promise<{ selic?: any; cdi?: any; ipca?: any }> => {
@@ -204,6 +213,45 @@ export const carteiraService = {
   }> => {
     const response = await api.get(`/carteira/historico?periodo=${periodo}`)
     return response.data
+  },
+
+  // Relatórios (download)
+  downloadMovimentacoesCSV: async (params: { mes?: string; ano?: string; inicio?: string; fim?: string }) => {
+    const p = new URLSearchParams()
+    if (params.mes) p.append('mes', params.mes)
+    if (params.ano) p.append('ano', params.ano)
+    if (params.inicio) p.append('inicio', params.inicio)
+    if (params.fim) p.append('fim', params.fim)
+    const url = `/relatorios/movimentacoes?${p.toString()}`
+    const resp = await api.get(url, { responseType: 'blob' })
+    return resp.data as Blob
+  },
+  downloadPosicoesCSV: async () => {
+    const resp = await api.get(`/relatorios/posicoes`, { responseType: 'blob' })
+    return resp.data as Blob
+  },
+  downloadRendimentosCSV: async (periodo: string = 'mensal') => {
+    const resp = await api.get(`/relatorios/rendimentos?periodo=${periodo}`, { responseType: 'blob' })
+    return resp.data as Blob
+  },
+  downloadMovimentacoesPDF: async (params: { mes?: string; ano?: string; inicio?: string; fim?: string }) => {
+    const p = new URLSearchParams()
+    if (params.mes) p.append('mes', params.mes)
+    if (params.ano) p.append('ano', params.ano)
+    if (params.inicio) p.append('inicio', params.inicio)
+    if (params.fim) p.append('fim', params.fim)
+    p.append('formato', 'pdf')
+    const url = `/relatorios/movimentacoes?${p.toString()}`
+    const resp = await api.get(url, { responseType: 'blob' })
+    return resp.data as Blob
+  },
+  downloadPosicoesPDF: async () => {
+    const resp = await api.get(`/relatorios/posicoes?formato=pdf`, { responseType: 'blob' })
+    return resp.data as Blob
+  },
+  downloadRendimentosPDF: async (periodo: string = 'mensal') => {
+    const resp = await api.get(`/relatorios/rendimentos?periodo=${periodo}&formato=pdf`, { responseType: 'blob' })
+    return resp.data as Blob
   },
 
   getProventos: async (tickers: string[]): Promise<Array<{

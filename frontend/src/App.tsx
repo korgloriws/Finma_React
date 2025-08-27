@@ -13,6 +13,7 @@ const AnalisePage = lazy(() => import('./pages/AnalisePage'))
 const CarteiraPage = lazy(() => import('./pages/CarteiraPage'))
 const ControlePage = lazy(() => import('./pages/ControlePage'))
 const JurosCompostosPage = lazy(() => import('./pages/JurosCompostosPage'))
+const GuiaMercadoPage = lazy(() => import('./pages/GuiaMercadoPage'))
 
 const HomePage = lazy(() => import('./pages/HomePage'))
 
@@ -82,6 +83,16 @@ function App() {
               <SecurityCheck>
                 <Layout>
                   <Suspense fallback={<div />}> <JurosCompostosPage /> </Suspense>
+                </Layout>
+              </SecurityCheck>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/guia" element={
+            <ProtectedRoute>
+              <SecurityCheck>
+                <Layout>
+                  <Suspense fallback={<div />}> <GuiaMercadoPage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
