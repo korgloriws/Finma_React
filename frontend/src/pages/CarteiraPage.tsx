@@ -184,10 +184,6 @@ export default function CarteiraPage() {
     staleTime: 0,
   })
 
- 
- 
-
- 
   const { data: tiposApi } = useQuery({
     queryKey: ['tipos-ativos', user],
     queryFn: carteiraService.getTipos,
