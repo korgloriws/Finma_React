@@ -33,7 +33,8 @@ import {
   BarChart as BarChartIcon,
   Lightbulb,
   MapPin,
-  ChevronRight
+  ChevronRight,
+  Settings
 } from 'lucide-react'
 import { 
   AreaChart, 
@@ -60,6 +61,11 @@ export default function HomePage() {
   const [mesAtual, setMesAtual] = useState(new Date().getMonth() + 1)
   const [anoAtual, setAnoAtual] = useState(new Date().getFullYear())
   const [abrirMesPicker, setAbrirMesPicker] = useState(false)
+  const [metaAnual, setMetaAnual] = useState<number>(() => {
+    const saved = localStorage.getItem('finma_meta_anual')
+    return saved ? parseFloat(saved) : 12
+  })
+  const [abrirConfigMeta, setAbrirConfigMeta] = useState(false)
 
 
   const { data: carteira, isLoading: loadingCarteira } = useQuery({
@@ -238,6 +244,12 @@ export default function HomePage() {
       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
     ]
     return meses[mes - 1]
+  }
+
+  const salvarMetaAnual = (novaMeta: number) => {
+    setMetaAnual(novaMeta)
+    localStorage.setItem('finma_meta_anual', novaMeta.toString())
+    setAbrirConfigMeta(false)
   }
 
   // Funções auxiliares para insights brasileiros
@@ -827,8 +839,7 @@ export default function HomePage() {
       return ((ultimo - primeiro) / primeiro) * 100
     }, [historicoCarteira])
 
-    // Meta anual (simplificada - pode ser configurável)
-    const metaAnual = 12 // 12% ao ano
+    // Meta anual configurável pelo usuário
     const mesesPassados = new Date().getMonth() + 1
     const metaMensal = metaAnual / 12
     const metaAcumulada = metaMensal * mesesPassados
@@ -842,11 +853,20 @@ export default function HomePage() {
         transition={{ duration: 0.5, delay }}
         className="bg-card border border-border rounded-2xl p-6 shadow-xl"
       >
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Target className="w-6 h-6 text-primary" />
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Target className="w-6 h-6 text-primary" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground">Performance vs Meta</h3>
           </div>
-          <h3 className="text-lg font-semibold text-foreground">Performance vs Meta</h3>
+          <button
+            onClick={() => setAbrirConfigMeta(true)}
+            className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+            title="Configurar meta anual"
+          >
+            <Settings className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+          </button>
         </div>
 
         <div className="space-y-4">
@@ -1779,6 +1799,95 @@ export default function HomePage() {
 
         {/* Ações inteligentes */}
         <SmartQuickActions delay={1.0} />
+
+        {/* Modal de Configuração da Meta */}
+        {abrirConfigMeta && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setAbrirConfigMeta(false)}></div>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="relative bg-card border border-border rounded-lg p-6 w-full max-w-md mx-4 shadow-xl"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Target className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground">Configurar Meta Anual</h3>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-foreground">
+                    Meta de Rentabilidade Anual (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={metaAnual}
+                    onChange={(e) => setMetaAnual(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="Ex: 12"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Meta atual: {metaAnual}% ao ano
+                  </p>
+                </div>
+                
+                <div className="bg-muted/30 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-foreground mb-2">Sugestões de Meta:</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[8, 10, 12, 15, 18, 20].map((sugestao) => (
+                      <button
+                        key={sugestao}
+                        onClick={() => setMetaAnual(sugestao)}
+                        className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                          metaAnual === sugestao
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background text-foreground border-border hover:bg-muted/50'
+                        }`}
+                      >
+                        {sugestao}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <Lightbulb className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-blue-800 dark:text-blue-200">
+                      <p className="font-medium mb-1">Dicas para definir sua meta:</p>
+                      <ul className="text-xs space-y-1">
+                        <li>• <strong>8-10%:</strong> Meta conservadora (CDI + 2-4%)</li>
+                        <li>• <strong>12-15%:</strong> Meta moderada (inflação + 6-9%)</li>
+                        <li>• <strong>18-20%:</strong> Meta agressiva (mercado de ações)</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-border">
+                <button
+                  onClick={() => setAbrirConfigMeta(false)}
+                  className="px-4 py-2 rounded-lg bg-muted text-foreground hover:bg-muted/80 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => salvarMetaAnual(metaAnual)}
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  Salvar Meta
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -447,31 +447,31 @@ export default function CarteiraPage() {
     return (
       <div className="bg-card border border-border rounded-lg overflow-hidden shadow-lg mb-6">
         <div 
-          className="bg-gradient-to-r from-primary/10 to-primary/5 px-4 md:px-6 py-4 border-b border-border cursor-pointer hover:bg-primary/20 transition-colors"
+          className="bg-gradient-to-r from-primary/10 to-primary/5 px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-border cursor-pointer hover:bg-primary/20 transition-colors"
           onClick={() => setExpandedTipos(prev => ({ ...prev, [tipo]: !prev[tipo] }))}
         >
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+      <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               <button className="p-1 hover:bg-white/20 rounded transition-colors flex-shrink-0">
-                {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                {isExpanded ? <ChevronUp size={18} className="sm:w-5 sm:h-5" /> : <ChevronDown size={18} className="sm:w-5 sm:h-5" />}
               </button>
-              <Target className="w-5 h-5 flex-shrink-0" />
+              <Target className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
               <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-semibold truncate">{tipo}</h3>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm text-muted-foreground">
+                <h3 className="text-base sm:text-lg font-semibold truncate">{tipo}</h3>
+                <div className="flex flex-col xs:flex-row xs:items-center gap-1 xs:gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
                   <span>{ativosDoTipo.length} ativo{ativosDoTipo.length !== 1 ? 's' : ''}</span>
-                  <span className="hidden sm:inline">•</span>
+                  <span className="hidden xs:inline">•</span>
                   <span>{porcentagemTipo}% da carteira</span>
-                  <span className="hidden sm:inline">•</span>
-                  <span className="text-xs sm:text-sm">Média DY: {ativosDoTipo.length > 0 ? 
+                  <span className="hidden xs:inline">•</span>
+                  <span className="text-xs">Média DY: {ativosDoTipo.length > 0 ? 
                     formatDividendYield(ativosDoTipo.reduce((sum, ativo) => sum + (ativo?.dy || 0), 0) / ativosDoTipo.length) : 
                     'N/A'
                   }</span>
                 </div>
               </div>
             </div>
-            <div className="text-right flex items-center gap-2 md:gap-3 flex-shrink-0">
-              <div className="text-sm md:text-lg font-bold">{formatCurrency(totalTipo)}</div>
+            <div className="text-right flex items-center gap-1 sm:gap-2 md:gap-3 flex-shrink-0">
+              <div className="text-xs sm:text-sm md:text-lg font-bold">{formatCurrency(totalTipo)}</div>
               {(() => {
                 const movs = movimentacoesAll || []
                 let somaValoresAtuais = 0
@@ -508,18 +508,18 @@ export default function CarteiraPage() {
                 }
                 const rendTipo = (somaValoresInvestidos > 0) ? ((somaValoresAtuais - somaValoresInvestidos) / somaValoresInvestidos) * 100 : null
                 return (
-                  <div className={`text-xs md:text-sm font-medium ${rendTipo != null ? (rendTipo >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-muted-foreground'}`}>
-                    {rendTipo != null ? `${rendTipo.toFixed(2).replace('.', ',')}%` : '-'}
+                  <div className={`text-xs font-medium ${rendTipo != null ? (rendTipo >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-muted-foreground'}`}>
+                    {rendTipo != null ? `${rendTipo.toFixed(1).replace('.', ',')}%` : '-'}
                   </div>
                 )
               })()}
-              <div className="hidden md:block text-sm text-muted-foreground">{porcentagemTipo}% do total</div>
+              <div className="hidden sm:block text-xs sm:text-sm text-muted-foreground">{porcentagemTipo}% do total</div>
               <button
                 onClick={(e)=>{ e.stopPropagation(); setManageTipoOpen({open: true, tipo}); setRenameTipoValue(tipo) }}
-                className="p-2 rounded hover:bg-white/20 flex-shrink-0"
+                className="p-1 sm:p-2 rounded hover:bg-white/20 flex-shrink-0"
                 title="Gerenciar tipo"
               >
-                <Settings size={18} />
+                <Settings size={16} className="sm:w-[18px] sm:h-[18px]" />
               </button>
               {podeRemoverTipo && (
                 <button
@@ -532,10 +532,11 @@ export default function CarteiraPage() {
                       return copy
                     })
                   }}
-                  className="px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200 flex-shrink-0"
+                  className="px-1 sm:px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200 flex-shrink-0"
                   title="Remover seção (somente tipos sem ativos)"
                 >
-                  Remover seção
+                  <span className="hidden sm:inline">Remover seção</span>
+                  <span className="sm:hidden">Remover</span>
                 </button>
               )}
             </div>
@@ -548,27 +549,27 @@ export default function CarteiraPage() {
               <>
                 {/* Desktop Table View */}
                 <div className="hidden lg:block overflow-x-auto">
-                  <table className="w-full min-w-[900px]">
-                    <thead className="bg-muted/30">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-medium">Ticker</th>
-                        <th className="px-4 py-3 text-left font-medium">Nome</th>
-                        <th className="px-4 py-3 text-left font-medium">Quantidade</th>
-                        <th className="px-4 py-3 text-left font-medium">Preço Atual</th>
-                        <th className="px-4 py-3 text-left font-medium">Valor Total</th>
-                        <th className="px-4 py-3 text-left font-medium">Indexado</th>
-                        <th className="px-4 py-3 text-left font-medium">Rentab. Estimada</th>
-                        <th className="px-4 py-3 text-left font-medium">Preço Médio</th>
-                        <th className="px-4 py-3 text-left font-medium">Valorização</th>
-                        <th className="px-4 py-3 text-left font-medium">Rendimento do Ticket</th>
-                        <th className="px-4 py-3 text-left font-medium">% Carteira</th>
-                        <th className="px-4 py-3 text-left font-medium">DY</th>
-                        <th className="px-4 py-3 text-left font-medium">ROE</th>
-                        <th className="px-4 py-3 text-left font-medium">P/L</th>
-                        <th className="px-4 py-3 text-left font-medium">P/VP</th>
-                        <th className="px-4 py-3 text-left font-medium">Ações</th>
-                      </tr>
-                    </thead>
+                <table className="w-full min-w-[900px]">
+                  <thead className="bg-muted/30">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-sm">Ticker</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">Nome</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">Quantidade</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">Preço Atual</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">Valor Total</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">Indexado</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">Rentab. Estimada</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">Preço Médio</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">Valorização</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">Rendimento</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">% Carteira</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">DY</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">ROE</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">P/L</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">P/VP</th>
+                      <th className="px-3 py-2 text-left font-medium text-sm">Ações</th>
+                    </tr>
+                  </thead>
                     <tbody>
                       {ativosDoTipo.map((ativo) => {
                         const movsDoTicker = (movimentacoesAll || [])
@@ -604,115 +605,115 @@ export default function CarteiraPage() {
                           ? (ativo.preco_atual - precoMedio) * totalQtd
                           : null
                         const porcentagemAtivo = valorTotal > 0 ? ((ativo?.valor_total || 0) / valorTotal * 100).toFixed(1) : '0.0'
-                        return (
-                          <tr key={ativo?.id} className="hover:bg-muted/40 transition-colors">
-                            <td className="px-4 py-3 min-w-[160px]">
-                              <TickerWithLogo ticker={ativo?.ticker || ''} nome={ativo?.nome_completo || ''} />
-                            </td>
-                            <td className="px-4 py-3">{ativo?.nome_completo}</td>
-                            <td className="px-4 py-3">
+                                              return (
+                        <tr key={ativo?.id} className="hover:bg-muted/40 transition-colors">
+                          <td className="px-3 py-2 min-w-[140px]">
+                            <TickerWithLogo ticker={ativo?.ticker || ''} nome={ativo?.nome_completo || ''} />
+                          </td>
+                          <td className="px-3 py-2 text-sm max-w-[200px] truncate" title={ativo?.nome_completo}>{ativo?.nome_completo}</td>
+                          <td className="px-3 py-2 text-sm">
+                            {editingId === ativo?.id ? (
+                              <input
+                                type="text"
+                                value={editQuantidade}
+                                onChange={(e) => setEditQuantidade(e.target.value)}
+                                className="w-16 px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
+                                aria-label="Editar quantidade"
+                                placeholder="Qtd"
+                              />
+                            ) : (
+                              ativo?.quantidade
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-sm font-semibold">{formatCurrency(ativo?.preco_atual)}</td>
+                          <td className="px-3 py-2 text-sm font-semibold">{formatCurrency(ativo?.valor_total)}</td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground">
+                            {ativo?.indexador ? `${ativo.indexador} ${ativo.indexador_pct ? `${ativo.indexador_pct}%` : ''}` : '-'}
+                          </td>
+                          <td className="px-3 py-2 text-xs">
+                            {(() => {
+                              const pct = (ativo?.indexador_pct || 0)
+                              const idx = (ativo?.indexador || '') as 'CDI'|'IPCA'|'SELIC'|''
+                              const getVal = (d:any) => {
+                                if (!d) return null
+                                const v = parseFloat(String(d.valor))
+                                return isFinite(v) ? v : null
+                              }
+                              const raw = idx === 'CDI' ? getVal(indicadores?.cdi)
+                                : idx === 'IPCA' ? getVal(indicadores?.ipca)
+                                : idx === 'SELIC' ? getVal(indicadores?.selic)
+                                : null
+                              if (!idx || raw == null || !pct) return '-'
+              
+                              const baseAnual = raw <= 2 ? ((Math.pow(1 + (raw/100), 12) - 1) * 100) : raw
+                              const anual = (pct/100) * baseAnual
+                              return `${anual.toFixed(1)}% a.m.`
+                            })()}
+                          </td>
+                          <td className="px-3 py-2 text-sm">{precoMedio != null ? formatCurrency(precoMedio) : '-'}</td>
+                          <td className={`px-3 py-2 text-sm font-medium ${valorizacaoAbs != null ? (valorizacaoAbs >= 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
+                            {valorizacaoAbs != null ? formatCurrency(valorizacaoAbs) : '-'}
+                          </td>
+                          <td className={`px-3 py-2 text-sm font-medium ${rendimentoPct != null ? (rendimentoPct >= 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
+                            {rendimentoPct != null ? `${rendimentoPct.toFixed(1).replace('.', ',')}%` : '-'}
+                          </td>
+                          <td className="px-3 py-2 text-sm text-muted-foreground">{porcentagemAtivo}%</td>
+                          <td className="px-3 py-2 text-green-600 font-medium text-sm">
+                            {formatDividendYield(ativo?.dy)}
+                          </td>
+                          <td className={`px-3 py-2 font-medium text-sm ${ativo?.roe && ativo.roe > 15 ? 'text-blue-600' : ''}`}>
+                            {formatPercentage(ativo?.roe ? ativo.roe * 100 : null)}
+                          </td>
+                          <td className="px-3 py-2 text-sm">{formatNumber(ativo?.pl)}</td>
+                          <td className="px-3 py-2 text-sm">{formatNumber(ativo?.pvp)}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex gap-1">
                               {editingId === ativo?.id ? (
-                                <input
-                                  type="text"
-                                  value={editQuantidade}
-                                  onChange={(e) => setEditQuantidade(e.target.value)}
-                                  className="w-20 px-2 py-1 border border-border rounded bg-background text-foreground"
-                                  aria-label="Editar quantidade"
-                                  placeholder="Qtd"
-                                />
+                                <>
+                                  <button
+                                    onClick={handleSalvarEdicao}
+                                    className="p-1 text-green-600 hover:text-green-700"
+                                    title="Salvar"
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    onClick={handleCancelarEdicao}
+                                    className="p-1 text-gray-600 hover:text-gray-700"
+                                    title="Cancelar"
+                                  >
+                                    ✕
+                                  </button>
+                                </>
                               ) : (
-                                ativo?.quantidade
+                                <>
+                                  <button
+                                    onClick={() => handleEditar(ativo?.id || 0, ativo?.quantidade || 0)}
+                                    className="p-1 text-blue-600 hover:text-blue-700"
+                                    title="Editar"
+                                  >
+                                    <Edit size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemover(ativo?.id || 0)}
+                                    className="p-1 text-red-600 hover:text-red-700"
+                                    title="Remover"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
                               )}
-                            </td>
-                            <td className="px-4 py-3 font-semibold">{formatCurrency(ativo?.preco_atual)}</td>
-                            <td className="px-4 py-3 font-semibold">{formatCurrency(ativo?.valor_total)}</td>
-                            <td className="px-4 py-3 text-sm text-muted-foreground">
-                              {ativo?.indexador ? `${ativo.indexador} ${ativo.indexador_pct ? `${ativo.indexador_pct}%` : ''}` : '-'}
-                            </td>
-                            <td className="px-4 py-3 text-sm">
-                              {(() => {
-                                const pct = (ativo?.indexador_pct || 0)
-                                const idx = (ativo?.indexador || '') as 'CDI'|'IPCA'|'SELIC'|''
-                                const getVal = (d:any) => {
-                                  if (!d) return null
-                                  const v = parseFloat(String(d.valor))
-                                  return isFinite(v) ? v : null
-                                }
-                                const raw = idx === 'CDI' ? getVal(indicadores?.cdi)
-                                  : idx === 'IPCA' ? getVal(indicadores?.ipca)
-                                  : idx === 'SELIC' ? getVal(indicadores?.selic)
-                                  : null
-                                if (!idx || raw == null || !pct) return '-'
-                
-                                const baseAnual = raw <= 2 ? ((Math.pow(1 + (raw/100), 12) - 1) * 100) : raw
-                                const anual = (pct/100) * baseAnual
-                                return `${anual.toFixed(2)}% a.m.`
-                              })()}
-                            </td>
-                            <td className="px-4 py-3 text-sm">{precoMedio != null ? formatCurrency(precoMedio) : '-'}</td>
-                            <td className={`px-4 py-3 text-sm font-medium ${valorizacaoAbs != null ? (valorizacaoAbs >= 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
-                              {valorizacaoAbs != null ? formatCurrency(valorizacaoAbs) : '-'}
-                            </td>
-                            <td className={`px-4 py-3 text-sm font-medium ${rendimentoPct != null ? (rendimentoPct >= 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
-                              {rendimentoPct != null ? `${rendimentoPct.toFixed(2).replace('.', ',')}%` : '-'}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-muted-foreground">{porcentagemAtivo}%</td>
-                            <td className="px-4 py-3 text-green-600 font-medium">
-                              {formatDividendYield(ativo?.dy)}
-                            </td>
-                            <td className={`px-4 py-3 font-medium ${ativo?.roe && ativo.roe > 15 ? 'text-blue-600' : ''}`}>
-                              {formatPercentage(ativo?.roe ? ativo.roe * 100 : null)}
-                            </td>
-                            <td className="px-4 py-3">{formatNumber(ativo?.pl)}</td>
-                            <td className="px-4 py-3">{formatNumber(ativo?.pvp)}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex gap-2">
-                                {editingId === ativo?.id ? (
-                                  <>
-                                    <button
-                                      onClick={handleSalvarEdicao}
-                                      className="p-1 text-green-600 hover:text-green-700"
-                                      title="Salvar"
-                                    >
-                                      ✓
-                                    </button>
-                                    <button
-                                      onClick={handleCancelarEdicao}
-                                      className="p-1 text-gray-600 hover:text-gray-700"
-                                      title="Cancelar"
-                                    >
-                                      ✕
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button
-                                      onClick={() => handleEditar(ativo?.id || 0, ativo?.quantidade || 0)}
-                                      className="p-1 text-blue-600 hover:text-blue-700"
-                                      title="Editar"
-                                    >
-                                      <Edit size={16} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleRemover(ativo?.id || 0)}
-                                      className="p-1 text-red-600 hover:text-red-700"
-                                      title="Remover"
-                                    >
-                                      <Trash2 size={16} />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )
+                            </div>
+                          </td>
+                        </tr>
+                      )
                       })}
                     </tbody>
                   </table>
                 </div>
 
                 {/* Mobile Card View */}
-                <div className="lg:hidden space-y-4 p-4">
+                <div className="lg:hidden space-y-3 p-3 sm:p-4">
                   {ativosDoTipo.map((ativo) => {
                     const movsDoTicker = (movimentacoesAll || [])
                       .filter(m => m.ticker?.toUpperCase?.() === (ativo?.ticker || '').toUpperCase())
@@ -748,25 +749,25 @@ export default function CarteiraPage() {
                     const porcentagemAtivo = valorTotal > 0 ? ((ativo?.valor_total || 0) / valorTotal * 100).toFixed(1) : '0.0'
                     
                     return (
-                      <div key={ativo?.id} className="bg-background border border-border rounded-lg p-4 space-y-3">
+                      <div key={ativo?.id} className="bg-background border border-border rounded-lg p-3 sm:p-4 space-y-3">
                         {/* Header com Ticker e Ações */}
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
                             <TickerWithLogo ticker={ativo?.ticker || ''} nome={ativo?.nome_completo || ''} />
                           </div>
-                          <div className="flex gap-2 ml-3">
+                          <div className="flex gap-1 sm:gap-2 ml-2">
                             {editingId === ativo?.id ? (
                               <>
                                 <button
                                   onClick={handleSalvarEdicao}
-                                  className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded"
+                                  className="p-1.5 sm:p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded"
                                   title="Salvar"
                                 >
                                   ✓
                                 </button>
                                 <button
                                   onClick={handleCancelarEdicao}
-                                  className="p-2 text-gray-600 hover:text-gray-700 hover:bg-gray-50 rounded"
+                                  className="p-1.5 sm:p-2 text-gray-600 hover:text-gray-700 hover:bg-gray-50 rounded"
                                   title="Cancelar"
                                 >
                                   ✕
@@ -776,17 +777,17 @@ export default function CarteiraPage() {
                               <>
                                 <button
                                   onClick={() => handleEditar(ativo?.id || 0, ativo?.quantidade || 0)}
-                                  className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
+                                  className="p-1.5 sm:p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
                                   title="Editar"
                                 >
-                                  <Edit size={18} />
+                                  <Edit size={16} className="sm:w-[18px] sm:h-[18px]" />
                                 </button>
                                 <button
                                   onClick={() => handleRemover(ativo?.id || 0)}
-                                  className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
+                                  className="p-1.5 sm:p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
                                   title="Remover"
                                 >
-                                  <Trash2 size={18} />
+                                  <Trash2 size={16} className="sm:w-[18px] sm:h-[18px]" />
                                 </button>
                               </>
                             )}
@@ -794,13 +795,13 @@ export default function CarteiraPage() {
                         </div>
 
                         {/* Nome do Ativo */}
-                        <div className="text-sm text-muted-foreground truncate">
+                        <div className="text-xs sm:text-sm text-muted-foreground truncate">
                           {ativo?.nome_completo}
                         </div>
 
                         {/* Grid de Informações Principais */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                          <div className="space-y-1.5 sm:space-y-2">
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-muted-foreground">Quantidade</span>
                               {editingId === ativo?.id ? (
@@ -808,46 +809,46 @@ export default function CarteiraPage() {
                                   type="text"
                                   value={editQuantidade}
                                   onChange={(e) => setEditQuantidade(e.target.value)}
-                                  className="w-20 px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
+                                  className="w-16 sm:w-20 px-2 py-1 text-xs sm:text-sm border border-border rounded bg-background text-foreground"
                                   aria-label="Editar quantidade"
                                   placeholder="Qtd"
                                 />
                               ) : (
-                                <span className="text-sm font-medium">{ativo?.quantidade}</span>
+                                <span className="text-xs sm:text-sm font-medium">{ativo?.quantidade}</span>
                               )}
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-muted-foreground">Preço Atual</span>
-                              <span className="text-sm font-semibold">{formatCurrency(ativo?.preco_atual)}</span>
+                              <span className="text-xs sm:text-sm font-semibold">{formatCurrency(ativo?.preco_atual)}</span>
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-muted-foreground">Valor Total</span>
-                              <span className="text-sm font-semibold text-primary">{formatCurrency(ativo?.valor_total)}</span>
+                              <span className="text-xs sm:text-sm font-semibold text-primary">{formatCurrency(ativo?.valor_total)}</span>
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-muted-foreground">% Carteira</span>
-                              <span className="text-sm text-muted-foreground">{porcentagemAtivo}%</span>
+                              <span className="text-xs sm:text-sm text-muted-foreground">{porcentagemAtivo}%</span>
                             </div>
                           </div>
                           
-                          <div className="space-y-2">
+                          <div className="space-y-1.5 sm:space-y-2">
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-muted-foreground">DY</span>
-                              <span className="text-sm text-green-600 font-medium">
+                              <span className="text-xs sm:text-sm text-green-600 font-medium">
                                 {formatDividendYield(ativo?.dy)}
                               </span>
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-muted-foreground">P/L</span>
-                              <span className="text-sm">{formatNumber(ativo?.pl)}</span>
+                              <span className="text-xs sm:text-sm">{formatNumber(ativo?.pl)}</span>
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-muted-foreground">P/VP</span>
-                              <span className="text-sm">{formatNumber(ativo?.pvp)}</span>
+                              <span className="text-xs sm:text-sm">{formatNumber(ativo?.pvp)}</span>
                             </div>
                             <div className="flex justify-between items-center">
                               <span className="text-xs text-muted-foreground">ROE</span>
-                              <span className={`text-sm font-medium ${ativo?.roe && ativo.roe > 15 ? 'text-blue-600' : ''}`}>
+                              <span className={`text-xs sm:text-sm font-medium ${ativo?.roe && ativo.roe > 15 ? 'text-blue-600' : ''}`}>
                                 {formatPercentage(ativo?.roe ? ativo.roe * 100 : null)}
                               </span>
                             </div>
@@ -856,24 +857,24 @@ export default function CarteiraPage() {
 
                         {/* Informações Adicionais (se houver) */}
                         {(ativo?.indexador || precoMedio != null || valorizacaoAbs != null || rendimentoPct != null) && (
-                          <div className="pt-3 border-t border-border">
-                            <div className="grid grid-cols-1 gap-2 text-xs">
+                          <div className="pt-2 sm:pt-3 border-t border-border">
+                            <div className="grid grid-cols-1 gap-1.5 sm:gap-2 text-xs">
                               {ativo?.indexador && (
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Indexado</span>
-                                  <span>{ativo.indexador} {ativo.indexador_pct ? `${ativo.indexador_pct}%` : ''}</span>
+                                  <span className="text-xs">{ativo.indexador} {ativo.indexador_pct ? `${ativo.indexador_pct}%` : ''}</span>
                                 </div>
                               )}
                               {precoMedio != null && (
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Preço Médio</span>
-                                  <span>{formatCurrency(precoMedio)}</span>
+                                  <span className="text-xs">{formatCurrency(precoMedio)}</span>
                                 </div>
                               )}
                               {valorizacaoAbs != null && (
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Valorização</span>
-                                  <span className={`font-medium ${valorizacaoAbs >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                  <span className={`text-xs font-medium ${valorizacaoAbs >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                     {formatCurrency(valorizacaoAbs)}
                                   </span>
                                 </div>
@@ -881,8 +882,8 @@ export default function CarteiraPage() {
                               {rendimentoPct != null && (
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Rendimento</span>
-                                  <span className={`font-medium ${rendimentoPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                    {rendimentoPct.toFixed(2).replace('.', ',')}%
+                                  <span className={`text-xs font-medium ${rendimentoPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {rendimentoPct.toFixed(1).replace('.', ',')}%
                                   </span>
                                 </div>
                               )}
@@ -1065,48 +1066,48 @@ export default function CarteiraPage() {
         {activeTab === 'ativos' && (
           <div className="space-y-6">
             {/* Formulário de Adição */}
-            <div className="bg-muted/30 rounded-lg p-4 md:p-6">
-              <h2 className="text-lg md:text-xl font-semibold mb-4 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-green-500" />
+            <div className="bg-muted/30 rounded-lg p-3 sm:p-4 md:p-6">
+              <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
                 Adicionar Ativo
               </h2>
               
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {/* Primeira linha - Ticker e Quantidade */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Ticker</label>
+                    <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Ticker</label>
                     <input
                       type="text"
                       value={inputTicker}
                       onChange={(e) => setInputTicker(e.target.value)}
                       placeholder="Ex: PETR4, AAPL, VISC11"
-                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-2">Quantidade</label>
+                    <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Quantidade</label>
                     <input
                       type="text"
                       value={inputQuantidade}
                       onChange={(e) => setInputQuantidade(e.target.value)}
                       placeholder="Ex: 100 ou 0,0012"
-                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
                 </div>
 
                 {/* Segunda linha - Tipo e Preço */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Tipo</label>
+                    <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Tipo</label>
                     <input
                       list="tipos-ativos"
                       value={inputTipo}
                       onChange={(e) => setInputTipo(e.target.value)}
                       placeholder="Ex.: Ação, FII, Criptomoeda, ..."
-                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                       aria-label="Selecionar ou digitar tipo de ativo"
                     />
                     <datalist id="tipos-ativos">
@@ -1117,12 +1118,12 @@ export default function CarteiraPage() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium mb-2">Preço (opcional)</label>
+                    <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Preço (opcional)</label>
                     <input
                       type="text"
                       inputMode="decimal"
                       placeholder="Ex: 10,50 (se vazio tenta buscar)"
-                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                       value={inputPreco}
                       onChange={(e)=>setInputPreco(e.target.value)}
                     />
@@ -1131,12 +1132,12 @@ export default function CarteiraPage() {
 
                 {/* Terceira linha - Indexador */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">Indexador (opcional)</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Indexador (opcional)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                     <select
                       value={inputIndexador}
                       onChange={(e)=>setInputIndexador(e.target.value as any)}
-                      className="px-3 py-2 border border-border rounded-lg bg-background text-foreground"
+                      className="px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground"
                       aria-label="Selecionar indexador"
                     >
                       <option value="">Sem indexador</option>
@@ -1148,16 +1149,18 @@ export default function CarteiraPage() {
                       type="text"
                       inputMode="decimal"
                       placeholder="Ex.: 110 (para 110%)"
-                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                       value={inputIndexadorPct}
                       onChange={(e)=>setInputIndexadorPct(e.target.value)}
                     />
                     <button
                       onClick={handleAdicionar}
                       disabled={adicionarMutation.isPending}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 whitespace-nowrap"
+                      className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 whitespace-nowrap flex items-center justify-center gap-1 sm:gap-2"
                     >
-                      {adicionarMutation.isPending ? 'Adicionando...' : 'Adicionar'}
+                      <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden xs:inline">{adicionarMutation.isPending ? 'Adicionando...' : 'Adicionar'}</span>
+                      <span className="xs:hidden">{adicionarMutation.isPending ? '...' : '+'}</span>
                     </button>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">Use N% do CDI/IPCA/SELIC. Ex.: 110 = 110%.</p>
@@ -1167,32 +1170,32 @@ export default function CarteiraPage() {
 
             {/* Resumo da Carteira */}
             {!loadingCarteira && carteira && carteira.length > 0 && (
-              <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-border rounded-lg p-4 md:p-6 mb-6">
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-primary" />
+              <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-border rounded-lg p-3 sm:p-4 md:p-6 mb-6">
+                <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                   Resumo da Carteira
                 </h3>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-                  <div className="bg-card border border-border rounded-lg p-3 md:p-4">
-                    <div className="text-xs md:text-sm text-muted-foreground">Total de Ativos</div>
-                    <div className="text-xl md:text-2xl font-bold text-primary">{carteira.length}</div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
+                  <div className="bg-card border border-border rounded-lg p-2 sm:p-3 md:p-4">
+                    <div className="text-xs sm:text-sm text-muted-foreground">Total de Ativos</div>
+                    <div className="text-sm sm:text-lg md:text-xl lg:text-2xl font-bold text-primary">{carteira.length}</div>
                   </div>
-                  <div className="bg-card border border-border rounded-lg p-3 md:p-4">
-                    <div className="text-xs md:text-sm text-muted-foreground">Tipos de Ativos</div>
-                    <div className="text-xl md:text-2xl font-bold text-primary">{Object.keys(ativosPorTipo).length}</div>
+                  <div className="bg-card border border-border rounded-lg p-2 sm:p-3 md:p-4">
+                    <div className="text-xs sm:text-sm text-muted-foreground">Tipos de Ativos</div>
+                    <div className="text-sm sm:text-lg md:text-xl lg:text-2xl font-bold text-primary">{Object.keys(ativosPorTipo).length}</div>
                   </div>
-                  <div className="bg-card border border-border rounded-lg p-3 md:p-4">
-                    <div className="text-xs md:text-sm text-muted-foreground">Média DY</div>
-                    <div className="text-lg md:text-2xl font-bold text-primary">
+                  <div className="bg-card border border-border rounded-lg p-2 sm:p-3 md:p-4">
+                    <div className="text-xs sm:text-sm text-muted-foreground">Média DY</div>
+                    <div className="text-sm sm:text-lg md:text-xl lg:text-2xl font-bold text-primary">
                       {formatDividendYield(carteira.reduce((sum, ativo) => sum + (ativo?.dy || 0), 0) / carteira.length)}
                     </div>
                   </div>
-                  <div className="bg-card border border-border rounded-lg p-3 md:p-4">
-                    <div className="text-xs md:text-sm text-muted-foreground">Maior Posição</div>
-                    <div className="text-sm md:text-lg font-bold text-primary">
+                  <div className="bg-card border border-border rounded-lg p-2 sm:p-3 md:p-4">
+                    <div className="text-xs sm:text-sm text-muted-foreground">Maior Posição</div>
+                    <div className="text-sm sm:text-lg md:text-xl lg:text-2xl font-bold text-primary">
                       {topAtivos[0]?.ticker || 'N/A'}
                     </div>
-                    <div className="text-xs md:text-sm text-muted-foreground">
+                    <div className="text-xs sm:text-sm text-muted-foreground">
                       {formatCurrency(topAtivos[0]?.valor_total || 0)}
                     </div>
                   </div>
@@ -1228,13 +1231,15 @@ export default function CarteiraPage() {
             ) : (
               <div className="space-y-6">
                 {/* Gráfico de Evolução do Patrimônio */}
-                <div className="bg-card border border-border rounded-2xl p-6 shadow-xl">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-primary/10">
-                        <TrendingUp className="w-6 h-6 text-primary" />
+                <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 min-w-0">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
+                          <TrendingUp className="w-6 h-6 text-primary" />
+                        </div>
+                        <h3 className="text-lg md:text-xl font-semibold text-foreground">Evolução do Patrimônio</h3>
                       </div>
-                      <h3 className="text-xl font-semibold text-foreground">Evolução do Patrimônio</h3>
                       <div className="text-sm text-muted-foreground">
                         Período: {{
                           'mensal': 'Mensal',
@@ -1245,11 +1250,11 @@ export default function CarteiraPage() {
                         }[filtroPeriodo]}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <select
                         value={filtroPeriodo}
                         onChange={(e) => setFiltroPeriodo(e.target.value as any)}
-                        className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
+                        className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm min-w-0 w-full sm:w-auto"
                         aria-label="Filtrar por período"
                       >
                         <option value="mensal">Mensal</option>
@@ -1266,22 +1271,22 @@ export default function CarteiraPage() {
                   ) : historicoCarteira && historicoCarteira.datas && historicoCarteira.datas.length > 0 ? (
                     <>
                       {/* Resumo estatístico */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div className="bg-muted/50 rounded-lg p-4">
-                          <div className="text-sm text-muted-foreground">Patrimônio Inicial</div>
-                          <div className="text-lg font-bold text-foreground">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6">
+                        <div className="bg-muted/50 rounded-lg p-3 md:p-4">
+                          <div className="text-xs md:text-sm text-muted-foreground">Patrimônio Inicial</div>
+                          <div className="text-base md:text-lg font-bold text-foreground">
                             {formatCurrency(historicoCarteira.carteira_valor?.[0] || 0)}
                           </div>
                         </div>
-                        <div className="bg-muted/50 rounded-lg p-4">
-                          <div className="text-sm text-muted-foreground">Patrimônio Atual</div>
-                          <div className="text-lg font-bold text-foreground">
+                        <div className="bg-muted/50 rounded-lg p-3 md:p-4">
+                          <div className="text-xs md:text-sm text-muted-foreground">Patrimônio Atual</div>
+                          <div className="text-base md:text-lg font-bold text-foreground">
                             {formatCurrency(historicoCarteira.carteira_valor?.[historicoCarteira.carteira_valor.length - 1] || 0)}
                           </div>
                         </div>
-                        <div className="bg-muted/50 rounded-lg p-4">
-                          <div className="text-sm text-muted-foreground">Crescimento</div>
-                          <div className={`text-lg font-bold ${
+                        <div className="bg-muted/50 rounded-lg p-3 md:p-4 sm:col-span-2 lg:col-span-1">
+                          <div className="text-xs md:text-sm text-muted-foreground">Crescimento</div>
+                          <div className={`text-base md:text-lg font-bold ${
                             (historicoCarteira.carteira_valor?.[historicoCarteira.carteira_valor.length - 1] || 0) > (historicoCarteira.carteira_valor?.[0] || 0) 
                               ? 'text-green-600' 
                               : 'text-red-600'
@@ -1298,7 +1303,8 @@ export default function CarteiraPage() {
                       </div>
                       
                       {/* Gráfico comparativo rebase 100 */}
-                      <ResponsiveContainer width="100%" height={320}>
+                      <div className="h-64 sm:h-80">
+                        <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={historicoCarteira.datas.map((d, i) => ({
                           data: d,
                           carteira: historicoCarteira.carteira?.[i] ?? null,
@@ -1337,7 +1343,8 @@ export default function CarteiraPage() {
                           <Area type="monotone" dataKey="ifix" stroke="#a855f7" fill="#a855f7" fillOpacity={0.1} strokeWidth={1.5} />
                           <Area type="monotone" dataKey="ipca" stroke="#ef4444" fill="#ef4444" fillOpacity={0.06} strokeWidth={1.2} />
                         </AreaChart>
-                      </ResponsiveContainer>
+                        </ResponsiveContainer>
+                      </div>
                     </>
                   ) : (
                   <div className="h-64 flex items-center justify-center text-muted-foreground">
@@ -1355,37 +1362,39 @@ export default function CarteiraPage() {
                 </div>
 
                 {/* Gráficos de Distribuição */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
                   {/* Distribuição por Tipo */}
-                  <div className="bg-card border border-border rounded-2xl p-6 shadow-xl">
+                  <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-xl">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 rounded-lg bg-primary/10">
+                      <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
                         <PieChart className="w-5 h-5 text-primary" />
                       </div>
-                      <h3 className="text-lg font-semibold text-foreground">Distribuição por Tipo de Ativo</h3>
+                      <h3 className="text-base md:text-lg font-semibold text-foreground">Distribuição por Tipo de Ativo</h3>
                     </div>
                     {Object.keys(ativosPorTipo).length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <RechartsPieChart>
-                          <Pie
-                            data={Object.entries(ativosPorTipo)
-                              .filter(([_, valor]) => valor > 0)
-                              .map(([tipo, valor]) => ({ name: tipo, value: valor }))}
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={80}
-                            dataKey="value"
-                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                          >
-                            {Object.entries(ativosPorTipo)
-                              .filter(([_, valor]) => valor > 0)
-                              .map((_, index) => (
-                                <Cell key={index} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'][index % 5]} />
-                              ))}
-                          </Pie>
-                          <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
-                        </RechartsPieChart>
-                      </ResponsiveContainer>
+                      <div className="h-64 sm:h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <RechartsPieChart>
+                            <Pie
+                              data={Object.entries(ativosPorTipo)
+                                .filter(([_, valor]) => valor > 0)
+                                .map(([tipo, valor]) => ({ name: tipo, value: valor }))}
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={80}
+                              dataKey="value"
+                              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            >
+                              {Object.entries(ativosPorTipo)
+                                .filter(([_, valor]) => valor > 0)
+                                .map((_, index) => (
+                                  <Cell key={index} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'][index % 5]} />
+                                ))}
+                            </Pie>
+                            <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
+                          </RechartsPieChart>
+                        </ResponsiveContainer>
+                      </div>
                     ) : (
                       <div className="h-64 flex items-center justify-center text-muted-foreground">
                         Nenhum dado disponível
@@ -1394,40 +1403,42 @@ export default function CarteiraPage() {
                   </div>
 
                   {/* Distribuição por Ativo */}
-                  <div className="bg-card border border-border rounded-2xl p-6 shadow-xl">
+                  <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-xl">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 rounded-lg bg-primary/10">
+                      <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
                         <BarChart3 className="w-5 h-5 text-primary" />
                       </div>
-                      <h3 className="text-lg font-semibold text-foreground">Distribuição por Ativo</h3>
+                      <h3 className="text-base md:text-lg font-semibold text-foreground">Distribuição por Ativo</h3>
                     </div>
                     {carteira.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <RechartsPieChart>
-                          <Pie
-                            data={carteira
-                              .filter(ativo => ativo?.valor_total && ativo.valor_total > 0)
-                              .slice(0, 8)
-                              .map(ativo => ({
-                                name: getDisplayTicker(ativo?.ticker || ''),
-                                value: ativo?.valor_total || 0
-                              }))}
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={80}
-                            dataKey="value"
-                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                          >
-                            {carteira
-                              .filter(ativo => ativo?.valor_total && ativo.valor_total > 0)
-                              .slice(0, 8)
-                              .map((_, index) => (
-                                <Cell key={index} fill={['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'][index % 8]} />
-                              ))}
-                          </Pie>
-                          <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
-                        </RechartsPieChart>
-                      </ResponsiveContainer>
+                      <div className="h-64 sm:h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <RechartsPieChart>
+                            <Pie
+                              data={carteira
+                                .filter(ativo => ativo?.valor_total && ativo.valor_total > 0)
+                                .slice(0, 8)
+                                .map(ativo => ({
+                                  name: getDisplayTicker(ativo?.ticker || ''),
+                                  value: ativo?.valor_total || 0
+                                }))}
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={80}
+                              dataKey="value"
+                              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            >
+                              {carteira
+                                .filter(ativo => ativo?.valor_total && ativo.valor_total > 0)
+                                .slice(0, 8)
+                                .map((_, index) => (
+                                  <Cell key={index} fill={['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'][index % 8]} />
+                                ))}
+                            </Pie>
+                            <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
+                          </RechartsPieChart>
+                        </ResponsiveContainer>
+                      </div>
                     ) : (
                       <div className="h-64 flex items-center justify-center text-muted-foreground">
                         Nenhum ativo disponível
@@ -1437,41 +1448,46 @@ export default function CarteiraPage() {
                 </div>
 
                 {/* Gráficos de Barras */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
                   {/* Top 5 Maiores Posições */}
-                  <div className="bg-card border border-border rounded-2xl p-6 shadow-xl">
+                  <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-xl">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 rounded-lg bg-primary/10">
+                      <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
                         <Trophy className="w-5 h-5 text-primary" />
                       </div>
-                      <h3 className="text-lg font-semibold text-foreground">Top 5 Maiores Posições</h3>
+                      <h3 className="text-base md:text-lg font-semibold text-foreground">Top 5 Maiores Posições</h3>
                     </div>
                     {topAtivos.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={topAtivos}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis 
-                            dataKey="ticker" 
-                            stroke="hsl(var(--muted-foreground))"
-                            fontSize={12}
-                          />
-                          <YAxis 
-                            stroke="hsl(var(--muted-foreground))"
-                            fontSize={12}
-                            tickFormatter={(value) => formatCurrency(value).replace('R$ ', '')}
-                          />
-                          <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: 'hsl(var(--card))', 
-                              border: '1px solid hsl(var(--border))', 
-                              borderRadius: '8px',
-                              color: 'hsl(var(--foreground))'
-                            }}
-                            formatter={(value: any) => [formatCurrency(value), 'Valor Total']}
-                          />
-                          <Bar dataKey="valor_total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <div className="h-64 sm:h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={topAtivos}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis 
+                              dataKey="ticker" 
+                              stroke="hsl(var(--muted-foreground))"
+                              fontSize={10}
+                              angle={-45}
+                              textAnchor="end"
+                              height={60}
+                            />
+                            <YAxis 
+                              stroke="hsl(var(--muted-foreground))"
+                              fontSize={10}
+                              tickFormatter={(value) => formatCurrency(value).replace('R$ ', '')}
+                            />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'hsl(var(--card))', 
+                                border: '1px solid hsl(var(--border))', 
+                                borderRadius: '8px',
+                                color: 'hsl(var(--foreground))'
+                              }}
+                              formatter={(value: any) => [formatCurrency(value), 'Valor Total']}
+                            />
+                            <Bar dataKey="valor_total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     ) : (
                       <div className="h-64 flex items-center justify-center text-muted-foreground">
                         Nenhuma posição disponível
@@ -1479,43 +1495,45 @@ export default function CarteiraPage() {
                     )}
                   </div>
 
-                  {/* Posições Positivas vs Negativas */}
-                  <div className="bg-card border border-border rounded-2xl p-6 shadow-xl">
+                  {/* Top 10 Ativos por Valor */}
+                  <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-xl">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 rounded-lg bg-primary/10">
+                      <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
                         <Activity className="w-5 h-5 text-primary" />
                       </div>
-                      <h3 className="text-lg font-semibold text-foreground">Top 10 Ativos por Valor</h3>
+                      <h3 className="text-base md:text-lg font-semibold text-foreground">Top 10 Ativos por Valor</h3>
                     </div>
                     {carteira.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={carteira.slice(0, 10)}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis 
-                            dataKey="ticker" 
-                            stroke="hsl(var(--muted-foreground))"
-                            fontSize={12}
-                            angle={-45}
-                            textAnchor="end"
-                            height={80}
-                          />
-                          <YAxis 
-                            stroke="hsl(var(--muted-foreground))"
-                            fontSize={12}
-                            tickFormatter={(value) => formatCurrency(value).replace('R$ ', '')}
-                          />
-                          <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: 'hsl(var(--card))', 
-                              border: '1px solid hsl(var(--border))', 
-                              borderRadius: '8px',
-                              color: 'hsl(var(--foreground))'
-                            }}
-                            formatter={(value: any) => [formatCurrency(value), 'Valor Total']}
-                          />
-                          <Bar dataKey="valor_total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <div className="h-64 sm:h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={carteira.slice(0, 10)}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis 
+                              dataKey="ticker" 
+                              stroke="hsl(var(--muted-foreground))"
+                              fontSize={10}
+                              angle={-45}
+                              textAnchor="end"
+                              height={60}
+                            />
+                            <YAxis 
+                              stroke="hsl(var(--muted-foreground))"
+                              fontSize={10}
+                              tickFormatter={(value) => formatCurrency(value).replace('R$ ', '')}
+                            />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'hsl(var(--card))', 
+                                border: '1px solid hsl(var(--border))', 
+                                borderRadius: '8px',
+                                color: 'hsl(var(--foreground))'
+                              }}
+                              formatter={(value: any) => [formatCurrency(value), 'Valor Total']}
+                            />
+                            <Bar dataKey="valor_total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
                     ) : (
                       <div className="h-64 flex items-center justify-center text-muted-foreground">
                         Nenhum ativo disponível
@@ -1632,14 +1650,14 @@ export default function CarteiraPage() {
 
         {activeTab === 'proventos' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">💰 Proventos</h2>
-              <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h2 className="text-lg md:text-xl font-semibold">💰 Proventos</h2>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                 <label className="text-sm font-medium">Filtro por período:</label>
                 <select
                   value={filtroProventos}
                   onChange={(e) => setFiltroProventos(e.target.value as any)}
-                  className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
+                  className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm w-full sm:w-auto"
                   aria-label="Filtrar proventos por período"
                 >
                   <option value="mes">Mês atual</option>
@@ -1680,26 +1698,26 @@ export default function CarteiraPage() {
                   ) : proventos && proventos.length > 0 ? (
                     <div className="space-y-4">
                       {/* Resumo do histórico */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-primary">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6">
+                      <div className="text-center bg-muted/30 rounded-lg p-3 md:p-4">
+                        <div className="text-xl md:text-2xl font-bold text-primary">
                           {proventos.filter(p => p.proventos && p.proventos.length > 0).length}
                         </div>
-                        <div className="text-sm text-muted-foreground">Ativos com Proventos</div>
+                        <div className="text-xs md:text-sm text-muted-foreground">Ativos com Proventos</div>
                       </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-primary">
+                      <div className="text-center bg-muted/30 rounded-lg p-3 md:p-4">
+                        <div className="text-xl md:text-2xl font-bold text-primary">
                           {proventos.reduce((total, p) => total + (p.proventos?.length || 0), 0)}
                         </div>
-                        <div className="text-sm text-muted-foreground">Total de Proventos</div>
+                        <div className="text-xs md:text-sm text-muted-foreground">Total de Proventos</div>
                       </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-primary">
+                      <div className="text-center bg-muted/30 rounded-lg p-3 md:p-4 sm:col-span-2 lg:col-span-1">
+                        <div className="text-lg md:text-2xl font-bold text-primary">
                           {formatCurrency(proventos.reduce((total, p) => 
                             total + (p.proventos?.reduce((sum, prov) => sum + prov.valor, 0) || 0), 0
                           ))}
                         </div>
-                        <div className="text-sm text-muted-foreground">Valor Total</div>
+                        <div className="text-xs md:text-sm text-muted-foreground">Valor Total</div>
                       </div>
                     </div>
 
@@ -1707,54 +1725,76 @@ export default function CarteiraPage() {
                 <div className="space-y-4">
                         {proventos.map((ativo) => (
                           <div key={ativo.ticker} className="bg-background rounded-lg p-4 border border-border">
-                            <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
                           <TickerWithLogo ticker={ativo.ticker} nome={ativo.nome} size="md" />
                           {ativo.erro && (
-                            <span className="text-sm text-red-500 bg-red-100 px-2 py-1 rounded">
+                            <span className="text-xs sm:text-sm text-red-500 bg-red-100 px-2 py-1 rounded">
                               {ativo.erro}
                             </span>
                           )}
                         </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold">
+                        <div className="text-left sm:text-right">
+                          <div className="text-base sm:text-lg font-bold">
                             {formatCurrency(ativo.proventos?.reduce((sum, prov) => sum + prov.valor, 0) || 0)}
                           </div>
-                          <div className="text-sm text-muted-foreground">
+                          <div className="text-xs sm:text-sm text-muted-foreground">
                             {ativo.proventos?.length || 0} provento{ativo.proventos?.length !== 1 ? 's' : ''}
                           </div>
                         </div>
                       </div>
                       
                       {ativo.proventos && ativo.proventos.length > 0 ? (
-                         <div className="overflow-x-auto">
-                           <table className="w-full min-w-[600px]">
-                            <thead className="bg-muted/30">
-                              <tr>
-                                <th className="px-4 py-2 text-left font-medium">Data</th>
-                                <th className="px-4 py-2 text-left font-medium">Tipo</th>
-                                <th className="px-4 py-2 text-left font-medium">Valor (R$)</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {ativo.proventos.map((provento, index) => (
-                                <tr key={index} className="hover:bg-muted/40 transition-colors">
-                                  <td className="px-4 py-2">
-                                    {new Date(provento.data).toLocaleDateString('pt-BR')}
-                                  </td>
-                                  <td className="px-4 py-2">
-                                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
-                                      {provento.tipo}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-2 font-semibold">
-                                    {formatCurrency(provento.valor)}
-                                  </td>
+                         <>
+                           {/* Desktop Table View */}
+                           <div className="hidden md:block overflow-x-auto">
+                             <table className="w-full min-w-[600px]">
+                              <thead className="bg-muted/30">
+                                <tr>
+                                  <th className="px-4 py-2 text-left font-medium">Data</th>
+                                  <th className="px-4 py-2 text-left font-medium">Tipo</th>
+                                  <th className="px-4 py-2 text-left font-medium">Valor (R$)</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+                              </thead>
+                              <tbody>
+                                {ativo.proventos.map((provento, index) => (
+                                  <tr key={index} className="hover:bg-muted/40 transition-colors">
+                                    <td className="px-4 py-2">
+                                      {new Date(provento.data).toLocaleDateString('pt-BR')}
+                                    </td>
+                                    <td className="px-4 py-2">
+                                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                                        {provento.tipo}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 font-semibold">
+                                      {formatCurrency(provento.valor)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Mobile Card View */}
+                          <div className="md:hidden space-y-3">
+                            {ativo.proventos.map((provento, index) => (
+                              <div key={index} className="bg-muted/30 rounded-lg p-3 border border-border">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div className="text-sm font-medium">
+                                    {new Date(provento.data).toLocaleDateString('pt-BR')}
+                                  </div>
+                                  <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                                    {provento.tipo}
+                                  </span>
+                                </div>
+                                <div className="text-lg font-bold text-primary">
+                                  {formatCurrency(provento.valor)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
                       ) : !ativo.erro ? (
                         <div className="text-center text-muted-foreground py-4">
                                 Nenhum provento encontrado para este ativo no período selecionado.
@@ -1782,26 +1822,26 @@ export default function CarteiraPage() {
                                     ) : proventosRecebidos && proventosRecebidos.length > 0 ? (
                     <div className="space-y-6">
                       {/* Resumo de Proventos Recebidos */}
-                      <div className="bg-muted/30 rounded-lg p-6">
-                        <h3 className="text-lg font-semibold mb-4">Resumo de Proventos Recebidos</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="text-center">
-                            <div className="text-2xl font-bold text-primary">
+                      <div className="bg-muted/30 rounded-lg p-4 md:p-6">
+                        <h3 className="text-base md:text-lg font-semibold mb-4">Resumo de Proventos Recebidos</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                          <div className="text-center bg-background rounded-lg p-3 md:p-4">
+                            <div className="text-xl md:text-2xl font-bold text-primary">
                               {proventosRecebidos.length}
                             </div>
-                            <div className="text-sm text-muted-foreground">Ativos com Proventos</div>
+                            <div className="text-xs md:text-sm text-muted-foreground">Ativos com Proventos</div>
                           </div>
-                          <div className="text-center">
-                            <div className="text-2xl font-bold text-primary">
+                          <div className="text-center bg-background rounded-lg p-3 md:p-4">
+                            <div className="text-lg md:text-2xl font-bold text-primary">
                               {formatCurrency(proventosRecebidos.reduce((total, p) => total + p.total_recebido, 0))}
                             </div>
-                            <div className="text-sm text-muted-foreground">Valor Total Recebido</div>
+                            <div className="text-xs md:text-sm text-muted-foreground">Valor Total Recebido</div>
                           </div>
-                          <div className="text-center">
-                            <div className="text-2xl font-bold text-primary">
+                          <div className="text-center bg-background rounded-lg p-3 md:p-4 sm:col-span-2 lg:col-span-1">
+                            <div className="text-xl md:text-2xl font-bold text-primary">
                               {proventosRecebidos.reduce((total, p) => total + p.proventos_recebidos.length, 0)}
                             </div>
-                            <div className="text-sm text-muted-foreground">Total de Proventos</div>
+                            <div className="text-xs md:text-sm text-muted-foreground">Total de Proventos</div>
                           </div>
                         </div>
                       </div>
@@ -1809,60 +1849,91 @@ export default function CarteiraPage() {
                       {/* Lista de Proventos por Ativo */}
                       <div className="space-y-4">
                     {proventosRecebidos?.map((provento) => (
-                      <div key={provento.ticker} className="bg-muted/30 rounded-lg p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
+                      <div key={provento.ticker} className="bg-muted/30 rounded-lg p-4 md:p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
                             <TickerWithLogo ticker={provento.ticker} nome={provento.nome} size="md" />
-                            <div className="text-sm text-muted-foreground">
-                              {provento.quantidade_carteira} ações
+                            <div className="text-xs sm:text-sm text-muted-foreground">
+                              <div>{provento.quantidade_carteira} ações</div>
                               {provento.data_aquisicao && (
-                                <span className="ml-2 text-xs">
+                                <div className="text-xs">
                                   (Adquirido em {new Date(provento.data_aquisicao).toLocaleDateString('pt-BR')})
-                                </span>
+                                </div>
                               )}
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-lg font-bold">
+                          <div className="text-left sm:text-right">
+                            <div className="text-base sm:text-lg font-bold">
                               {formatCurrency(provento.total_recebido)}
                             </div>
-                            <div className="text-sm text-muted-foreground">
+                            <div className="text-xs sm:text-sm text-muted-foreground">
                               {provento.proventos_recebidos.length} provento{provento.proventos_recebidos.length !== 1 ? 's' : ''}
                             </div>
                           </div>
                         </div>
                         
                         {provento.proventos_recebidos && provento.proventos_recebidos.length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full min-w-[700px]">
-                              <thead className="bg-muted/30">
-                                <tr>
-                                  <th className="px-4 py-2 text-left font-medium">Data</th>
-                                  <th className="px-4 py-2 text-left font-medium">Valor Unitário</th>
-                                  <th className="px-4 py-2 text-left font-medium">Quantidade</th>
-                                  <th className="px-4 py-2 text-left font-medium">Valor Recebido</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {provento.proventos_recebidos.map((prov, index) => (
-                                  <tr key={index} className="hover:bg-muted/40 transition-colors">
-                                    <td className="px-4 py-2">
-                                      {new Date(prov.data).toLocaleDateString('pt-BR')}
-                                    </td>
-                                    <td className="px-4 py-2">
-                                      {formatCurrency(prov.valor_unitario)}
-                                    </td>
-                                    <td className="px-4 py-2">
-                                      {prov.quantidade}
-                                    </td>
-                                    <td className="px-4 py-2 font-semibold">
-                                      {formatCurrency(prov.valor_recebido)}
-                                    </td>
+                          <>
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block overflow-x-auto">
+                              <table className="w-full min-w-[700px]">
+                                <thead className="bg-muted/30">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium">Data</th>
+                                    <th className="px-4 py-2 text-left font-medium">Valor Unitário</th>
+                                    <th className="px-4 py-2 text-left font-medium">Quantidade</th>
+                                    <th className="px-4 py-2 text-left font-medium">Valor Recebido</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                                </thead>
+                                <tbody>
+                                  {provento.proventos_recebidos.map((prov, index) => (
+                                    <tr key={index} className="hover:bg-muted/40 transition-colors">
+                                      <td className="px-4 py-2">
+                                        {new Date(prov.data).toLocaleDateString('pt-BR')}
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        {formatCurrency(prov.valor_unitario)}
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        {prov.quantidade}
+                                      </td>
+                                      <td className="px-4 py-2 font-semibold">
+                                        {formatCurrency(prov.valor_recebido)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Mobile Card View */}
+                            <div className="md:hidden space-y-3">
+                              {provento.proventos_recebidos.map((prov, index) => (
+                                <div key={index} className="bg-background rounded-lg p-3 border border-border">
+                                  <div className="flex justify-between items-start mb-2">
+                                    <div className="text-sm font-medium">
+                                      {new Date(prov.data).toLocaleDateString('pt-BR')}
+                                    </div>
+                                    <div className="text-right">
+                                      <div className="text-sm text-muted-foreground">
+                                        {prov.quantidade} ações
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div>
+                                      <div className="text-xs text-muted-foreground">Valor Unitário</div>
+                                      <div className="font-medium">{formatCurrency(prov.valor_unitario)}</div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-muted-foreground">Valor Recebido</div>
+                                      <div className="font-bold text-primary">{formatCurrency(prov.valor_recebido)}</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
                         ) : (
                           <div className="text-center text-muted-foreground py-4">
                             Nenhum provento recebido para este ativo no período selecionado.
@@ -1873,10 +1944,10 @@ export default function CarteiraPage() {
                 </div>
 
                 {/* Gráfico de Proventos */}
-                <div className="bg-muted/30 rounded-lg p-6">
-                  <h3 className="text-lg font-semibold mb-4">Proventos por Mês</h3>
+                <div className="bg-muted/30 rounded-lg p-4 md:p-6">
+                  <h3 className="text-base md:text-lg font-semibold mb-4">Proventos por Mês</h3>
                         {dadosGraficoProventos.length > 0 ? (
-                          <div className="h-64">
+                          <div className="h-64 sm:h-80">
                             <ResponsiveContainer width="100%" height="100%">
                               <BarChart data={dadosGraficoProventos}>
                                 <CartesianGrid strokeDasharray="3 3" />
@@ -1886,9 +1957,14 @@ export default function CarteiraPage() {
                                     const [ano, mes] = value.split('-')
                                     return `${mes}/${ano.slice(2)}`
                                   }}
+                                  fontSize={10}
+                                  angle={-45}
+                                  textAnchor="end"
+                                  height={60}
                                 />
                                 <YAxis 
                                   tickFormatter={(value) => formatCurrency(value)}
+                                  fontSize={10}
                                 />
                                 <Tooltip 
                                   formatter={(value: number) => [formatCurrency(value), 'Valor Recebido']}
@@ -1896,8 +1972,14 @@ export default function CarteiraPage() {
                                     const [ano, mes] = label.split('-')
                                     return `${mes}/${ano}`
                                   }}
+                                  contentStyle={{ 
+                                    backgroundColor: 'hsl(var(--card))', 
+                                    border: '1px solid hsl(var(--border))', 
+                                    borderRadius: '8px',
+                                    color: 'hsl(var(--foreground))'
+                                  }}
                                 />
-                                <Bar dataKey="valor" fill="#10b981" />
+                                <Bar dataKey="valor" fill="#10b981" radius={[4, 4, 0, 0]} />
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
