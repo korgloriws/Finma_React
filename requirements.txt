@@ -1,0 +1,11 @@
+pandas
+yfinance
+Flask
+flask-cors
+flask-caching
+bcrypt
+gunicorn
+psycopg[binary]
+flask-compress
+cloudscraper
+reportlab
