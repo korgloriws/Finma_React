@@ -447,31 +447,31 @@ export default function CarteiraPage() {
     return (
       <div className="bg-card border border-border rounded-lg overflow-hidden shadow-lg mb-6">
         <div 
-          className="bg-gradient-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-border cursor-pointer hover:bg-primary/20 transition-colors"
+          className="bg-gradient-to-r from-primary/10 to-primary/5 px-4 md:px-6 py-4 border-b border-border cursor-pointer hover:bg-primary/20 transition-colors"
           onClick={() => setExpandedTipos(prev => ({ ...prev, [tipo]: !prev[tipo] }))}
         >
-      <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <button className="p-1 hover:bg-white/20 rounded transition-colors">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <button className="p-1 hover:bg-white/20 rounded transition-colors flex-shrink-0">
                 {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
               </button>
-              <Target className="w-5 h-5" />
-              <div>
-                <h3 className="text-lg font-semibold">{tipo}</h3>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <Target className="w-5 h-5 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h3 className="text-lg font-semibold truncate">{tipo}</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm text-muted-foreground">
                   <span>{ativosDoTipo.length} ativo{ativosDoTipo.length !== 1 ? 's' : ''}</span>
-                  <span>•</span>
+                  <span className="hidden sm:inline">•</span>
                   <span>{porcentagemTipo}% da carteira</span>
-                  <span>•</span>
-                  <span>Média DY: {ativosDoTipo.length > 0 ? 
+                  <span className="hidden sm:inline">•</span>
+                  <span className="text-xs sm:text-sm">Média DY: {ativosDoTipo.length > 0 ? 
                     formatDividendYield(ativosDoTipo.reduce((sum, ativo) => sum + (ativo?.dy || 0), 0) / ativosDoTipo.length) : 
                     'N/A'
                   }</span>
                 </div>
               </div>
             </div>
-            <div className="text-right flex items-center gap-3">
-              <div className="text-lg font-bold">{formatCurrency(totalTipo)}</div>
+            <div className="text-right flex items-center gap-2 md:gap-3 flex-shrink-0">
+              <div className="text-sm md:text-lg font-bold">{formatCurrency(totalTipo)}</div>
               {(() => {
                 const movs = movimentacoesAll || []
                 let somaValoresAtuais = 0
@@ -508,15 +508,15 @@ export default function CarteiraPage() {
                 }
                 const rendTipo = (somaValoresInvestidos > 0) ? ((somaValoresAtuais - somaValoresInvestidos) / somaValoresInvestidos) * 100 : null
                 return (
-                  <div className={`text-sm font-medium ${rendTipo != null ? (rendTipo >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-muted-foreground'}`}>
+                  <div className={`text-xs md:text-sm font-medium ${rendTipo != null ? (rendTipo >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-muted-foreground'}`}>
                     {rendTipo != null ? `${rendTipo.toFixed(2).replace('.', ',')}%` : '-'}
                   </div>
                 )
               })()}
-              <div className="text-sm text-muted-foreground">{porcentagemTipo}% do total</div>
+              <div className="hidden md:block text-sm text-muted-foreground">{porcentagemTipo}% do total</div>
               <button
                 onClick={(e)=>{ e.stopPropagation(); setManageTipoOpen({open: true, tipo}); setRenameTipoValue(tipo) }}
-                className="p-2 rounded hover:bg-white/20"
+                className="p-2 rounded hover:bg-white/20 flex-shrink-0"
                 title="Gerenciar tipo"
               >
                 <Settings size={18} />
@@ -532,7 +532,7 @@ export default function CarteiraPage() {
                       return copy
                     })
                   }}
-                  className="px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200"
+                  className="px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200 flex-shrink-0"
                   title="Remover seção (somente tipos sem ativos)"
                 >
                   Remover seção
@@ -545,169 +545,355 @@ export default function CarteiraPage() {
         {isExpanded && (
           <>
             {ativosDoTipo.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px]">
-                  <thead className="bg-muted/30">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-medium">Ticker</th>
-                      <th className="px-4 py-3 text-left font-medium">Nome</th>
-                      <th className="px-4 py-3 text-left font-medium">Quantidade</th>
-                      <th className="px-4 py-3 text-left font-medium">Preço Atual</th>
-                      <th className="px-4 py-3 text-left font-medium">Valor Total</th>
-                      <th className="px-4 py-3 text-left font-medium">Indexado</th>
-                      <th className="px-4 py-3 text-left font-medium">Rentab. Estimada</th>
-                      <th className="px-4 py-3 text-left font-medium">Preço Médio</th>
-                      <th className="px-4 py-3 text-left font-medium">Valorização</th>
-                      <th className="px-4 py-3 text-left font-medium">Rendimento do Ticket</th>
-                      <th className="px-4 py-3 text-left font-medium">% Carteira</th>
-                      <th className="px-4 py-3 text-left font-medium">DY</th>
-                      <th className="px-4 py-3 text-left font-medium">ROE</th>
-                      <th className="px-4 py-3 text-left font-medium">P/L</th>
-                      <th className="px-4 py-3 text-left font-medium">P/VP</th>
-                      <th className="px-4 py-3 text-left font-medium">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ativosDoTipo.map((ativo) => {
-                      const movsDoTicker = (movimentacoesAll || [])
-                        .filter(m => m.ticker?.toUpperCase?.() === (ativo?.ticker || '').toUpperCase())
-                        .sort((a, b) => String(a.data).localeCompare(String(b.data)))
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden lg:block overflow-x-auto">
+                  <table className="w-full min-w-[900px]">
+                    <thead className="bg-muted/30">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-medium">Ticker</th>
+                        <th className="px-4 py-3 text-left font-medium">Nome</th>
+                        <th className="px-4 py-3 text-left font-medium">Quantidade</th>
+                        <th className="px-4 py-3 text-left font-medium">Preço Atual</th>
+                        <th className="px-4 py-3 text-left font-medium">Valor Total</th>
+                        <th className="px-4 py-3 text-left font-medium">Indexado</th>
+                        <th className="px-4 py-3 text-left font-medium">Rentab. Estimada</th>
+                        <th className="px-4 py-3 text-left font-medium">Preço Médio</th>
+                        <th className="px-4 py-3 text-left font-medium">Valorização</th>
+                        <th className="px-4 py-3 text-left font-medium">Rendimento do Ticket</th>
+                        <th className="px-4 py-3 text-left font-medium">% Carteira</th>
+                        <th className="px-4 py-3 text-left font-medium">DY</th>
+                        <th className="px-4 py-3 text-left font-medium">ROE</th>
+                        <th className="px-4 py-3 text-left font-medium">P/L</th>
+                        <th className="px-4 py-3 text-left font-medium">P/VP</th>
+                        <th className="px-4 py-3 text-left font-medium">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ativosDoTipo.map((ativo) => {
+                        const movsDoTicker = (movimentacoesAll || [])
+                          .filter(m => m.ticker?.toUpperCase?.() === (ativo?.ticker || '').toUpperCase())
+                          .sort((a, b) => String(a.data).localeCompare(String(b.data)))
 
-                      type Lot = { qty: number; price: number; date: string }
-                      const lots: Lot[] = []
-                      for (const m of movsDoTicker) {
-                        const qty = Number(m.quantidade || 0)
-                        const price = Number(m.preco || 0)
-                        if (m.tipo === 'compra') {
-                          lots.push({ qty, price, date: m.data })
-                        } else if (m.tipo === 'venda') {
-                          let remaining = qty
-                          while (remaining > 0 && lots.length > 0) {
-                            const lot = lots[0]
-                            const consume = Math.min(lot.qty, remaining)
-                            lot.qty -= consume
-                            remaining -= consume
-                            if (lot.qty <= 0) lots.shift()
+                        type Lot = { qty: number; price: number; date: string }
+                        const lots: Lot[] = []
+                        for (const m of movsDoTicker) {
+                          const qty = Number(m.quantidade || 0)
+                          const price = Number(m.preco || 0)
+                          if (m.tipo === 'compra') {
+                            lots.push({ qty, price, date: m.data })
+                          } else if (m.tipo === 'venda') {
+                            let remaining = qty
+                            while (remaining > 0 && lots.length > 0) {
+                              const lot = lots[0]
+                              const consume = Math.min(lot.qty, remaining)
+                              lot.qty -= consume
+                              remaining -= consume
+                              if (lot.qty <= 0) lots.shift()
+                            }
+                            // Se vendeu mais do que possuía, ignorar excedente (sem posição short)
                           }
-                          // Se vendeu mais do que possuía, ignorar excedente (sem posição short)
+                        }
+                        const totalQtd = lots.reduce((s, l) => s + l.qty, 0)
+                        const totalValor = lots.reduce((s, l) => s + l.qty * l.price, 0)
+                        const precoMedio = totalQtd > 0 ? (totalValor / totalQtd) : null
+                        const rendimentoPct = (precoMedio != null && ativo?.preco_atual)
+                          ? ((ativo.preco_atual - precoMedio) / precoMedio) * 100
+                          : null
+                        const valorizacaoAbs = (precoMedio != null && ativo?.preco_atual && totalQtd > 0)
+                          ? (ativo.preco_atual - precoMedio) * totalQtd
+                          : null
+                        const porcentagemAtivo = valorTotal > 0 ? ((ativo?.valor_total || 0) / valorTotal * 100).toFixed(1) : '0.0'
+                        return (
+                          <tr key={ativo?.id} className="hover:bg-muted/40 transition-colors">
+                            <td className="px-4 py-3 min-w-[160px]">
+                              <TickerWithLogo ticker={ativo?.ticker || ''} nome={ativo?.nome_completo || ''} />
+                            </td>
+                            <td className="px-4 py-3">{ativo?.nome_completo}</td>
+                            <td className="px-4 py-3">
+                              {editingId === ativo?.id ? (
+                                <input
+                                  type="text"
+                                  value={editQuantidade}
+                                  onChange={(e) => setEditQuantidade(e.target.value)}
+                                  className="w-20 px-2 py-1 border border-border rounded bg-background text-foreground"
+                                  aria-label="Editar quantidade"
+                                  placeholder="Qtd"
+                                />
+                              ) : (
+                                ativo?.quantidade
+                              )}
+                            </td>
+                            <td className="px-4 py-3 font-semibold">{formatCurrency(ativo?.preco_atual)}</td>
+                            <td className="px-4 py-3 font-semibold">{formatCurrency(ativo?.valor_total)}</td>
+                            <td className="px-4 py-3 text-sm text-muted-foreground">
+                              {ativo?.indexador ? `${ativo.indexador} ${ativo.indexador_pct ? `${ativo.indexador_pct}%` : ''}` : '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              {(() => {
+                                const pct = (ativo?.indexador_pct || 0)
+                                const idx = (ativo?.indexador || '') as 'CDI'|'IPCA'|'SELIC'|''
+                                const getVal = (d:any) => {
+                                  if (!d) return null
+                                  const v = parseFloat(String(d.valor))
+                                  return isFinite(v) ? v : null
+                                }
+                                const raw = idx === 'CDI' ? getVal(indicadores?.cdi)
+                                  : idx === 'IPCA' ? getVal(indicadores?.ipca)
+                                  : idx === 'SELIC' ? getVal(indicadores?.selic)
+                                  : null
+                                if (!idx || raw == null || !pct) return '-'
+                
+                                const baseAnual = raw <= 2 ? ((Math.pow(1 + (raw/100), 12) - 1) * 100) : raw
+                                const anual = (pct/100) * baseAnual
+                                return `${anual.toFixed(2)}% a.m.`
+                              })()}
+                            </td>
+                            <td className="px-4 py-3 text-sm">{precoMedio != null ? formatCurrency(precoMedio) : '-'}</td>
+                            <td className={`px-4 py-3 text-sm font-medium ${valorizacaoAbs != null ? (valorizacaoAbs >= 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
+                              {valorizacaoAbs != null ? formatCurrency(valorizacaoAbs) : '-'}
+                            </td>
+                            <td className={`px-4 py-3 text-sm font-medium ${rendimentoPct != null ? (rendimentoPct >= 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
+                              {rendimentoPct != null ? `${rendimentoPct.toFixed(2).replace('.', ',')}%` : '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-muted-foreground">{porcentagemAtivo}%</td>
+                            <td className="px-4 py-3 text-green-600 font-medium">
+                              {formatDividendYield(ativo?.dy)}
+                            </td>
+                            <td className={`px-4 py-3 font-medium ${ativo?.roe && ativo.roe > 15 ? 'text-blue-600' : ''}`}>
+                              {formatPercentage(ativo?.roe ? ativo.roe * 100 : null)}
+                            </td>
+                            <td className="px-4 py-3">{formatNumber(ativo?.pl)}</td>
+                            <td className="px-4 py-3">{formatNumber(ativo?.pvp)}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex gap-2">
+                                {editingId === ativo?.id ? (
+                                  <>
+                                    <button
+                                      onClick={handleSalvarEdicao}
+                                      className="p-1 text-green-600 hover:text-green-700"
+                                      title="Salvar"
+                                    >
+                                      ✓
+                                    </button>
+                                    <button
+                                      onClick={handleCancelarEdicao}
+                                      className="p-1 text-gray-600 hover:text-gray-700"
+                                      title="Cancelar"
+                                    >
+                                      ✕
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => handleEditar(ativo?.id || 0, ativo?.quantidade || 0)}
+                                      className="p-1 text-blue-600 hover:text-blue-700"
+                                      title="Editar"
+                                    >
+                                      <Edit size={16} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleRemover(ativo?.id || 0)}
+                                      className="p-1 text-red-600 hover:text-red-700"
+                                      title="Remover"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="lg:hidden space-y-4 p-4">
+                  {ativosDoTipo.map((ativo) => {
+                    const movsDoTicker = (movimentacoesAll || [])
+                      .filter(m => m.ticker?.toUpperCase?.() === (ativo?.ticker || '').toUpperCase())
+                      .sort((a, b) => String(a.data).localeCompare(String(b.data)))
+
+                    type Lot = { qty: number; price: number; date: string }
+                    const lots: Lot[] = []
+                    for (const m of movsDoTicker) {
+                      const qty = Number(m.quantidade || 0)
+                      const price = Number(m.preco || 0)
+                      if (m.tipo === 'compra') {
+                        lots.push({ qty, price, date: m.data })
+                      } else if (m.tipo === 'venda') {
+                        let remaining = qty
+                        while (remaining > 0 && lots.length > 0) {
+                          const lot = lots[0]
+                          const consume = Math.min(lot.qty, remaining)
+                          lot.qty -= consume
+                          remaining -= consume
+                          if (lot.qty <= 0) lots.shift()
                         }
                       }
-                      const totalQtd = lots.reduce((s, l) => s + l.qty, 0)
-                      const totalValor = lots.reduce((s, l) => s + l.qty * l.price, 0)
-                      const precoMedio = totalQtd > 0 ? (totalValor / totalQtd) : null
-                      const rendimentoPct = (precoMedio != null && ativo?.preco_atual)
-                        ? ((ativo.preco_atual - precoMedio) / precoMedio) * 100
-                        : null
-                      const valorizacaoAbs = (precoMedio != null && ativo?.preco_atual && totalQtd > 0)
-                        ? (ativo.preco_atual - precoMedio) * totalQtd
-                        : null
-                      const porcentagemAtivo = valorTotal > 0 ? ((ativo?.valor_total || 0) / valorTotal * 100).toFixed(1) : '0.0'
-                      return (
-                        <tr key={ativo?.id} className="hover:bg-muted/40 transition-colors">
-                          <td className="px-4 py-3 min-w-[160px]">
+                    }
+                    const totalQtd = lots.reduce((s, l) => s + l.qty, 0)
+                    const totalValor = lots.reduce((s, l) => s + l.qty * l.price, 0)
+                    const precoMedio = totalQtd > 0 ? (totalValor / totalQtd) : null
+                    const rendimentoPct = (precoMedio != null && ativo?.preco_atual)
+                      ? ((ativo.preco_atual - precoMedio) / precoMedio) * 100
+                      : null
+                    const valorizacaoAbs = (precoMedio != null && ativo?.preco_atual && totalQtd > 0)
+                      ? (ativo.preco_atual - precoMedio) * totalQtd
+                      : null
+                    const porcentagemAtivo = valorTotal > 0 ? ((ativo?.valor_total || 0) / valorTotal * 100).toFixed(1) : '0.0'
+                    
+                    return (
+                      <div key={ativo?.id} className="bg-background border border-border rounded-lg p-4 space-y-3">
+                        {/* Header com Ticker e Ações */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
                             <TickerWithLogo ticker={ativo?.ticker || ''} nome={ativo?.nome_completo || ''} />
-                          </td>
-                          <td className="px-4 py-3">{ativo?.nome_completo}</td>
-                          <td className="px-4 py-3">
+                          </div>
+                          <div className="flex gap-2 ml-3">
                             {editingId === ativo?.id ? (
-                              <input
-                                type="text"
-                                value={editQuantidade}
-                                onChange={(e) => setEditQuantidade(e.target.value)}
-                                className="w-20 px-2 py-1 border border-border rounded bg-background text-foreground"
-                                aria-label="Editar quantidade"
-                                placeholder="Qtd"
-                              />
+                              <>
+                                <button
+                                  onClick={handleSalvarEdicao}
+                                  className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded"
+                                  title="Salvar"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  onClick={handleCancelarEdicao}
+                                  className="p-2 text-gray-600 hover:text-gray-700 hover:bg-gray-50 rounded"
+                                  title="Cancelar"
+                                >
+                                  ✕
+                                </button>
+                              </>
                             ) : (
-                              ativo?.quantidade
+                              <>
+                                <button
+                                  onClick={() => handleEditar(ativo?.id || 0, ativo?.quantidade || 0)}
+                                  className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
+                                  title="Editar"
+                                >
+                                  <Edit size={18} />
+                                </button>
+                                <button
+                                  onClick={() => handleRemover(ativo?.id || 0)}
+                                  className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
+                                  title="Remover"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </>
                             )}
-                          </td>
-                          <td className="px-4 py-3 font-semibold">{formatCurrency(ativo?.preco_atual)}</td>
-                          <td className="px-4 py-3 font-semibold">{formatCurrency(ativo?.valor_total)}</td>
-                          <td className="px-4 py-3 text-sm text-muted-foreground">
-                            {ativo?.indexador ? `${ativo.indexador} ${ativo.indexador_pct ? `${ativo.indexador_pct}%` : ''}` : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-sm">
-                            {(() => {
-                              const pct = (ativo?.indexador_pct || 0)
-                              const idx = (ativo?.indexador || '') as 'CDI'|'IPCA'|'SELIC'|''
-                              const getVal = (d:any) => {
-                                if (!d) return null
-                                const v = parseFloat(String(d.valor))
-                                return isFinite(v) ? v : null
-                              }
-                              const raw = idx === 'CDI' ? getVal(indicadores?.cdi)
-                                : idx === 'IPCA' ? getVal(indicadores?.ipca)
-                                : idx === 'SELIC' ? getVal(indicadores?.selic)
-                                : null
-                              if (!idx || raw == null || !pct) return '-'
-              
-                              const baseAnual = raw <= 2 ? ((Math.pow(1 + (raw/100), 12) - 1) * 100) : raw
-                              const anual = (pct/100) * baseAnual
-                              return `${anual.toFixed(2)}% a.m.`
-                            })()}
-                          </td>
-                          <td className="px-4 py-3 text-sm">{precoMedio != null ? formatCurrency(precoMedio) : '-'}</td>
-                          <td className={`px-4 py-3 text-sm font-medium ${valorizacaoAbs != null ? (valorizacaoAbs >= 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
-                            {valorizacaoAbs != null ? formatCurrency(valorizacaoAbs) : '-'}
-                          </td>
-                          <td className={`px-4 py-3 text-sm font-medium ${rendimentoPct != null ? (rendimentoPct >= 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
-                            {rendimentoPct != null ? `${rendimentoPct.toFixed(2).replace('.', ',')}%` : '-'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-muted-foreground">{porcentagemAtivo}%</td>
-                          <td className="px-4 py-3 text-green-600 font-medium">
-                            {formatDividendYield(ativo?.dy)}
-                          </td>
-                          <td className={`px-4 py-3 font-medium ${ativo?.roe && ativo.roe > 15 ? 'text-blue-600' : ''}`}>
-                            {formatPercentage(ativo?.roe ? ativo.roe * 100 : null)}
-                          </td>
-                          <td className="px-4 py-3">{formatNumber(ativo?.pl)}</td>
-                          <td className="px-4 py-3">{formatNumber(ativo?.pvp)}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-2">
+                          </div>
+                        </div>
+
+                        {/* Nome do Ativo */}
+                        <div className="text-sm text-muted-foreground truncate">
+                          {ativo?.nome_completo}
+                        </div>
+
+                        {/* Grid de Informações Principais */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-muted-foreground">Quantidade</span>
                               {editingId === ativo?.id ? (
-                                <>
-                                  <button
-                                    onClick={handleSalvarEdicao}
-                                    className="p-1 text-green-600 hover:text-green-700"
-                                    title="Salvar"
-                                  >
-                                    ✓
-                                  </button>
-                                  <button
-                                    onClick={handleCancelarEdicao}
-                                    className="p-1 text-gray-600 hover:text-gray-700"
-                                    title="Cancelar"
-                                  >
-                                    ✕
-                                  </button>
-                                </>
+                                <input
+                                  type="text"
+                                  value={editQuantidade}
+                                  onChange={(e) => setEditQuantidade(e.target.value)}
+                                  className="w-20 px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
+                                  aria-label="Editar quantidade"
+                                  placeholder="Qtd"
+                                />
                               ) : (
-                                <>
-                                  <button
-                                    onClick={() => handleEditar(ativo?.id || 0, ativo?.quantidade || 0)}
-                                    className="p-1 text-blue-600 hover:text-blue-700"
-                                    title="Editar"
-                                  >
-                                    <Edit size={16} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleRemover(ativo?.id || 0)}
-                                    className="p-1 text-red-600 hover:text-red-700"
-                                    title="Remover"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                </>
+                                <span className="text-sm font-medium">{ativo?.quantidade}</span>
                               )}
                             </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-muted-foreground">Preço Atual</span>
+                              <span className="text-sm font-semibold">{formatCurrency(ativo?.preco_atual)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-muted-foreground">Valor Total</span>
+                              <span className="text-sm font-semibold text-primary">{formatCurrency(ativo?.valor_total)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-muted-foreground">% Carteira</span>
+                              <span className="text-sm text-muted-foreground">{porcentagemAtivo}%</span>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-muted-foreground">DY</span>
+                              <span className="text-sm text-green-600 font-medium">
+                                {formatDividendYield(ativo?.dy)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-muted-foreground">P/L</span>
+                              <span className="text-sm">{formatNumber(ativo?.pl)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-muted-foreground">P/VP</span>
+                              <span className="text-sm">{formatNumber(ativo?.pvp)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-muted-foreground">ROE</span>
+                              <span className={`text-sm font-medium ${ativo?.roe && ativo.roe > 15 ? 'text-blue-600' : ''}`}>
+                                {formatPercentage(ativo?.roe ? ativo.roe * 100 : null)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Informações Adicionais (se houver) */}
+                        {(ativo?.indexador || precoMedio != null || valorizacaoAbs != null || rendimentoPct != null) && (
+                          <div className="pt-3 border-t border-border">
+                            <div className="grid grid-cols-1 gap-2 text-xs">
+                              {ativo?.indexador && (
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Indexado</span>
+                                  <span>{ativo.indexador} {ativo.indexador_pct ? `${ativo.indexador_pct}%` : ''}</span>
+                                </div>
+                              )}
+                              {precoMedio != null && (
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Preço Médio</span>
+                                  <span>{formatCurrency(precoMedio)}</span>
+                                </div>
+                              )}
+                              {valorizacaoAbs != null && (
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Valorização</span>
+                                  <span className={`font-medium ${valorizacaoAbs >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {formatCurrency(valorizacaoAbs)}
+                                  </span>
+                                </div>
+                              )}
+                              {rendimentoPct != null && (
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Rendimento</span>
+                                  <span className={`font-medium ${rendimentoPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {rendimentoPct.toFixed(2).replace('.', ',')}%
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
             ) : (
               <div className="p-6 text-center text-muted-foreground">
                 Nenhum ativo do tipo {tipo} na carteira.
@@ -879,67 +1065,74 @@ export default function CarteiraPage() {
         {activeTab === 'ativos' && (
           <div className="space-y-6">
             {/* Formulário de Adição */}
-            <div className="bg-muted/30 rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <div className="bg-muted/30 rounded-lg p-4 md:p-6">
+              <h2 className="text-lg md:text-xl font-semibold mb-4 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-green-500" />
                 Adicionar Ativo
               </h2>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Ticker</label>
-                  <input
-                    type="text"
-                    value={inputTicker}
-                    onChange={(e) => setInputTicker(e.target.value)}
-                    placeholder="Ex: PETR4, AAPL, VISC11"
-                    className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-2">Quantidade</label>
-                  <input
-                    type="text"
-                    value={inputQuantidade}
-                    onChange={(e) => setInputQuantidade(e.target.value)}
-                    placeholder="Ex: 100 ou 0,0012"
-                    className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-2">Tipo</label>
-                  <input
-                    list="tipos-ativos"
-                    value={inputTipo}
-                    onChange={(e) => setInputTipo(e.target.value)}
-                    placeholder="Ex.: Ação, FII, Criptomoeda, ..."
-                    className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    aria-label="Selecionar ou digitar tipo de ativo"
-                  />
-                  <datalist id="tipos-ativos">
-                    {(tiposDisponiveisComputed || []).map(t => (
-                      <option key={t} value={t} />
-                    ))}
-                  </datalist>
+              <div className="space-y-4">
+                {/* Primeira linha - Ticker e Quantidade */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Ticker</label>
+                    <input
+                      type="text"
+                      value={inputTicker}
+                      onChange={(e) => setInputTicker(e.target.value)}
+                      placeholder="Ex: PETR4, AAPL, VISC11"
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
                   
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Quantidade</label>
+                    <input
+                      type="text"
+                      value={inputQuantidade}
+                      onChange={(e) => setInputQuantidade(e.target.value)}
+                      placeholder="Ex: 100 ou 0,0012"
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium mb-2">Preço (opcional)</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="Ex: 10,50 (se vazio tenta buscar)"
-                    className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    value={inputPreco}
-                    onChange={(e)=>setInputPreco(e.target.value)}
-                  />
+
+                {/* Segunda linha - Tipo e Preço */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Tipo</label>
+                    <input
+                      list="tipos-ativos"
+                      value={inputTipo}
+                      onChange={(e) => setInputTipo(e.target.value)}
+                      placeholder="Ex.: Ação, FII, Criptomoeda, ..."
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      aria-label="Selecionar ou digitar tipo de ativo"
+                    />
+                    <datalist id="tipos-ativos">
+                      {(tiposDisponiveisComputed || []).map(t => (
+                        <option key={t} value={t} />
+                      ))}
+                    </datalist>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Preço (opcional)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Ex: 10,50 (se vazio tenta buscar)"
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      value={inputPreco}
+                      onChange={(e)=>setInputPreco(e.target.value)}
+                    />
+                  </div>
                 </div>
+
+                {/* Terceira linha - Indexador */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Indexador (opcional)</label>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <select
                       value={inputIndexador}
                       onChange={(e)=>setInputIndexador(e.target.value as any)}
@@ -959,50 +1152,47 @@ export default function CarteiraPage() {
                       value={inputIndexadorPct}
                       onChange={(e)=>setInputIndexadorPct(e.target.value)}
                     />
+                    <button
+                      onClick={handleAdicionar}
+                      disabled={adicionarMutation.isPending}
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {adicionarMutation.isPending ? 'Adicionando...' : 'Adicionar'}
+                    </button>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">Use N% do CDI/IPCA/SELIC. Ex.: 110 = 110%.</p>
-                </div>
-                
-                <div className="flex items-end">
-                  <button
-                    onClick={handleAdicionar}
-                    disabled={adicionarMutation.isPending}
-                    className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 whitespace-nowrap"
-                  >
-                    {adicionarMutation.isPending ? 'Adicionando...' : 'Adicionar'}
-                  </button>
                 </div>
               </div>
             </div>
 
             {/* Resumo da Carteira */}
             {!loadingCarteira && carteira && carteira.length > 0 && (
-              <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-border rounded-lg p-6 mb-6">
+              <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-border rounded-lg p-4 md:p-6 mb-6">
                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 text-primary" />
                   Resumo da Carteira
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-card border border-border rounded-lg p-4">
-                    <div className="text-sm text-muted-foreground">Total de Ativos</div>
-                    <div className="text-2xl font-bold text-primary">{carteira.length}</div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  <div className="bg-card border border-border rounded-lg p-3 md:p-4">
+                    <div className="text-xs md:text-sm text-muted-foreground">Total de Ativos</div>
+                    <div className="text-xl md:text-2xl font-bold text-primary">{carteira.length}</div>
                   </div>
-                  <div className="bg-card border border-border rounded-lg p-4">
-                    <div className="text-sm text-muted-foreground">Tipos de Ativos</div>
-                    <div className="text-2xl font-bold text-primary">{Object.keys(ativosPorTipo).length}</div>
+                  <div className="bg-card border border-border rounded-lg p-3 md:p-4">
+                    <div className="text-xs md:text-sm text-muted-foreground">Tipos de Ativos</div>
+                    <div className="text-xl md:text-2xl font-bold text-primary">{Object.keys(ativosPorTipo).length}</div>
                   </div>
-                  <div className="bg-card border border-border rounded-lg p-4">
-                    <div className="text-sm text-muted-foreground">Média DY</div>
-                    <div className="text-2xl font-bold text-primary">
+                  <div className="bg-card border border-border rounded-lg p-3 md:p-4">
+                    <div className="text-xs md:text-sm text-muted-foreground">Média DY</div>
+                    <div className="text-lg md:text-2xl font-bold text-primary">
                       {formatDividendYield(carteira.reduce((sum, ativo) => sum + (ativo?.dy || 0), 0) / carteira.length)}
                     </div>
                   </div>
-                  <div className="bg-card border border-border rounded-lg p-4">
-                    <div className="text-sm text-muted-foreground">Maior Posição</div>
-                    <div className="text-lg font-bold text-primary">
+                  <div className="bg-card border border-border rounded-lg p-3 md:p-4">
+                    <div className="text-xs md:text-sm text-muted-foreground">Maior Posição</div>
+                    <div className="text-sm md:text-lg font-bold text-primary">
                       {topAtivos[0]?.ticker || 'N/A'}
                     </div>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-xs md:text-sm text-muted-foreground">
                       {formatCurrency(topAtivos[0]?.valor_total || 0)}
                     </div>
                   </div>
