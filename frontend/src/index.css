@@ -28,6 +28,14 @@
   .progress-bar-90 { width: 90%; }
   .progress-bar-95 { width: 95%; }
   .progress-bar-100 { width: 100%; }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer base {

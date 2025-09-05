@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ativoService } from '../services/api'
 import { formatNumber, formatPercentage } from '../utils/formatters'
-import { ExternalLink, TrendingUp,  BarChart3, Search, BookOpen, Target, AlertCircle, PieChart, Building2, Globe, MapPin, ArrowUpRight, Shield, Calculator } from 'lucide-react'
+import { ExternalLink, TrendingUp,  BarChart3, BookOpen, Target, AlertCircle, PieChart, Building2, Globe, MapPin, ArrowUpRight, Shield, Calculator } from 'lucide-react'
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,  Legend } from 'recharts'
 
 type Strategy = {
@@ -1641,74 +1641,84 @@ export default function GuiaMercadoPage() {
             <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto">
               Conhecimento completo para investir com confiança. Estratégias, indicadores e análise de ativos.
             </p>
+          </div>
         </div>
-      </div>
 
               {/* Sistema de Abas com Design Moderno */}
-        <div className="bg-card border border-border rounded-2xl p-6 shadow-xl">
-          <div className="flex flex-wrap gap-2 mb-6">
-            <div className="flex items-center justify-between w-full">
-              <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setActiveTab('geral')}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  activeTab === 'geral'
-                        ? 'bg-primary text-primary-foreground shadow-lg'
-                        : 'bg-muted text-muted-foreground hover:bg-accent hover:shadow-md'
-                }`}
-              >
-                Guia Geral
-              </button>
-              <button
-                onClick={() => setActiveTab('renda-fixa')}
-                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  activeTab === 'renda-fixa'
-                        ? 'bg-primary text-primary-foreground shadow-lg'
-                        : 'bg-muted text-muted-foreground hover:bg-accent hover:shadow-md'
-                }`}
-              >
-                Renda Fixa
-              </button>
-                  <button
-                    onClick={() => setActiveTab('renda-variavel')}
-                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                      activeTab === 'renda-variavel'
-                        ? 'bg-primary text-primary-foreground shadow-lg'
-                        : 'bg-muted text-muted-foreground hover:bg-accent hover:shadow-md'
-                    }`}
-                  >
-                    Renda Variável
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('renda-variavel-internacional')}
-                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                      activeTab === 'renda-variavel-internacional'
-                        ? 'bg-primary text-primary-foreground shadow-lg'
-                        : 'bg-muted text-muted-foreground hover:bg-accent hover:shadow-md'
-                    }`}
-                  >
-                    Renda Variável Internacional
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('renda-fixa-internacional')}
-                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                      activeTab === 'renda-fixa-internacional'
-                        ? 'bg-primary text-primary-foreground shadow-lg'
-                        : 'bg-muted text-muted-foreground hover:bg-accent hover:shadow-md'
-                    }`}
-                  >
-                    Renda Fixa Internacional
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                    <input type="checkbox" checked={showMarketNotes} onChange={(e) => setShowMarketNotes(e.target.checked)} />
-                    Mostrar notas de mercado (não-técnicas)
-                  </label>
-                </div>
+        <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-xl">
+          <div className="space-y-4 mb-6">
+            {/* Menu de Navegação Responsivo */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex overflow-x-auto scrollbar-hide gap-2 pb-2 sm:pb-0">
+                <button
+                  onClick={() => setActiveTab('geral')}
+                  className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+                    activeTab === 'geral'
+                      ? 'bg-primary text-primary-foreground shadow-lg'
+                      : 'bg-muted text-muted-foreground hover:bg-accent hover:shadow-md'
+                  }`}
+                >
+                  Guia Geral
+                </button>
+                <button
+                  onClick={() => setActiveTab('renda-fixa')}
+                  className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+                    activeTab === 'renda-fixa'
+                      ? 'bg-primary text-primary-foreground shadow-lg'
+                      : 'bg-muted text-muted-foreground hover:bg-accent hover:shadow-md'
+                  }`}
+                >
+                  Renda Fixa
+                </button>
+                <button
+                  onClick={() => setActiveTab('renda-variavel')}
+                  className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+                    activeTab === 'renda-variavel'
+                      ? 'bg-primary text-primary-foreground shadow-lg'
+                      : 'bg-muted text-muted-foreground hover:bg-accent hover:shadow-md'
+                  }`}
+                >
+                  Renda Variável
+                </button>
+                <button
+                  onClick={() => setActiveTab('renda-variavel-internacional')}
+                  className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+                    activeTab === 'renda-variavel-internacional'
+                      ? 'bg-primary text-primary-foreground shadow-lg'
+                      : 'bg-muted text-muted-foreground hover:bg-accent hover:shadow-md'
+                  }`}
+                >
+                  <span className="hidden xs:inline">Renda Variável Internacional</span>
+                  <span className="xs:hidden">RV Internacional</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('renda-fixa-internacional')}
+                  className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+                    activeTab === 'renda-fixa-internacional'
+                      ? 'bg-primary text-primary-foreground shadow-lg'
+                      : 'bg-muted text-muted-foreground hover:bg-accent hover:shadow-md'
+                  }`}
+                >
+                  <span className="hidden xs:inline">Renda Fixa Internacional</span>
+                  <span className="xs:hidden">RF Internacional</span>
+                </button>
+              </div>
+              
+              {/* Checkbox de Notas de Mercado */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                  <input 
+                    type="checkbox" 
+                    checked={showMarketNotes} 
+                    onChange={(e) => setShowMarketNotes(e.target.checked)}
+                    className="rounded border-border"
+                  />
+                  <span className="hidden sm:inline">Mostrar notas de mercado (não-técnicas)</span>
+                  <span className="sm:hidden">Notas de mercado</span>
+                </label>
               </div>
             </div>
-            </div>
+          </div>
 
                     {/* Conteúdo das Abas */}
           <div className="space-y-8">
@@ -3077,6 +3087,7 @@ export default function GuiaMercadoPage() {
               </div>
             )}
           </div>
+        </div>
       </div>
     </div>
   )

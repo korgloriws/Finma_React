@@ -587,16 +587,16 @@ export default function HomePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay }}
-        className="bg-card border border-border rounded-2xl p-6 shadow-xl"
+        className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-xl"
       >
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Activity className="w-6 h-6 text-primary" />
+        <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+          <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 flex-shrink-0">
+            <Activity className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
           </div>
-          <h2 className="text-xl font-semibold text-foreground">Status do Sistema</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-foreground">Status do Sistema</h2>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {sortedItems.map((item, index) => {
             const Icon = item.icon
             
@@ -606,7 +606,7 @@ export default function HomePage() {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: delay + index * 0.1 }}
-                className={`p-4 rounded-xl border transition-all ${
+                className={`p-3 sm:p-4 rounded-xl border transition-all ${
                   item.priority === 'high' 
                     ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' 
                     : item.priority === 'medium'
@@ -614,17 +614,17 @@ export default function HomePage() {
                     : 'bg-muted/30 border-border'
                 }`}
               >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`p-2 rounded-lg ${item.bgColor}`}>
-                    <Icon className={`w-4 h-4 ${item.color}`} />
+                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                  <div className={`p-1.5 sm:p-2 rounded-lg ${item.bgColor} flex-shrink-0`}>
+                    <Icon className={`w-3 h-3 sm:w-4 sm:h-4 ${item.color}`} />
                   </div>
-                  <span className="text-sm font-medium text-muted-foreground">
+                  <span className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
                     {item.title}
                   </span>
                 </div>
                 
                 <div className="space-y-1">
-                  <p className="text-2xl font-bold text-foreground">
+                  <p className="text-lg sm:text-xl lg:text-2xl font-bold text-foreground">
                     {item.value}{item.suffix || ''}
                   </p>
                   {item.total && (
@@ -633,7 +633,7 @@ export default function HomePage() {
                     </p>
                   )}
                   {item.description && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground leading-tight">
                       {item.description}
                     </p>
                   )}
@@ -643,17 +643,18 @@ export default function HomePage() {
           })}
         </div>
 
-        <div className="mt-6 pt-4 border-t border-border">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+        <div className="mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-border">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               Última atualização: {new Date().toLocaleTimeString('pt-BR')}
             </p>
             <Link 
               to="/carteira" 
-              className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
+              className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-primary hover:text-primary/80 transition-colors"
             >
-              Ver Carteira Completa
-              <ChevronRight className="w-4 h-4" />
+              <span className="hidden xs:inline">Ver Carteira Completa</span>
+              <span className="xs:hidden">Ver Carteira</span>
+              <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
             </Link>
           </div>
         </div>
@@ -944,6 +945,23 @@ export default function HomePage() {
 
   // Componente Oportunidades de Rebalanceamento
   const OportunidadesRebalanceamentoCard = ({ delay = 0 }: { delay?: number }) => {
+    // Buscar configuração de rebalanceamento real
+    const { data: rbConfig } = useQuery({
+      queryKey: ['rebalance-config', user],
+      queryFn: carteiraService.getRebalanceConfig,
+      enabled: !!user,
+      refetchOnWindowFocus: false,
+      staleTime: 60_000,
+    })
+
+    const { data: rbStatus } = useQuery({
+      queryKey: ['rebalance-status', user],
+      queryFn: carteiraService.getRebalanceStatus,
+      enabled: !!user,
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    })
+
     // Calcular alocação atual vs ideal
     const alocacaoAtual = useMemo(() => {
       if (!carteira || carteira.length === 0) return {}
@@ -955,45 +973,105 @@ export default function HomePage() {
       }, {})
     }, [carteira])
 
-    // Alocação ideal (simplificada - pode ser configurável)
-    const alocacaoIdeal: Record<string, number> = {
-      'Ações': 60,
-      'Fundos Imobiliários': 20,
-      'Renda Fixa': 15,
-      'Internacional': 5
-    }
+    // Usar configuração real do usuário ou padrão
+    const alocacaoIdeal = useMemo(() => {
+      const configTargets = (rbConfig as any)?.targets || {}
+      if (Object.keys(configTargets).length > 0) {
+        return configTargets
+      }
+      
+      // Fallback para alocação padrão se não houver configuração
+      return {
+        'Ações': 60,
+        'Fundos Imobiliários': 20,
+        'Renda Fixa': 15,
+        'Internacional': 5
+      }
+    }, [rbConfig])
 
     // Identificar oportunidades de rebalanceamento
-    const oportunidades = Object.entries(alocacaoAtual).map(([tipo, valor]) => {
-      const percentualAtual = totalInvestido > 0 ? (valor / totalInvestido) * 100 : 0
-      const percentualIdeal = alocacaoIdeal[tipo] || 0
-      const diferenca = percentualAtual - percentualIdeal
+    const oportunidades = useMemo(() => {
+      return Object.entries(alocacaoAtual).map(([tipo, valor]) => {
+        const percentualAtual = totalInvestido > 0 ? (valor / totalInvestido) * 100 : 0
+        const percentualIdeal = alocacaoIdeal[tipo] || 0
+        const diferenca = percentualAtual - percentualIdeal
+        
+        return {
+          tipo,
+          atual: percentualAtual,
+          ideal: percentualIdeal,
+          diferenca,
+          acao: diferenca > 5 ? 'Reduzir' : diferenca < -5 ? 'Aumentar' : 'Manter',
+          valorAtual: valor,
+          valorIdeal: totalInvestido * (percentualIdeal / 100)
+        }
+      }).filter(op => Math.abs(op.diferenca) > 5) // Só mostrar diferenças significativas
+    }, [alocacaoAtual, alocacaoIdeal, totalInvestido])
+
+    // Status do rebalanceamento
+    const statusInfo = useMemo(() => {
+      if (!rbStatus) return null
+      
+      const canRebalance = rbStatus.can_rebalance
+      const nextDue = rbStatus.next_due_date
+      const daysUntilNext = rbStatus.days_until_next || 0
+      const periodo = (rbConfig as any)?.periodo || 'mensal'
       
       return {
-        tipo,
-        atual: percentualAtual,
-        ideal: percentualIdeal,
-        diferenca,
-        acao: diferenca > 5 ? 'Reduzir' : diferenca < -5 ? 'Aumentar' : 'Manter'
+        canRebalance,
+        nextDue,
+        daysUntilNext,
+        periodo
       }
-    }).filter(op => Math.abs(op.diferenca) > 5) // Só mostrar diferenças significativas
+    }, [rbStatus, rbConfig])
 
     return (
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay }}
-        className="bg-card border border-border rounded-2xl p-6 shadow-xl"
+        className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-xl"
       >
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <PieChart className="w-6 h-6 text-primary" />
+        <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+          <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 flex-shrink-0">
+            <PieChart className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground">Rebalanceamento</h3>
+          <h3 className="text-lg sm:text-xl font-semibold text-foreground">Rebalanceamento</h3>
         </div>
 
+        {/* Status do Rebalanceamento */}
+        {statusInfo && (
+          <div className={`p-3 rounded-lg border mb-4 ${
+            statusInfo.canRebalance 
+              ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+              : 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800'
+          }`}>
+            <div className="flex items-center gap-2 mb-1">
+              {statusInfo.canRebalance ? (
+                <CheckCircle className="w-4 h-4 text-green-600" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-orange-600" />
+              )}
+              <span className={`text-sm font-medium ${
+                statusInfo.canRebalance ? 'text-green-800 dark:text-green-200' : 'text-orange-800 dark:text-orange-200'
+              }`}>
+                {statusInfo.canRebalance ? 'Pronto para Rebalancear' : 'Aguardando Período'}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Período: {statusInfo.periodo} • 
+              {statusInfo.canRebalance 
+                ? ' Pode rebalancear agora'
+                : ` Próximo em ${statusInfo.daysUntilNext} dias`
+              }
+            </p>
+          </div>
+        )}
+
+        {/* Oportunidades de Rebalanceamento */}
         {oportunidades.length > 0 ? (
           <div className="space-y-3">
+            <h4 className="text-sm font-medium text-muted-foreground mb-3">Ajustes Necessários:</h4>
             {oportunidades.map((op, index) => {
               const progressWidth = Math.min(op.atual, 100)
               const progressClass = `progress-bar-${Math.round(progressWidth / 5) * 5}`
@@ -1010,21 +1088,34 @@ export default function HomePage() {
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-foreground">{op.tipo}</span>
-                  <span className={`text-sm font-semibold ${
+                  <span className="font-medium text-foreground text-sm sm:text-base">{op.tipo}</span>
+                  <span className={`text-xs sm:text-sm font-semibold ${
                     op.acao === 'Reduzir' ? 'text-red-600' : 'text-green-600'
                   }`}>
                     {op.acao}
                   </span>
                 </div>
                 
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    Atual: {op.atual.toFixed(1)}%
-                  </span>
-                  <span className="text-muted-foreground">
-                    Ideal: {op.ideal}%
-                  </span>
+                <div className="grid grid-cols-2 gap-2 text-xs sm:text-sm mb-2">
+                  <div>
+                    <span className="text-muted-foreground">Atual: </span>
+                    <span className="font-medium">{op.atual.toFixed(1)}%</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Ideal: </span>
+                    <span className="font-medium">{op.ideal}%</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                  <div>
+                    <span className="text-muted-foreground">Valor atual: </span>
+                    <span className="font-medium">{formatCurrency(op.valorAtual)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Valor ideal: </span>
+                    <span className="font-medium">{formatCurrency(op.valorIdeal)}</span>
+                  </div>
                 </div>
                 
                 <div className="mt-2 w-full bg-muted rounded-full h-2">
@@ -1041,17 +1132,37 @@ export default function HomePage() {
         ) : (
           <div className="text-center py-6 text-muted-foreground">
             <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>Carteira bem balanceada!</p>
+            <p className="text-sm sm:text-base">Carteira bem balanceada!</p>
+            <p className="text-xs mt-1">Todos os tipos estão dentro da alocação ideal</p>
+          </div>
+        )}
+
+        {/* Resumo da Alocação */}
+        {Object.keys(alocacaoAtual).length > 0 && (
+          <div className="mt-4 p-3 bg-muted/30 rounded-lg">
+            <h4 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2">Resumo da Alocação:</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              {Object.entries(alocacaoAtual).map(([tipo, valor]) => {
+                const percentual = totalInvestido > 0 ? (valor / totalInvestido) * 100 : 0
+                return (
+                  <div key={tipo} className="flex justify-between">
+                    <span className="truncate">{tipo}:</span>
+                    <span className="font-medium">{percentual.toFixed(1)}%</span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
 
         <div className="mt-4 pt-4 border-t border-border">
           <Link 
-            to="/carteira" 
-            className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
+            to="/carteira?tab=rebalance" 
+            className="flex items-center gap-2 text-xs sm:text-sm text-primary hover:text-primary/80 transition-colors"
           >
-            Rebalancear Carteira
-            <ChevronRight className="w-4 h-4" />
+            <span className="hidden xs:inline">Configurar Rebalanceamento</span>
+            <span className="xs:hidden">Rebalancear</span>
+            <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
           </Link>
         </div>
       </motion.div>
@@ -1413,20 +1524,8 @@ export default function HomePage() {
           </div>
         </motion.div>
 
-        {/* Cards principais com animações */}
+        {/* Cards principais com animações - Ordem Contábil */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <CardPrincipal
-            title="Carteira"
-            value={formatarValor(totalInvestido)}
-            subtitle={`${carteira?.length || 0} ativos`}
-            icon={Building2}
-            color="blue"
-            to="/carteira"
-            trend={carteiraTrend}
-            loading={loadingCarteira}
-            delay={0.1}
-          />
-          
           <CardPrincipal
             title="Receitas"
             value={formatarValor(totalReceitas)}
@@ -1435,6 +1534,18 @@ export default function HomePage() {
             color="green"
             to="/controle"
             trend={calcTrend(totalReceitas, totalReceitasAnterior)}
+            loading={loadingResumo}
+            delay={0.1}
+          />
+          
+          <CardPrincipal
+            title="Despesas"
+            value={formatarValor(totalDespesas)}
+            subtitle={`Cartões + Outros • ${getNomeMes(mesAtual)}`}
+            icon={CreditCard}
+            color="red"
+            to="/controle"
+            trend={calcTrend(totalDespesas, totalDespesasAnterior)}
             loading={loadingResumo}
             delay={0.2}
           />
@@ -1452,14 +1563,14 @@ export default function HomePage() {
           />
           
           <CardPrincipal
-            title="Despesas"
-            value={formatarValor(totalDespesas)}
-            subtitle={`Cartões + Outros • ${getNomeMes(mesAtual)}`}
-            icon={CreditCard}
-            color="red"
-            to="/controle"
-            trend={calcTrend(totalDespesas, totalDespesasAnterior)}
-            loading={loadingResumo}
+            title="Carteira"
+            value={formatarValor(totalInvestido)}
+            subtitle={`${carteira?.length || 0} ativos`}
+            icon={Building2}
+            color="blue"
+            to="/carteira"
+            trend={carteiraTrend}
+            loading={loadingCarteira}
             delay={0.4}
           />
         </div>

@@ -178,97 +178,100 @@ export default function AnalisePage() {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-card border border-border rounded-lg p-6 mb-6"
+      className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-4 sm:mb-6"
     >
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Filter className="w-5 h-5 text-blue-500" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+          <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
           Filtros para Ações
         </h3>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+          <label className="flex items-center gap-2 text-xs sm:text-sm">
             <input
               type="checkbox"
               checked={autoSearchAcoes}
               onChange={(e) => setAutoSearchAcoes(e.target.checked)}
               className="rounded border-border"
             />
-            Busca automática
+            <span className="hidden xs:inline">Busca automática</span>
+            <span className="xs:hidden">Auto</span>
           </label>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={handleBuscarAcoes}
             disabled={loadingAcoes}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-xs sm:text-sm whitespace-nowrap"
           >
             {loadingAcoes ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Buscando...
+                <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
+                <span className="hidden xs:inline">Buscando...</span>
+                <span className="xs:hidden">...</span>
               </>
             ) : (
               <>
-                <Search className="w-4 h-4" />
-                Buscar Ações
+                <Search className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline">Buscar Ações</span>
+                <span className="xs:hidden">Buscar</span>
               </>
             )}
           </motion.button>
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <div>
-          <label className="block text-sm font-medium mb-2">ROE Mínimo (%)</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">ROE Mínimo (%)</label>
           <input
             type="number"
             value={filtrosAcoes.roe_min || ''}
             onChange={(e) => handleFiltroAcoesChange('roe_min', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="ROE mínimo para ações"
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">Dividend Yield Mínimo (%)</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Dividend Yield Mínimo (%)</label>
           <input
             type="number"
             value={filtrosAcoes.dy_min || ''}
             onChange={(e) => handleFiltroAcoesChange('dy_min', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="Dividend Yield mínimo para ações"
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">P/L Mínimo</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">P/L Mínimo</label>
           <input
             type="number"
             value={filtrosAcoes.pl_min || ''}
             onChange={(e) => handleFiltroAcoesChange('pl_min', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="P/L mínimo para ações"
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">P/L Máximo</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">P/L Máximo</label>
           <input
             type="number"
             value={filtrosAcoes.pl_max || ''}
             onChange={(e) => handleFiltroAcoesChange('pl_max', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="P/L máximo para ações"
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">P/VP Máximo</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">P/VP Máximo</label>
           <input
             type="number"
             value={filtrosAcoes.pvp_max || ''}
             onChange={(e) => handleFiltroAcoesChange('pvp_max', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="P/VP máximo para ações"
           />
         </div>
@@ -281,97 +284,100 @@ export default function AnalisePage() {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-card border border-border rounded-lg p-6 mb-6"
+      className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-4 sm:mb-6"
     >
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Filter className="w-5 h-5 text-green-500" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+          <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
           Filtros para BDRs
         </h3>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+          <label className="flex items-center gap-2 text-xs sm:text-sm">
             <input
               type="checkbox"
               checked={autoSearchBdrs}
               onChange={(e) => setAutoSearchBdrs(e.target.checked)}
               className="rounded border-border"
             />
-            Busca automática
+            <span className="hidden xs:inline">Busca automática</span>
+            <span className="xs:hidden">Auto</span>
           </label>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={handleBuscarBdrs}
             disabled={loadingBdrs}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 text-xs sm:text-sm whitespace-nowrap"
           >
             {loadingBdrs ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Buscando...
+                <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
+                <span className="hidden xs:inline">Buscando...</span>
+                <span className="xs:hidden">...</span>
               </>
             ) : (
               <>
-                <Search className="w-4 h-4" />
-                Buscar BDRs
+                <Search className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline">Buscar BDRs</span>
+                <span className="xs:hidden">Buscar</span>
               </>
             )}
           </motion.button>
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <div>
-          <label className="block text-sm font-medium mb-2">ROE Mínimo (%)</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">ROE Mínimo (%)</label>
           <input
             type="number"
             value={filtrosBdrs.roe_min || ''}
             onChange={(e) => handleFiltroBdrsChange('roe_min', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="ROE mínimo para BDRs"
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">Dividend Yield Mínimo (%)</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Dividend Yield Mínimo (%)</label>
           <input
             type="number"
             value={filtrosBdrs.dy_min || ''}
             onChange={(e) => handleFiltroBdrsChange('dy_min', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="Dividend Yield mínimo para BDRs"
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">P/L Mínimo</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">P/L Mínimo</label>
           <input
             type="number"
             value={filtrosBdrs.pl_min || ''}
             onChange={(e) => handleFiltroBdrsChange('pl_min', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="P/L mínimo para BDRs"
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">P/L Máximo</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">P/L Máximo</label>
           <input
             type="number"
             value={filtrosBdrs.pl_max || ''}
             onChange={(e) => handleFiltroBdrsChange('pl_max', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="P/L máximo para BDRs"
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">P/VP Máximo</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">P/VP Máximo</label>
           <input
             type="number"
             value={filtrosBdrs.pvp_max || ''}
             onChange={(e) => handleFiltroBdrsChange('pvp_max', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="P/VP máximo para BDRs"
           />
         </div>
@@ -384,75 +390,78 @@ export default function AnalisePage() {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-card border border-border rounded-lg p-6 mb-6"
+      className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-4 sm:mb-6"
     >
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Filter className="w-5 h-5 text-purple-500" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+          <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500" />
           Filtros para FIIs
         </h3>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+          <label className="flex items-center gap-2 text-xs sm:text-sm">
             <input
               type="checkbox"
               checked={autoSearchFiis}
               onChange={(e) => setAutoSearchFiis(e.target.checked)}
               className="rounded border-border"
             />
-            Busca automática
+            <span className="hidden xs:inline">Busca automática</span>
+            <span className="xs:hidden">Auto</span>
           </label>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={handleBuscarFiis}
             disabled={loadingFiis}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 text-xs sm:text-sm whitespace-nowrap"
           >
             {loadingFiis ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Buscando...
+                <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
+                <span className="hidden xs:inline">Buscando...</span>
+                <span className="xs:hidden">...</span>
               </>
             ) : (
               <>
-                <Search className="w-4 h-4" />
-                Buscar FIIs
+                <Search className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline">Buscar FIIs</span>
+                <span className="xs:hidden">Buscar</span>
               </>
             )}
           </motion.button>
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div>
-          <label className="block text-sm font-medium mb-2">Dividend Yield Mínimo (%)</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Dividend Yield Mínimo (%)</label>
           <input
             type="number"
             value={filtrosFiis.dy_min || ''}
             onChange={(e) => handleFiltroFiisChange('dy_min', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="Dividend Yield mínimo para FIIs"
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">Dividend Yield Máximo (%)</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Dividend Yield Máximo (%)</label>
           <input
             type="number"
             value={filtrosFiis.dy_max || ''}
             onChange={(e) => handleFiltroFiisChange('dy_max', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="Dividend Yield máximo para FIIs"
           />
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2">Liquidez Mínima</label>
+          <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Liquidez Mínima</label>
           <input
             type="number"
             value={filtrosFiis.liq_min || ''}
             onChange={(e) => handleFiltroFiisChange('liq_min', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
             aria-label="Liquidez mínima para FIIs"
           />
         </div>
@@ -514,74 +523,148 @@ export default function AnalisePage() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="overflow-x-auto"
+          className="overflow-x-auto scrollbar-hide"
         >
-          <table className="w-full">
-            <thead className="bg-muted/30">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium">Ticker</th>
-                <th className="px-4 py-3 text-left font-medium">Nome</th>
-                <th className="px-4 py-3 text-left font-medium">Setor</th>
-                <th className="px-4 py-3 text-left font-medium">País</th>
-                <th className="px-4 py-3 text-left font-medium">Preço</th>
-                <th className="px-4 py-3 text-left font-medium">DY</th>
-                <th className="px-4 py-3 text-left font-medium">P/L</th>
-                <th className="px-4 py-3 text-left font-medium">ROE</th>
-                <th className="px-4 py-3 text-left font-medium">P/VP</th>
-                <th className="px-4 py-3 text-left font-medium">Carteira</th>
-              </tr>
-            </thead>
-            <tbody>
-              <AnimatePresence>
-                {ativos.map((ativo, index) => {
-                  try {
-                    return (
-                      <motion.tr 
-                        key={ativo.ticker || index} 
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="hover:bg-muted/40 transition-colors"
-                      >
-                        <td className="px-4 py-3">
-                          <TickerWithLogo ticker={ativo.ticker || ''} size="md" />
-                        </td>
-                        <td className="px-4 py-3">{ativo.nome_completo || '-'}</td>
-                        <td className="px-4 py-3">{ativo.setor || '-'}</td>
-                        <td className="px-4 py-3">{ativo.pais || '-'}</td>
-                        <td className="px-4 py-3">{formatCurrency(ativo.preco_atual || 0)}</td>
-                        <td className={`px-4 py-3 font-medium ${(ativo.dividend_yield || 0) > 8 ? 'text-green-600' : ''}`}>
-                          {formatPercentage(ativo.dividend_yield || 0)}
-                        </td>
-                        <td className={`px-4 py-3 font-medium ${(ativo.pl || 0) < 0 ? 'text-red-600' : ''}`}>
-                          {(ativo.pl || 0)?.toFixed(2) || '-'}
-                        </td>
-                        <td className={`px-4 py-3 font-medium ${(ativo.roe || 0) > 15 ? 'text-blue-600' : ''}`}>
-                          {formatPercentage(ativo.roe || 0)}
-                        </td>
-                        <td className="px-4 py-3">{(ativo.pvp || 0)?.toFixed(2) || '-'}</td>
-                        <td className="px-4 py-3">
+          {/* Desktop Table */}
+          <div className="hidden lg:block">
+            <table className="w-full">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Ticker</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Nome</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Setor</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">País</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Preço</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">DY</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">P/L</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">ROE</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">P/VP</th>
+                  <th className="px-3 sm:px-4 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Carteira</th>
+                </tr>
+              </thead>
+              <tbody>
+                <AnimatePresence>
+                  {ativos.map((ativo, index) => {
+                    try {
+                      return (
+                        <motion.tr 
+                          key={ativo.ticker || index} 
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="hover:bg-muted/40 transition-colors"
+                        >
+                          <td className="px-3 sm:px-4 py-2 sm:py-3">
+                            <TickerWithLogo ticker={ativo.ticker || ''} size="md" />
+                          </td>
+                          <td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm">{ativo.nome_completo || '-'}</td>
+                          <td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm">{ativo.setor || '-'}</td>
+                          <td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm">{ativo.pais || '-'}</td>
+                          <td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm">{formatCurrency(ativo.preco_atual || 0)}</td>
+                          <td className={`px-3 sm:px-4 py-2 sm:py-3 font-medium text-xs sm:text-sm ${(ativo.dividend_yield || 0) > 8 ? 'text-green-600' : ''}`}>
+                            {formatPercentage(ativo.dividend_yield || 0)}
+                          </td>
+                          <td className={`px-3 sm:px-4 py-2 sm:py-3 font-medium text-xs sm:text-sm ${(ativo.pl || 0) < 0 ? 'text-red-600' : ''}`}>
+                            {(ativo.pl || 0)?.toFixed(2) || '-'}
+                          </td>
+                          <td className={`px-3 sm:px-4 py-2 sm:py-3 font-medium text-xs sm:text-sm ${(ativo.roe || 0) > 15 ? 'text-blue-600' : ''}`}>
+                            {formatPercentage(ativo.roe || 0)}
+                          </td>
+                          <td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm">{(ativo.pvp || 0)?.toFixed(2) || '-'}</td>
+                          <td className="px-3 sm:px-4 py-2 sm:py-3">
+                            {isAtivoNaCarteira(ativo.ticker || '') && (
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className="flex items-center gap-1 text-green-600"
+                              >
+                                <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                                <span className="text-xs">Na carteira</span>
+                              </motion.div>
+                            )}
+                          </td>
+                        </motion.tr>
+                      )
+                    } catch (rowError) {
+                      console.error('Erro ao renderizar linha:', rowError, 'Dados:', ativo)
+                      return null
+                    }
+                  })}
+                </AnimatePresence>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="lg:hidden space-y-3">
+            <AnimatePresence>
+              {ativos.map((ativo, index) => {
+                try {
+                  return (
+                    <motion.div
+                      key={ativo.ticker || index}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="bg-card border border-border rounded-lg p-3 sm:p-4"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <TickerWithLogo ticker={ativo.ticker || ''} size="sm" />
                           {isAtivoNaCarteira(ativo.ticker || '') && (
                             <motion.div
                               initial={{ scale: 0 }}
                               animate={{ scale: 1 }}
                               className="flex items-center gap-1 text-green-600"
                             >
-                              <CheckCircle className="w-4 h-4" />
+                              <CheckCircle className="w-3 h-3" />
                               <span className="text-xs">Na carteira</span>
                             </motion.div>
                           )}
-                        </td>
-                      </motion.tr>
-                    )
-                  } catch (rowError) {
-                    console.error('Erro ao renderizar linha:', rowError, 'Dados:', ativo)
-                    return null
-                  }
-                })}
-              </AnimatePresence>
-            </tbody>
-          </table>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">{formatCurrency(ativo.preco_atual || 0)}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="mb-2">
+                        <p className="text-sm font-medium text-foreground truncate">{ativo.nome_completo || '-'}</p>
+                        <p className="text-xs text-muted-foreground">{ativo.setor || '-'} • {ativo.pais || '-'}</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div>
+                          <span className="text-muted-foreground">DY:</span>
+                          <span className={`ml-1 font-medium ${(ativo.dividend_yield || 0) > 8 ? 'text-green-600' : ''}`}>
+                            {formatPercentage(ativo.dividend_yield || 0)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">P/L:</span>
+                          <span className={`ml-1 font-medium ${(ativo.pl || 0) < 0 ? 'text-red-600' : ''}`}>
+                            {(ativo.pl || 0)?.toFixed(2) || '-'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">ROE:</span>
+                          <span className={`ml-1 font-medium ${(ativo.roe || 0) > 15 ? 'text-blue-600' : ''}`}>
+                            {formatPercentage(ativo.roe || 0)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">P/VP:</span>
+                          <span className="ml-1 font-medium">{(ativo.pvp || 0)?.toFixed(2) || '-'}</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )
+                } catch (rowError) {
+                  console.error('Erro ao renderizar card mobile:', rowError, 'Dados:', ativo)
+                  return null
+                }
+              })}
+            </AnimatePresence>
+          </div>
         </motion.div>
       )
     } catch (tableError) {
@@ -649,22 +732,35 @@ export default function AnalisePage() {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="space-y-6"
+        className="space-y-4 sm:space-y-6"
       >
         {/* P/L vs Dividend Yield */}
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h3 className="text-lg font-semibold mb-4">P/L vs Dividend Yield</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+          <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">P/L vs Dividend Yield</h3>
+          <ResponsiveContainer width="100%" height={250}>
             <ScatterChart data={todosAtivos}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="pl" name="P/L" stroke="hsl(var(--muted-foreground))" />
-              <YAxis dataKey="dividend_yield" name="Dividend Yield (%)" stroke="hsl(var(--muted-foreground))" />
+              <XAxis 
+                dataKey="pl" 
+                name="P/L" 
+                stroke="hsl(var(--muted-foreground))" 
+                fontSize={12}
+                tick={{ fontSize: 10 }}
+              />
+              <YAxis 
+                dataKey="dividend_yield" 
+                name="Dividend Yield (%)" 
+                stroke="hsl(var(--muted-foreground))" 
+                fontSize={12}
+                tick={{ fontSize: 10 }}
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: 'hsl(var(--card))', 
                   border: '1px solid hsl(var(--border))', 
                   borderRadius: '8px',
-                  color: 'hsl(var(--foreground))'
+                  color: 'hsl(var(--foreground))',
+                  fontSize: '12px'
                 }}
                 formatter={(value: any, name: string) => [value, name]} 
               />
@@ -673,21 +769,31 @@ export default function AnalisePage() {
           </ResponsiveContainer>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Top 5 Dividend Yield */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <h3 className="text-lg font-semibold mb-4">Top 5 Dividend Yield</h3>
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+            <h3 className="text-sm sm:text-base font-semibold mb-3 sm:mb-4">Top 5 Dividend Yield</h3>
+            <ResponsiveContainer width="100%" height={200}>
               <RechartsBarChart data={topDy}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="ticker" stroke="hsl(var(--muted-foreground))" />
-                <YAxis stroke="hsl(var(--muted-foreground))" />
+                <XAxis 
+                  dataKey="ticker" 
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={10}
+                  tick={{ fontSize: 8 }}
+                />
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={10}
+                  tick={{ fontSize: 8 }}
+                />
                 <Tooltip 
                   contentStyle={{ 
                     backgroundColor: 'hsl(var(--card))', 
                     border: '1px solid hsl(var(--border))', 
                     borderRadius: '8px',
-                    color: 'hsl(var(--foreground))'
+                    color: 'hsl(var(--foreground))',
+                    fontSize: '12px'
                   }}
                   formatter={(value: any) => [formatPercentage(value), 'DY']} 
                 />
@@ -697,19 +803,29 @@ export default function AnalisePage() {
           </div>
 
           {/* Top 5 ROE */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <h3 className="text-lg font-semibold mb-4">Top 5 ROE</h3>
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+            <h3 className="text-sm sm:text-base font-semibold mb-3 sm:mb-4">Top 5 ROE</h3>
+            <ResponsiveContainer width="100%" height={200}>
               <RechartsBarChart data={topRoe}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="ticker" stroke="hsl(var(--muted-foreground))" />
-                <YAxis stroke="hsl(var(--muted-foreground))" />
+                <XAxis 
+                  dataKey="ticker" 
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={10}
+                  tick={{ fontSize: 8 }}
+                />
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={10}
+                  tick={{ fontSize: 8 }}
+                />
                 <Tooltip 
                   contentStyle={{ 
                     backgroundColor: 'hsl(var(--card))', 
                     border: '1px solid hsl(var(--border))', 
                     borderRadius: '8px',
-                    color: 'hsl(var(--foreground))'
+                    color: 'hsl(var(--foreground))',
+                    fontSize: '12px'
                   }}
                   formatter={(value: any) => [formatPercentage(value), 'ROE']} 
                 />
@@ -719,19 +835,29 @@ export default function AnalisePage() {
           </div>
 
           {/* Menor P/L */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <h3 className="text-lg font-semibold mb-4">Menor P/L</h3>
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+            <h3 className="text-sm sm:text-base font-semibold mb-3 sm:mb-4">Menor P/L</h3>
+            <ResponsiveContainer width="100%" height={200}>
               <RechartsBarChart data={menorPl}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="ticker" stroke="hsl(var(--muted-foreground))" />
-                <YAxis stroke="hsl(var(--muted-foreground))" />
+                <XAxis 
+                  dataKey="ticker" 
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={10}
+                  tick={{ fontSize: 8 }}
+                />
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={10}
+                  tick={{ fontSize: 8 }}
+                />
                 <Tooltip 
                   contentStyle={{ 
                     backgroundColor: 'hsl(var(--card))', 
                     border: '1px solid hsl(var(--border))', 
                     borderRadius: '8px',
-                    color: 'hsl(var(--foreground))'
+                    color: 'hsl(var(--foreground))',
+                    fontSize: '12px'
                   }}
                   formatter={(value: any) => [value.toFixed(2), 'P/L']} 
                 />
@@ -745,28 +871,29 @@ export default function AnalisePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between flex-wrap gap-3"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4"
       >
         <div className="flex items-center gap-2">
-          <h1 className="text-3xl font-bold text-foreground">Análise de Oportunidades</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Análise de Oportunidades</h1>
           <HelpTips
             title="Como usar a Análise"
             tips={[
               { title: 'Tabs', content: 'Use Lista ou Gráficos conforme a necessidade.' },
               { title: 'Tipos', content: 'Selecione Ações, BDRs ou FIIs para filtrar o universo.' },
               { title: 'Filtros', content: 'Ajuste ROE, DY, P/L, P/VP e liquidez para refinar os resultados.' },
-              { title: 'Carteira', content: 'Itens marcados como “Na carteira” já existem na sua carteira.' },
+              { title: 'Carteira', content: 'Itens marcados como "Na carteira" já existem na sua carteira.' },
             ]}
           />
         </div>
         {loadingCarteira && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Carregando carteira...
+          <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+            <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
+            <span className="hidden xs:inline">Carregando carteira...</span>
+            <span className="xs:hidden">Carregando...</span>
           </div>
         )}
       </motion.div>
@@ -778,45 +905,47 @@ export default function AnalisePage() {
         className="bg-card border border-border rounded-lg"
       >
         <div className="border-b border-border">
-          <div className="flex overflow-x-auto">
+          <div className="flex overflow-x-auto scrollbar-hide">
             <button
               onClick={() => setActiveTab('lista')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+              className={`flex-1 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                 activeTab === 'lista'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <div className="flex items-center justify-center gap-2">
-                <List className="w-4 h-4" />
-                Lista
+              <div className="flex items-center justify-center gap-1 sm:gap-2">
+                <List className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline">Lista</span>
+                <span className="xs:hidden">Lista</span>
               </div>
             </button>
             <button
               onClick={() => setActiveTab('graficos')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+              className={`flex-1 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                 activeTab === 'graficos'
                   ? 'text-blue-600 border-b-2 border-blue-600'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <div className="flex items-center justify-center gap-2">
-                <BarChart className="w-4 h-4" />
-                Gráficos
+              <div className="flex items-center justify-center gap-1 sm:gap-2">
+                <BarChart className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline">Gráficos</span>
+                <span className="xs:hidden">Gráficos</span>
               </div>
             </button>
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {activeTab === 'lista' ? (
             <div>
               {/* Sub-tabs para tipos de ativos */}
-              <div className="border-b border-border mb-6">
-                <div className="flex overflow-x-auto">
+              <div className="border-b border-border mb-4 sm:mb-6">
+                <div className="flex overflow-x-auto scrollbar-hide">
                   <button
                     onClick={() => setActiveSubTab('acoes')}
-                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                       activeSubTab === 'acoes'
                         ? 'text-blue-600 border-b-2 border-blue-600'
                         : 'text-muted-foreground hover:text-foreground'
@@ -826,7 +955,7 @@ export default function AnalisePage() {
                   </button>
                   <button
                     onClick={() => setActiveSubTab('bdrs')}
-                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                       activeSubTab === 'bdrs'
                         ? 'text-blue-600 border-b-2 border-blue-600'
                         : 'text-muted-foreground hover:text-foreground'
@@ -836,7 +965,7 @@ export default function AnalisePage() {
                   </button>
                   <button
                     onClick={() => setActiveSubTab('fiis')}
-                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                       activeSubTab === 'fiis'
                         ? 'text-blue-600 border-b-2 border-blue-600'
                         : 'text-muted-foreground hover:text-foreground'

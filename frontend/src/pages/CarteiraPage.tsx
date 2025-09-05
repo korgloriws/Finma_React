@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 
 import { 
   Plus, 
@@ -52,6 +53,7 @@ import {
 
 export default function CarteiraPage() {
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
   const [inputTicker, setInputTicker] = useState('')
   const [inputQuantidade, setInputQuantidade] = useState('')
   const [inputTipo, setInputTipo] = useState('')
@@ -62,7 +64,11 @@ export default function CarteiraPage() {
   const [editQuantidade, setEditQuantidade] = useState('')
   const [filtroMes, setFiltroMes] = useState<number>(new Date().getMonth() + 1)
   const [filtroAno, setFiltroAno] = useState<number>(new Date().getFullYear())
-  const [activeTab, setActiveTab] = useState('ativos')
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabFromUrl = searchParams.get('tab')
+    const validTabs = ['ativos', 'graficos', 'ranking', 'proventos', 'insights', 'rebalance', 'movimentacoes', 'relatorios']
+    return validTabs.includes(tabFromUrl || '') ? tabFromUrl! : 'ativos'
+  })
   const now = new Date()
   const [repMes, setRepMes] = useState<string>(String(now.getMonth() + 1).padStart(2, '0'))
   const [repAno, setRepAno] = useState<string>(String(now.getFullYear()))
@@ -570,42 +576,42 @@ export default function CarteiraPage() {
                       <th className="px-3 py-2 text-left font-medium text-sm">Ações</th>
                     </tr>
                   </thead>
-                    <tbody>
-                      {ativosDoTipo.map((ativo) => {
-                        const movsDoTicker = (movimentacoesAll || [])
-                          .filter(m => m.ticker?.toUpperCase?.() === (ativo?.ticker || '').toUpperCase())
-                          .sort((a, b) => String(a.data).localeCompare(String(b.data)))
+                  <tbody>
+                    {ativosDoTipo.map((ativo) => {
+                      const movsDoTicker = (movimentacoesAll || [])
+                        .filter(m => m.ticker?.toUpperCase?.() === (ativo?.ticker || '').toUpperCase())
+                        .sort((a, b) => String(a.data).localeCompare(String(b.data)))
 
-                        type Lot = { qty: number; price: number; date: string }
-                        const lots: Lot[] = []
-                        for (const m of movsDoTicker) {
-                          const qty = Number(m.quantidade || 0)
-                          const price = Number(m.preco || 0)
-                          if (m.tipo === 'compra') {
-                            lots.push({ qty, price, date: m.data })
-                          } else if (m.tipo === 'venda') {
-                            let remaining = qty
-                            while (remaining > 0 && lots.length > 0) {
-                              const lot = lots[0]
-                              const consume = Math.min(lot.qty, remaining)
-                              lot.qty -= consume
-                              remaining -= consume
-                              if (lot.qty <= 0) lots.shift()
-                            }
-                            // Se vendeu mais do que possuía, ignorar excedente (sem posição short)
+                      type Lot = { qty: number; price: number; date: string }
+                      const lots: Lot[] = []
+                      for (const m of movsDoTicker) {
+                        const qty = Number(m.quantidade || 0)
+                        const price = Number(m.preco || 0)
+                        if (m.tipo === 'compra') {
+                          lots.push({ qty, price, date: m.data })
+                        } else if (m.tipo === 'venda') {
+                          let remaining = qty
+                          while (remaining > 0 && lots.length > 0) {
+                            const lot = lots[0]
+                            const consume = Math.min(lot.qty, remaining)
+                            lot.qty -= consume
+                            remaining -= consume
+                            if (lot.qty <= 0) lots.shift()
                           }
+                          // Se vendeu mais do que possuía, ignorar excedente (sem posição short)
                         }
-                        const totalQtd = lots.reduce((s, l) => s + l.qty, 0)
-                        const totalValor = lots.reduce((s, l) => s + l.qty * l.price, 0)
-                        const precoMedio = totalQtd > 0 ? (totalValor / totalQtd) : null
-                        const rendimentoPct = (precoMedio != null && ativo?.preco_atual)
-                          ? ((ativo.preco_atual - precoMedio) / precoMedio) * 100
-                          : null
-                        const valorizacaoAbs = (precoMedio != null && ativo?.preco_atual && totalQtd > 0)
-                          ? (ativo.preco_atual - precoMedio) * totalQtd
-                          : null
-                        const porcentagemAtivo = valorTotal > 0 ? ((ativo?.valor_total || 0) / valorTotal * 100).toFixed(1) : '0.0'
-                                              return (
+                      }
+                      const totalQtd = lots.reduce((s, l) => s + l.qty, 0)
+                      const totalValor = lots.reduce((s, l) => s + l.qty * l.price, 0)
+                      const precoMedio = totalQtd > 0 ? (totalValor / totalQtd) : null
+                      const rendimentoPct = (precoMedio != null && ativo?.preco_atual)
+                        ? ((ativo.preco_atual - precoMedio) / precoMedio) * 100
+                        : null
+                      const valorizacaoAbs = (precoMedio != null && ativo?.preco_atual && totalQtd > 0)
+                        ? (ativo.preco_atual - precoMedio) * totalQtd
+                        : null
+                      const porcentagemAtivo = valorTotal > 0 ? ((ativo?.valor_total || 0) / valorTotal * 100).toFixed(1) : '0.0'
+                      return (
                         <tr key={ativo?.id} className="hover:bg-muted/40 transition-colors">
                           <td className="px-3 py-2 min-w-[140px]">
                             <TickerWithLogo ticker={ativo?.ticker || ''} nome={ativo?.nome_completo || ''} />
@@ -707,10 +713,10 @@ export default function CarteiraPage() {
                           </td>
                         </tr>
                       )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
                 {/* Mobile Card View */}
                 <div className="lg:hidden space-y-3 p-3 sm:p-4">
@@ -1075,59 +1081,59 @@ export default function CarteiraPage() {
               <div className="space-y-3 sm:space-y-4">
                 {/* Primeira linha - Ticker e Quantidade */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div>
+                <div>
                     <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Ticker</label>
-                    <input
-                      type="text"
-                      value={inputTicker}
-                      onChange={(e) => setInputTicker(e.target.value)}
-                      placeholder="Ex: PETR4, AAPL, VISC11"
+                  <input
+                    type="text"
+                    value={inputTicker}
+                    onChange={(e) => setInputTicker(e.target.value)}
+                    placeholder="Ex: PETR4, AAPL, VISC11"
                       className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  
-                  <div>
+                  />
+                </div>
+                
+                <div>
                     <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Quantidade</label>
-                    <input
-                      type="text"
-                      value={inputQuantidade}
-                      onChange={(e) => setInputQuantidade(e.target.value)}
-                      placeholder="Ex: 100 ou 0,0012"
+                  <input
+                    type="text"
+                    value={inputQuantidade}
+                    onChange={(e) => setInputQuantidade(e.target.value)}
+                    placeholder="Ex: 100 ou 0,0012"
                       className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
+                  />
                   </div>
                 </div>
-
+                
                 {/* Segunda linha - Tipo e Preço */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div>
+                <div>
                     <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Tipo</label>
-                    <input
-                      list="tipos-ativos"
-                      value={inputTipo}
-                      onChange={(e) => setInputTipo(e.target.value)}
-                      placeholder="Ex.: Ação, FII, Criptomoeda, ..."
+                  <input
+                    list="tipos-ativos"
+                    value={inputTipo}
+                    onChange={(e) => setInputTipo(e.target.value)}
+                    placeholder="Ex.: Ação, FII, Criptomoeda, ..."
                       className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                      aria-label="Selecionar ou digitar tipo de ativo"
-                    />
-                    <datalist id="tipos-ativos">
-                      {(tiposDisponiveisComputed || []).map(t => (
-                        <option key={t} value={t} />
-                      ))}
-                    </datalist>
-                  </div>
-                  
-                  <div>
+                    aria-label="Selecionar ou digitar tipo de ativo"
+                  />
+                  <datalist id="tipos-ativos">
+                    {(tiposDisponiveisComputed || []).map(t => (
+                      <option key={t} value={t} />
+                    ))}
+                  </datalist>
+                </div>
+                
+                <div>
                     <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Preço (opcional)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="Ex: 10,50 (se vazio tenta buscar)"
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Ex: 10,50 (se vazio tenta buscar)"
                       className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                      value={inputPreco}
-                      onChange={(e)=>setInputPreco(e.target.value)}
-                    />
-                  </div>
+                    value={inputPreco}
+                    onChange={(e)=>setInputPreco(e.target.value)}
+                  />
+                </div>
                 </div>
 
                 {/* Terceira linha - Indexador */}
@@ -1153,15 +1159,15 @@ export default function CarteiraPage() {
                       value={inputIndexadorPct}
                       onChange={(e)=>setInputIndexadorPct(e.target.value)}
                     />
-                    <button
-                      onClick={handleAdicionar}
-                      disabled={adicionarMutation.isPending}
+                  <button
+                    onClick={handleAdicionar}
+                    disabled={adicionarMutation.isPending}
                       className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 whitespace-nowrap flex items-center justify-center gap-1 sm:gap-2"
-                    >
+                  >
                       <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
                       <span className="hidden xs:inline">{adicionarMutation.isPending ? 'Adicionando...' : 'Adicionar'}</span>
                       <span className="xs:hidden">{adicionarMutation.isPending ? '...' : '+'}</span>
-                    </button>
+                  </button>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">Use N% do CDI/IPCA/SELIC. Ex.: 110 = 110%.</p>
                 </div>
@@ -1234,10 +1240,10 @@ export default function CarteiraPage() {
                 <div className="bg-card border border-border rounded-2xl p-4 md:p-6 shadow-xl">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3 min-w-0">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
-                          <TrendingUp className="w-6 h-6 text-primary" />
-                        </div>
+                        <TrendingUp className="w-6 h-6 text-primary" />
+                      </div>
                         <h3 className="text-lg md:text-xl font-semibold text-foreground">Evolução do Patrimônio</h3>
                       </div>
                       <div className="text-sm text-muted-foreground">
@@ -1343,7 +1349,7 @@ export default function CarteiraPage() {
                           <Area type="monotone" dataKey="ifix" stroke="#a855f7" fill="#a855f7" fillOpacity={0.1} strokeWidth={1.5} />
                           <Area type="monotone" dataKey="ipca" stroke="#ef4444" fill="#ef4444" fillOpacity={0.06} strokeWidth={1.2} />
                         </AreaChart>
-                        </ResponsiveContainer>
+                      </ResponsiveContainer>
                       </div>
                     </>
                   ) : (
@@ -1374,26 +1380,26 @@ export default function CarteiraPage() {
                     {Object.keys(ativosPorTipo).length > 0 ? (
                       <div className="h-64 sm:h-80">
                         <ResponsiveContainer width="100%" height="100%">
-                          <RechartsPieChart>
-                            <Pie
-                              data={Object.entries(ativosPorTipo)
-                                .filter(([_, valor]) => valor > 0)
-                                .map(([tipo, valor]) => ({ name: tipo, value: valor }))}
-                              cx="50%"
-                              cy="50%"
-                              outerRadius={80}
-                              dataKey="value"
-                              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                            >
-                              {Object.entries(ativosPorTipo)
-                                .filter(([_, valor]) => valor > 0)
-                                .map((_, index) => (
-                                  <Cell key={index} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'][index % 5]} />
-                                ))}
-                            </Pie>
-                            <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
-                          </RechartsPieChart>
-                        </ResponsiveContainer>
+                        <RechartsPieChart>
+                          <Pie
+                            data={Object.entries(ativosPorTipo)
+                              .filter(([_, valor]) => valor > 0)
+                              .map(([tipo, valor]) => ({ name: tipo, value: valor }))}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={80}
+                            dataKey="value"
+                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          >
+                            {Object.entries(ativosPorTipo)
+                              .filter(([_, valor]) => valor > 0)
+                              .map((_, index) => (
+                                <Cell key={index} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'][index % 5]} />
+                              ))}
+                          </Pie>
+                          <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
                       </div>
                     ) : (
                       <div className="h-64 flex items-center justify-center text-muted-foreground">
@@ -1413,31 +1419,31 @@ export default function CarteiraPage() {
                     {carteira.length > 0 ? (
                       <div className="h-64 sm:h-80">
                         <ResponsiveContainer width="100%" height="100%">
-                          <RechartsPieChart>
-                            <Pie
-                              data={carteira
-                                .filter(ativo => ativo?.valor_total && ativo.valor_total > 0)
-                                .slice(0, 8)
-                                .map(ativo => ({
-                                  name: getDisplayTicker(ativo?.ticker || ''),
-                                  value: ativo?.valor_total || 0
-                                }))}
-                              cx="50%"
-                              cy="50%"
-                              outerRadius={80}
-                              dataKey="value"
-                              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                            >
-                              {carteira
-                                .filter(ativo => ativo?.valor_total && ativo.valor_total > 0)
-                                .slice(0, 8)
-                                .map((_, index) => (
-                                  <Cell key={index} fill={['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'][index % 8]} />
-                                ))}
-                            </Pie>
-                            <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
-                          </RechartsPieChart>
-                        </ResponsiveContainer>
+                        <RechartsPieChart>
+                          <Pie
+                            data={carteira
+                              .filter(ativo => ativo?.valor_total && ativo.valor_total > 0)
+                              .slice(0, 8)
+                              .map(ativo => ({
+                                name: getDisplayTicker(ativo?.ticker || ''),
+                                value: ativo?.valor_total || 0
+                              }))}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={80}
+                            dataKey="value"
+                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          >
+                            {carteira
+                              .filter(ativo => ativo?.valor_total && ativo.valor_total > 0)
+                              .slice(0, 8)
+                              .map((_, index) => (
+                                <Cell key={index} fill={['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'][index % 8]} />
+                              ))}
+                          </Pie>
+                          <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
                       </div>
                     ) : (
                       <div className="h-64 flex items-center justify-center text-muted-foreground">
@@ -1460,33 +1466,33 @@ export default function CarteiraPage() {
                     {topAtivos.length > 0 ? (
                       <div className="h-64 sm:h-80">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={topAtivos}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                            <XAxis 
-                              dataKey="ticker" 
-                              stroke="hsl(var(--muted-foreground))"
+                        <BarChart data={topAtivos}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis 
+                            dataKey="ticker" 
+                            stroke="hsl(var(--muted-foreground))"
                               fontSize={10}
                               angle={-45}
                               textAnchor="end"
                               height={60}
-                            />
-                            <YAxis 
-                              stroke="hsl(var(--muted-foreground))"
+                          />
+                          <YAxis 
+                            stroke="hsl(var(--muted-foreground))"
                               fontSize={10}
-                              tickFormatter={(value) => formatCurrency(value).replace('R$ ', '')}
-                            />
-                            <Tooltip 
-                              contentStyle={{ 
-                                backgroundColor: 'hsl(var(--card))', 
-                                border: '1px solid hsl(var(--border))', 
-                                borderRadius: '8px',
-                                color: 'hsl(var(--foreground))'
-                              }}
-                              formatter={(value: any) => [formatCurrency(value), 'Valor Total']}
-                            />
-                            <Bar dataKey="valor_total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
+                            tickFormatter={(value) => formatCurrency(value).replace('R$ ', '')}
+                          />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'hsl(var(--card))', 
+                              border: '1px solid hsl(var(--border))', 
+                              borderRadius: '8px',
+                              color: 'hsl(var(--foreground))'
+                            }}
+                            formatter={(value: any) => [formatCurrency(value), 'Valor Total']}
+                          />
+                          <Bar dataKey="valor_total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
                       </div>
                     ) : (
                       <div className="h-64 flex items-center justify-center text-muted-foreground">
@@ -1506,33 +1512,33 @@ export default function CarteiraPage() {
                     {carteira.length > 0 ? (
                       <div className="h-64 sm:h-80">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={carteira.slice(0, 10)}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                            <XAxis 
-                              dataKey="ticker" 
-                              stroke="hsl(var(--muted-foreground))"
+                        <BarChart data={carteira.slice(0, 10)}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis 
+                            dataKey="ticker" 
+                            stroke="hsl(var(--muted-foreground))"
                               fontSize={10}
-                              angle={-45}
-                              textAnchor="end"
+                            angle={-45}
+                            textAnchor="end"
                               height={60}
-                            />
-                            <YAxis 
-                              stroke="hsl(var(--muted-foreground))"
+                          />
+                          <YAxis 
+                            stroke="hsl(var(--muted-foreground))"
                               fontSize={10}
-                              tickFormatter={(value) => formatCurrency(value).replace('R$ ', '')}
-                            />
-                            <Tooltip 
-                              contentStyle={{ 
-                                backgroundColor: 'hsl(var(--card))', 
-                                border: '1px solid hsl(var(--border))', 
-                                borderRadius: '8px',
-                                color: 'hsl(var(--foreground))'
-                              }}
-                              formatter={(value: any) => [formatCurrency(value), 'Valor Total']}
-                            />
-                            <Bar dataKey="valor_total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
+                            tickFormatter={(value) => formatCurrency(value).replace('R$ ', '')}
+                          />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'hsl(var(--card))', 
+                              border: '1px solid hsl(var(--border))', 
+                              borderRadius: '8px',
+                              color: 'hsl(var(--foreground))'
+                            }}
+                            formatter={(value: any) => [formatCurrency(value), 'Valor Total']}
+                          />
+                          <Bar dataKey="valor_total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
                       </div>
                     ) : (
                       <div className="h-64 flex items-center justify-center text-muted-foreground">
@@ -1748,33 +1754,33 @@ export default function CarteiraPage() {
                          <>
                            {/* Desktop Table View */}
                            <div className="hidden md:block overflow-x-auto">
-                             <table className="w-full min-w-[600px]">
-                              <thead className="bg-muted/30">
-                                <tr>
-                                  <th className="px-4 py-2 text-left font-medium">Data</th>
-                                  <th className="px-4 py-2 text-left font-medium">Tipo</th>
-                                  <th className="px-4 py-2 text-left font-medium">Valor (R$)</th>
+                           <table className="w-full min-w-[600px]">
+                            <thead className="bg-muted/30">
+                              <tr>
+                                <th className="px-4 py-2 text-left font-medium">Data</th>
+                                <th className="px-4 py-2 text-left font-medium">Tipo</th>
+                                <th className="px-4 py-2 text-left font-medium">Valor (R$)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {ativo.proventos.map((provento, index) => (
+                                <tr key={index} className="hover:bg-muted/40 transition-colors">
+                                  <td className="px-4 py-2">
+                                    {new Date(provento.data).toLocaleDateString('pt-BR')}
+                                  </td>
+                                  <td className="px-4 py-2">
+                                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                                      {provento.tipo}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2 font-semibold">
+                                    {formatCurrency(provento.valor)}
+                                  </td>
                                 </tr>
-                              </thead>
-                              <tbody>
-                                {ativo.proventos.map((provento, index) => (
-                                  <tr key={index} className="hover:bg-muted/40 transition-colors">
-                                    <td className="px-4 py-2">
-                                      {new Date(provento.data).toLocaleDateString('pt-BR')}
-                                    </td>
-                                    <td className="px-4 py-2">
-                                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
-                                        {provento.tipo}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-2 font-semibold">
-                                      {formatCurrency(provento.valor)}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
 
                           {/* Mobile Card View */}
                           <div className="md:hidden space-y-3">
@@ -1876,35 +1882,35 @@ export default function CarteiraPage() {
                           <>
                             {/* Desktop Table View */}
                             <div className="hidden md:block overflow-x-auto">
-                              <table className="w-full min-w-[700px]">
-                                <thead className="bg-muted/30">
-                                  <tr>
-                                    <th className="px-4 py-2 text-left font-medium">Data</th>
-                                    <th className="px-4 py-2 text-left font-medium">Valor Unitário</th>
-                                    <th className="px-4 py-2 text-left font-medium">Quantidade</th>
-                                    <th className="px-4 py-2 text-left font-medium">Valor Recebido</th>
+                            <table className="w-full min-w-[700px]">
+                              <thead className="bg-muted/30">
+                                <tr>
+                                  <th className="px-4 py-2 text-left font-medium">Data</th>
+                                  <th className="px-4 py-2 text-left font-medium">Valor Unitário</th>
+                                  <th className="px-4 py-2 text-left font-medium">Quantidade</th>
+                                  <th className="px-4 py-2 text-left font-medium">Valor Recebido</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {provento.proventos_recebidos.map((prov, index) => (
+                                  <tr key={index} className="hover:bg-muted/40 transition-colors">
+                                    <td className="px-4 py-2">
+                                      {new Date(prov.data).toLocaleDateString('pt-BR')}
+                                    </td>
+                                    <td className="px-4 py-2">
+                                      {formatCurrency(prov.valor_unitario)}
+                                    </td>
+                                    <td className="px-4 py-2">
+                                      {prov.quantidade}
+                                    </td>
+                                    <td className="px-4 py-2 font-semibold">
+                                      {formatCurrency(prov.valor_recebido)}
+                                    </td>
                                   </tr>
-                                </thead>
-                                <tbody>
-                                  {provento.proventos_recebidos.map((prov, index) => (
-                                    <tr key={index} className="hover:bg-muted/40 transition-colors">
-                                      <td className="px-4 py-2">
-                                        {new Date(prov.data).toLocaleDateString('pt-BR')}
-                                      </td>
-                                      <td className="px-4 py-2">
-                                        {formatCurrency(prov.valor_unitario)}
-                                      </td>
-                                      <td className="px-4 py-2">
-                                        {prov.quantidade}
-                                      </td>
-                                      <td className="px-4 py-2 font-semibold">
-                                        {formatCurrency(prov.valor_recebido)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
 
                             {/* Mobile Card View */}
                             <div className="md:hidden space-y-3">
@@ -2177,20 +2183,20 @@ export default function CarteiraPage() {
             <h2 className="text-xl font-semibold">⚖️ Rebalanceamento da Carteira</h2>
             
             {/* Configuração de Período e Último Rebalanceamento */}
-            <div className="bg-muted/30 rounded-lg p-6">
+              <div className="bg-muted/30 rounded-lg p-6">
               <h3 className="text-lg font-semibold mb-4">📅 Configuração de Período</h3>
               <RebalanceConfigForm
-                defaultPeriodo={(rbConfig as any)?.periodo || 'mensal'}
-                defaultLastRebalanceDate={(rbConfig as any)?.last_rebalance_date}
+                  defaultPeriodo={(rbConfig as any)?.periodo || 'mensal'}
+                  defaultLastRebalanceDate={(rbConfig as any)?.last_rebalance_date}
                 onSave={(periodo, lastDate) => {
                   const currentTargets = idealPreview?.targets || (rbConfig as any)?.targets || {}
                   saveRebalanceMutation.mutate({ periodo, targets: currentTargets, last_rebalance_date: lastDate })
-                }}
-              />
-            </div>
+                  }}
+                />
+              </div>
 
             {/* Configuração de Tipos e Porcentagens */}
-            <div className="bg-muted/30 rounded-lg p-6">
+              <div className="bg-muted/30 rounded-lg p-6">
               <h3 className="text-lg font-semibold mb-4">🎯 Configuração de Tipos e Porcentagens</h3>
               <TargetsForm
                 defaultTargets={(rbConfig as any)?.targets || {}}
@@ -2204,7 +2210,7 @@ export default function CarteiraPage() {
                   setIdealPreview({ periodo: currentPeriodo, targets })
                 }}
               />
-            </div>
+              </div>
 
             {/* Gráficos e Cálculos */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2215,7 +2221,7 @@ export default function CarteiraPage() {
                   Proporção Ideal
                 </h3>
                 <IdealDistributionChart targets={idealTargets} />
-              </div>
+                  </div>
 
               {/* Gráfico da Carteira Atual */}
               <div className="bg-muted/30 rounded-lg p-6">
@@ -2224,8 +2230,8 @@ export default function CarteiraPage() {
                   Carteira Atual
                 </h3>
                 <CurrentDistributionChart carteira={carteira} />
-              </div>
-            </div>
+                      </div>
+                    </div>
 
             {/* Cálculos de Rebalanceamento */}
             <div className="bg-muted/30 rounded-lg p-6">
@@ -2238,7 +2244,7 @@ export default function CarteiraPage() {
                 idealTargets={idealTargets} 
                 valorTotal={valorTotal}
               />
-            </div>
+                </div>
 
             {/* Status e Histórico */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2694,7 +2700,7 @@ function RebalanceConfigForm({ defaultPeriodo, defaultLastRebalanceDate, onSave 
   })
 
   useEffect(() => {
-    setPeriodo(defaultPeriodo)
+      setPeriodo(defaultPeriodo)
   }, [defaultPeriodo])
 
   const handleSave = () => {
@@ -2713,50 +2719,50 @@ function RebalanceConfigForm({ defaultPeriodo, defaultLastRebalanceDate, onSave 
           onChange={(e) => setPeriodo(e.target.value)} 
           className="w-full px-3 py-2 border border-border rounded bg-background text-foreground"
         >
-          <option value="mensal">Mensal</option>
-          <option value="trimestral">Trimestral</option>
-          <option value="semestral">Semestral</option>
-          <option value="anual">Anual</option>
-        </select>
-      </div>
+              <option value="mensal">Mensal</option>
+              <option value="trimestral">Trimestral</option>
+              <option value="semestral">Semestral</option>
+              <option value="anual">Anual</option>
+            </select>
+          </div>
       
-      <div>
+          <div>
         <label className="block text-sm font-medium mb-2">Último Rebalanceamento</label>
-        <div className="flex gap-2">
-          <select
-            aria-label="Mês"
+            <div className="flex gap-2">
+              <select
+                aria-label="Mês"
             title="Selecione o mês do último rebalanceamento"
-            value={lastMonth ? lastMonth.split('-')[1] : ''}
+                value={lastMonth ? lastMonth.split('-')[1] : ''}
             onChange={(e) => {
-              const m = e.target.value
-              const y = lastMonth ? lastMonth.split('-')[0] : String(new Date().getFullYear())
-              setLastMonth(`${y}-${m}`)
-            }}
-            className="px-3 py-2 border border-border rounded bg-background text-foreground"
-          >
-            <option value="">Mês</option>
+                  const m = e.target.value
+                  const y = lastMonth ? lastMonth.split('-')[0] : String(new Date().getFullYear())
+                  setLastMonth(`${y}-${m}`)
+                }}
+                className="px-3 py-2 border border-border rounded bg-background text-foreground"
+              >
+                <option value="">Mês</option>
             {Array.from({length:12}, (_,i) => String(i+1).padStart(2,'0')).map(m => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-          <select
-            aria-label="Ano"
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <select
+                aria-label="Ano"
             title="Selecione o ano do último rebalanceamento"
-            value={lastMonth ? lastMonth.split('-')[0] : ''}
+                value={lastMonth ? lastMonth.split('-')[0] : ''}
             onChange={(e) => {
-              const y = e.target.value
-              const m = lastMonth ? lastMonth.split('-')[1] : String(new Date().getMonth()+1).padStart(2,'0')
-              setLastMonth(`${y}-${m}`)
-            }}
-            className="px-3 py-2 border border-border rounded bg-background text-foreground"
-          >
-            <option value="">Ano</option>
+                  const y = e.target.value
+                  const m = lastMonth ? lastMonth.split('-')[1] : String(new Date().getMonth()+1).padStart(2,'0')
+                  setLastMonth(`${y}-${m}`)
+                }}
+                className="px-3 py-2 border border-border rounded bg-background text-foreground"
+              >
+                <option value="">Ano</option>
             {Array.from({length:8}, (_,i) => String(new Date().getFullYear()-i)).map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
       
       <div>
         <button
@@ -2853,7 +2859,7 @@ function TargetsForm({ defaultTargets, onSave, onChange }: {
       <div className="space-y-3">
         <div className="text-sm font-medium">Tipos e Pesos (%)</div>
         <div className="max-h-[300px] overflow-auto space-y-2">
-          {Object.entries(targets).map(([key, val]) => (
+              {Object.entries(targets).map(([key, val]) => (
             <div key={key} className="flex items-center gap-3 p-3 bg-background rounded-lg border border-border">
               <div className="flex-1 min-w-[140px]">
                 <span className="font-medium">{key}</span>
@@ -2870,17 +2876,17 @@ function TargetsForm({ defaultTargets, onSave, onChange }: {
                   title={`Peso percentual para ${key}`}
                   aria-label={`Peso percentual para ${key}`}
                 />
-                <span className="text-sm text-muted-foreground">%</span>
-              </div>
+                    <span className="text-sm text-muted-foreground">%</span>
+                  </div>
               <button 
                 onClick={() => handleRemoveClass(key)} 
                 className="px-3 py-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
               >
                 Remover
               </button>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
       </div>
 
       {/* Adicionar tipos existentes */}
@@ -2904,16 +2910,16 @@ function TargetsForm({ defaultTargets, onSave, onChange }: {
       )}
       
       {/* Criar novo tipo */}
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={novoTipo}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={novoTipo}
           onChange={(e) => setNovoTipo(e.target.value)}
-          placeholder="Novo tipo (persiste no sistema)"
+                  placeholder="Novo tipo (persiste no sistema)"
           title="Digite o nome do novo tipo de ativo"
           className="flex-1 px-3 py-2 border border-border rounded bg-background text-foreground"
-          aria-label="Novo tipo"
-        />
+                  aria-label="Novo tipo"
+                />
         <button 
           onClick={handleCreateTypePersisted} 
           className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
@@ -2921,20 +2927,20 @@ function TargetsForm({ defaultTargets, onSave, onChange }: {
         >
           Criar tipo
         </button>
-      </div>
+              </div>
       
       {/* Total e botão salvar */}
       <div className="flex items-center justify-between pt-4 border-t border-border">
         <div className={`text-sm font-medium ${Math.abs(total-100) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
           Total: {total.toFixed(2)}%
-        </div>
-        <button
+            </div>
+            <button
           onClick={() => onSave(targets)}
           className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-          disabled={total <= 0}
-        >
+              disabled={total <= 0}
+            >
           Salvar Tipos e Pesos
-        </button>
+            </button>
       </div>
     </div>
   )
@@ -3203,8 +3209,8 @@ function RebalanceHistory({ history, onRegisterHistory }: {
           className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
           Registrar
-        </button>
-      </div>
+              </button>
+          </div>
 
       {/* Lista de histórico */}
       {history.length > 0 ? (
@@ -3213,9 +3219,9 @@ function RebalanceHistory({ history, onRegisterHistory }: {
             <div key={idx} className="flex items-center justify-between p-3 bg-background border border-border rounded">
               <span>{new Date(date).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
               <span className="text-sm text-muted-foreground">{new Date(date).toLocaleDateString('pt-BR')}</span>
-            </div>
-          ))}
         </div>
+          ))}
+      </div>
       ) : (
         <div className="text-center text-muted-foreground py-4">
           <History className="w-8 h-8 mx-auto mb-2 opacity-50" />

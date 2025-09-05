@@ -74,7 +74,7 @@ const SUPPORTED_CODES = Array.from(new Set(CURRENCY_PAIRS.flatMap(p => [p.from, 
 const SUPPORTED_CURRENCIES = CURRENCIES.filter(c => SUPPORTED_CODES.includes(c.code))
 
 export default function ConversorMoedasPage() {
-  const [amount, setAmount] = useState<string>('100')
+  const [amount, setAmount] = useState<string>('1')
   const [fromCurrency, setFromCurrency] = useState('BRL')
   const [toCurrency, setToCurrency] = useState('USD')
   const [searchTicker, setSearchTicker] = useState('')
@@ -374,45 +374,47 @@ export default function ConversorMoedasPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">Conversor de Moedas</h1>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Conversor de Moedas</h1>
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => exchangeRateQuery.refetch()}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm sm:text-base bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
-          Atualizar
+          <span className="hidden xs:inline">Atualizar</span>
+          <span className="xs:hidden">Atualizar</span>
         </motion.button>
       </div>
 
       {/* Tabs */}
       <div className="bg-card border border-border rounded-lg">
         <div className="border-b border-border">
-          <div className="flex">
+          <div className="flex overflow-x-auto scrollbar-hide">
             {[
-              { id: 'conversor', label: 'Conversor', icon: Calculator },
-              { id: 'ativos', label: 'Projeção de Ativos', icon: TrendingUp },
-              { id: 'carteira', label: 'Carteira', icon: BarChart3 },
+              { id: 'conversor', label: 'Conversor', icon: Calculator, shortLabel: 'Conversor' },
+              { id: 'ativos', label: 'Projeção de Ativos', icon: TrendingUp, shortLabel: 'Ativos' },
+              { id: 'carteira', label: 'Carteira', icon: BarChart3, shortLabel: 'Carteira' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                   activeTab === tab.id
                     ? 'text-primary border-b-2 border-primary'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
+                <tab.icon className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span className="hidden xs:inline">{tab.label}</span>
+                <span className="xs:hidden">{tab.shortLabel}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {activeTab === 'conversor' && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
@@ -533,7 +535,7 @@ export default function ConversorMoedasPage() {
             >
               {/* Busca de Ativo */}
               <div className="space-y-4">
-                <div className="flex gap-4">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   <div className="flex-1">
                     <input
                       type="text"
@@ -541,14 +543,14 @@ export default function ConversorMoedasPage() {
                       onChange={(e) => setSearchTicker(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Digite o ticker (ex: PETR4, AAPL, MSFT)..."
-                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={handleSearch}
-                    className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                    className="px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors whitespace-nowrap"
                   >
                     Buscar
                   </motion.button>
@@ -665,14 +667,14 @@ export default function ConversorMoedasPage() {
               className="space-y-6"
             >
               {/* Seletor de Moeda de Referência */}
-              <div className="flex items-center gap-4">
-                <label className="text-sm font-medium">Moeda de Referência:</label>
-                                 <select
-                   value={toCurrency}
-                   onChange={(e) => setToCurrency(e.target.value)}
-                   className="px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                   aria-label="Selecionar moeda de referência"
-                 >
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+                <label className="text-sm font-medium whitespace-nowrap">Moeda de Referência:</label>
+                <select
+                  value={toCurrency}
+                  onChange={(e) => setToCurrency(e.target.value)}
+                  className="w-full sm:w-auto px-3 sm:px-4 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  aria-label="Selecionar moeda de referência"
+                >
                   {SUPPORTED_CURRENCIES.map(currency => (
                     <option key={currency.code} value={currency.code}>
                       {currency.code} - {currency.name}
