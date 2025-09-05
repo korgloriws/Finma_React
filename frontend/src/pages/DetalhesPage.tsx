@@ -4,35 +4,25 @@ import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Search, 
-  TrendingUp, 
   BarChart3, 
-  TrendingDown, 
   DollarSign, 
   Target, 
-  Activity, 
-  Zap, 
-  ArrowUpRight, 
-  ArrowDownRight, 
-  Calendar,
-  Building2,
-  Globe,
-  Users,
   FileText,
   PieChart,
   LineChart,
-  Award,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  ExternalLink,
   RefreshCw,
 } from 'lucide-react'
 import { ativoService } from '../services/api'
 import { AtivoDetalhes, AtivoInfo } from '../types'
-import { formatCurrency, formatPercentage, formatNumber, formatDividendYield } from '../utils/formatters'
-import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts'
-import TickerWithLogo from '../components/TickerWithLogo'
 import { normalizeTicker, getDisplayTicker } from '../utils/tickerUtils'
+import DetalhesVisaoGeralTab from '../components/detalhes/DetalhesVisaoGeralTab'
+import DetalhesFundamentalsTab from '../components/detalhes/DetalhesFundamentalsTab'
+import DetalhesChartsTab from '../components/detalhes/DetalhesChartsTab'
+import DetalhesDividendsTab from '../components/detalhes/DetalhesDividendsTab'
+import DetalhesHistoryTab from '../components/detalhes/DetalhesHistoryTab'
+import DetalhesConceptsTab from '../components/detalhes/DetalhesConceptsTab'
+import DetalhesComparisonTab from '../components/detalhes/DetalhesComparisonTab'
+import DetalhesFixedIncomeTab from '../components/detalhes/DetalhesFixedIncomeTab'
 
 export default function DetalhesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -58,7 +48,7 @@ export default function DetalhesPage() {
     enabled: !!ticker,
   })
 
-  // Histórico dedicado para comparação com RF (pode ter período diferente do de charts)
+  
   const yfPeriodMap: Record<typeof fiPeriodo, string> = {
     '6m': '6mo',
     '1y': '1y',
@@ -295,7 +285,7 @@ export default function DetalhesPage() {
     return out
   }, [fiStartDate, fiEndDate])
 
-  // CDI diário (BCB 12) → índice base 100 → mensal por último valor do mês
+
   const { data: cdiDaily } = useQuery<{ date: Date; idx: number }[]>({
     queryKey: ['cdi-daily', fiPeriodo],
     enabled: true,
@@ -594,118 +584,11 @@ export default function DetalhesPage() {
   )
 
 
-  const MetricCard = ({ 
-    title, 
-    value, 
-    subtitle, 
-    icon: Icon, 
-    color = 'blue',
-    trend,
-    loading = false
-  }: { 
-    title: string
-    value: string
-    subtitle?: string
-    icon: any
-    color?: string
-    trend?: { value: number; isPositive: boolean }
-    loading?: boolean
-  }) => (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ scale: 1.02 }}
-      className="bg-card border border-border rounded-xl p-6 hover:shadow-lg transition-all duration-200"
-    >
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-        <div className={`p-3 rounded-lg bg-${color}-100 dark:bg-${color}-900/30`}>
-          <Icon className={`w-6 h-6 text-${color}-600 dark:text-${color}-400`} />
-        </div>
-        {trend && !loading && (
-          <motion.div 
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
-              trend.isPositive 
-                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
-                : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-            }`}
-          >
-            {trend.isPositive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-            {Math.abs(trend.value).toFixed(1)}%
-          </motion.div>
-        )}
-      </div>
-      
-      <div className="space-y-1">
-        <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-        {loading ? (
-          <div className="animate-pulse">
-            <div className="h-8 bg-muted rounded w-24"></div>
-          </div>
-        ) : (
-          <p className="text-2xl font-bold text-foreground">{value}</p>
-        )}
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
-      </div>
-    </motion.div>
-  )
 
 
-  const InfoRow = ({ label, value, icon: Icon, color = 'gray' }: { 
-    label: string
-    value: string | null | undefined
-    icon?: any
-    color?: string
-  }) => (
-    <motion.div 
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="flex items-center justify-between flex-wrap gap-3 py-3 px-4 rounded-lg hover:bg-muted/30 transition-colors"
-    >
-      <div className="flex items-center gap-3">
-        {Icon && (
-          <Icon className={`w-4 h-4 text-${color}-500`} />
-        )}
-        <span className="font-medium text-sm text-muted-foreground">{label}:</span>
-      </div>
-      <span className="text-sm font-semibold text-foreground text-right break-all max-w-full sm:max-w-[60%] ml-auto">
-        {value || '-'}
-      </span>
-    </motion.div>
-  )
 
 
-  const InfoSection = ({ 
-    title, 
-    icon: Icon, 
-    color = 'blue', 
-    children 
-  }: { 
-    title: string
-    icon: any
-    color?: string
-    children: React.ReactNode
-  }) => (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-card border border-border rounded-xl p-6 shadow-lg"
-    >
-      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <div className={`p-2 rounded-lg bg-${color}-100 dark:bg-${color}-900/30`}>
-          <Icon className={`w-5 h-5 text-${color}-600 dark:text-${color}-400`} />
-        </div>
-        {title}
-      </h3>
-      {children}
-    </motion.div>
-  )
 
-  
-  const calcularVariacao = (atual: number, anterior: number) => {
-    return ((atual - anterior) / anterior) * 100
-  }
 
 
   const chartData = useMemo(() => {
@@ -952,963 +835,93 @@ export default function DetalhesPage() {
         <div className="p-6">
           <AnimatePresence mode="wait">
             {activeTab === 'fixedincome' && (
-              <motion.div
-                key="fixedincome"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-6"
-              >
-                {/* Filtro de período */}
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-muted-foreground">Período:</label>
-                  <select
-                    className="px-3 py-2 border border-border rounded bg-background text-foreground"
-                    value={fiPeriodo}
-                    onChange={(e) => setFiPeriodo(e.target.value as any)}
-                    aria-label="Selecionar período de comparação"
-                  >
-                    <option value="6m">6 meses</option>
-                    <option value="1y">1 ano</option>
-                    <option value="3y">3 anos</option>
-                    <option value="5y">5 anos</option>
-                    <option value="max">Máximo</option>
-                  </select>
-                </div>
-
-                {/* Gráfico comparativo rebase 100 */}
-                <div className="bg-muted/30 rounded-lg p-6">
-                  <h3 className="text-lg font-semibold mb-4">Crescimento Comparado (Ativo x CDI x SELIC x IPCA)</h3>
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsLineChart data={fiChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis dataKey="label" tick={{ fontSize: 12 }} angle={-12} textAnchor="end" height={50} />
-                        <YAxis tick={{ fontSize: 12 }} domain={[0, 'auto']} />
-                        <Tooltip formatter={(v: any) => (v != null ? `${Number(v).toFixed(2)}%` : '-')} />
-                        <Legend />
-                        <Line type="monotone" dataKey="Ativo" stroke="#2563eb" dot={false} strokeWidth={2} />
-                        <Line type="monotone" dataKey="CDI" stroke="#16a34a" dot={false} strokeWidth={2} />
-                        <Line type="monotone" dataKey="SELIC" stroke="#f59e0b" dot={false} strokeWidth={2} />
-                        <Line type="monotone" dataKey="IPCA" stroke="#ef4444" dot={false} strokeWidth={2} />
-                      </RechartsLineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Resumo textual da comparação */}
-                {fiResumo && (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    {[
-                      { k: 'Ativo', label: 'Ativo', color: 'text-blue-600' },
-                      { k: 'CDI', label: 'CDI', color: 'text-emerald-600' },
-                      { k: 'SELIC', label: 'SELIC', color: 'text-amber-600' },
-                      { k: 'IPCA', label: 'IPCA', color: 'text-rose-600' },
-                    ].map((it) => (
-                      <div key={it.k} className="bg-card border border-border rounded-lg p-4">
-                        <div className="text-sm text-muted-foreground">{it.label} ({fiPeriodo})</div>
-                        <div className={`text-xl font-bold ${it.color}`}>
-                          {isFinite(Number((fiResumo as any)[it.k]))
-                            ? `${Number((fiResumo as any)[it.k]).toFixed(2)}%`
-                            : '-'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
+              <DetalhesFixedIncomeTab
+                fiPeriodo={fiPeriodo}
+                setFiPeriodo={setFiPeriodo}
+                fiChartData={fiChartData}
+                fiResumo={fiResumo}
+              />
             )}
             {activeTab === 'overview' && (
-              <motion.div
-                key="overview"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-6"
-              >
-                {/* Header do ativo */}
-                <div className="flex items-center gap-4 p-6 bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl border border-primary/20 flex-wrap">
-                  {logoUrl ? (
-                    <img 
-                      src={logoUrl} 
-                      alt={ticker} 
-                      className="w-16 h-16 rounded-lg object-contain border-2 border-border bg-white p-2 shadow-md"
-                    />
-                  ) : (
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-md">
-                      {ticker.replace('.SA', '').replace('.sa', '').slice(0, 4)}
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <h2 className="text-2xl font-bold text-foreground min-w-0 break-words">{info.longName}</h2>
-                      <motion.span
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.2 }}
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border shrink-0 ${
-                          strategyDetails.meets
-                            ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800'
-                            : 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800'
-                        }`}
-                        title={strategyDetails.meets ? 'Dentro da estratégia' : 'Fora da estratégia'}
-                      >
-                        {strategyDetails.meets ? (
-                          <CheckCircle className="w-3.5 h-3.5" />
-                        ) : (
-                          <XCircle className="w-3.5 h-3.5" />
-                        )}
-                        <span className="hidden sm:inline whitespace-nowrap">
-                          {strategyDetails.meets ? 'Dentro da estratégia' : 'Fora da estratégia'}
-                        </span>
-                      </motion.span>
-                      <div className="w-full mt-2 flex items-center gap-1 sm:gap-2 text-xs text-muted-foreground flex-wrap">
-                        <span className="hidden md:inline">Critérios:</span>
-                        {strategyDetails.criteria.map((c, idx) => (
-                          <motion.span
-                            key={idx}
-                            initial={{ opacity: 0, y: -4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.03 * idx }}
-                            className={`inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full border text-xs ${
-                              c.ok
-                                ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-300 dark:border-green-800'
-                                : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-300 dark:border-red-800'
-                            }`}
-                            title={`${c.label}: ${c.value}`}
-                          >
-                            {c.ok ? (
-                              <CheckCircle className="w-3 h-3" />
-                            ) : (
-                              <XCircle className="w-3 h-3" />
-                            )}
-                            <span className="max-w-[80px] sm:max-w-[120px] truncate">{c.label}</span>
-                          </motion.span>
-                        ))}
-                        {tipoAtivo === 'FII' && (
-                          <>
-                            {fiiInfo?.tipo && (
-                              <span
-                                className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full border bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/10 dark:text-purple-300 dark:border-purple-800 text-xs"
-                                title={`Tipo de FII: ${fiiInfo?.tipo}`}
-                              >
-                                <PieChart className="w-3 h-3" />
-                                <span className="max-w-[100px] sm:max-w-[140px] truncate">{fiiInfo?.tipo}</span>
-                              </span>
-                            )}
-                            {fiiInfo?.segmento && (
-                              <span
-                                className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/10 dark:text-indigo-300 dark:border-indigo-800 text-xs"
-                                title={`Segmento: ${fiiInfo?.segmento}`}
-                              >
-                                <Building2 className="w-3 h-3" />
-                                <span className="max-w-[120px] sm:max-w-[160px] truncate">{fiiInfo?.segmento}</span>
-                              </span>
-                            )}
-                          </>
-                        )}
-                        {/* Selos de Graham e Bazin no overview (responsivos) */}
-                        {grahamBadge && (
-                          <span className={`inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full border text-xs font-medium ${
-                            grahamBadge.color === 'green' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-300 dark:border-green-800' :
-                            grahamBadge.color === 'yellow' ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/10 dark:text-yellow-300 dark:border-yellow-800' :
-                            'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-300 dark:border-red-800'
-                          }`}>
-                            <span className="hidden sm:inline">{grahamBadge.label}</span>
-                            <span className="sm:hidden">{grahamBadge.label.split(' ')[0]}</span>
-                          </span>
-                        )}
-                        {bazinBadge && (
-                          <span className={`inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full border text-xs font-medium ${
-                            bazinBadge.color === 'green' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-300 dark:border-green-800' :
-                            'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-300 dark:border-red-800'
-                          }`}>
-                            <span className="hidden sm:inline">{bazinBadge.label}</span>
-                            <span className="sm:hidden">{bazinBadge.label.split(' ')[0]}</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-lg text-muted-foreground">{info.symbol}</p>
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-sm text-muted-foreground">
-                      {info.sector && <span className="flex items-center gap-1"><Building2 className="w-4 h-4" />{info.sector}</span>}
-                      {info.country && <span className="flex items-center gap-1"><Globe className="w-4 h-4" />{info.country}</span>}
-                      {info.website && (
-                        <a 
-                          href={info.website} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-primary hover:underline"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                          Website
-                        </a>
-                      )}
-                      <a 
-                        href={`https://www.google.com/search?q=${encodeURIComponent(ticker)}`}
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-primary hover:underline"
-                        title="Pesquisar no Google"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        Google
-                      </a>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Métricas principais */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-
-                  <MetricCard
-                    title="Preço Atual"
-                    value={formatCurrency(info.currentPrice)}
-          icon={DollarSign}
-          color="green"
-                    trend={historico && historico.length > 1 ? {
-                      value: calcularVariacao(historico[historico.length - 1].Close, historico[historico.length - 2].Close),
-                      isPositive: historico[historico.length - 1].Close > historico[historico.length - 2].Close
-                    } : undefined}
-                    loading={loadingHistorico}
-                  />
-                  <MetricCard
-                    title="P/L"
-                    value={formatNumber(info.trailingPE)}
-                    subtitle="Price/Earnings"
-          icon={Target}
-          color="blue"
-        />
-                  <MetricCard
-                    title="P/VP"
-                    value={formatNumber(info.priceToBook)}
-                    subtitle="Price/Book Value"
-                    icon={FileText}
-                    color="indigo"
-                  />
-                  <MetricCard
-                    title="Dividend Yield"
-                    value={formatDividendYield(info.dividendYield)}
-          icon={TrendingUp}
-          color="purple"
-        />
-                  <MetricCard
-                    title="ROE"
-                    value={formatPercentage(info.returnOnEquity ? info.returnOnEquity * 100 : null)}
-                    subtitle="Return on Equity"
-          icon={Activity}
-          color="orange"
-        />
-      </div>
-
-                {/* Informações da empresa / FII */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <InfoSection title="Informações Gerais" icon={Building2} color="blue">
-                    <div className="space-y-1">
-                      <InfoRow label="Nome Completo" value={info.longName} icon={FileText} />
-                      <InfoRow label="Ticker" value={info.symbol} icon={Award} />
-                      <InfoRow label="País" value={info.country} icon={Globe} />
-                      <InfoRow label="Setor" value={info.sector} icon={Building2} />
-                      {/* Campos adicionais para FII */}
-                      <InfoRow label="Tipo de FII" value={fiiInfo?.tipo} icon={PieChart} />
-                      <InfoRow label="Segmento" value={fiiInfo?.segmento} icon={Target} />
-                      <InfoRow label="Gestora" value={fiiInfo?.gestora} icon={Users} />
-                      <InfoRow label="Administradora" value={fiiInfo?.administradora} icon={Users} />
-                      <InfoRow label="Patrimônio Líquido" value={formatCurrency(fiiInfo?.patrimonio_liquido)} icon={DollarSign} />
-                      <InfoRow label="Vacância" value={fiiInfo?.vacancia ? `${fiiInfo.vacancia}%` : '-'} icon={AlertTriangle} />
-                      <InfoRow label="Nº de Cotistas" value={fiiInfo?.num_cotistas?.toLocaleString('pt-BR')} icon={Users} />
-                      <InfoRow label="Nº de Imóveis" value={fiiInfo?.num_imoveis?.toString()} icon={Building2} />
-                      <InfoRow label="Indústria" value={info.industry} icon={Target} />
-                                            <InfoRow label="Website" value={info.website} icon={ExternalLink} />
-                     
-                      <InfoRow label="Funcionários" value={info.fullTimeEmployees?.toLocaleString('pt-BR')} icon={Users} />
-                      <InfoRow label="Moeda" value={info.currency} icon={DollarSign} />
-          </div>
-                  </InfoSection>
-
-                  <InfoSection title="Indicadores de Mercado" icon={TrendingUp} color="green">
-                    <div className="space-y-1">
-                      <InfoRow label="Market Cap" value={formatCurrency(info.marketCap)} icon={DollarSign} />
-                      <InfoRow label="Enterprise Value (EV)" value={formatCurrency(enterpriseValue)} icon={DollarSign} />
-                      <InfoRow label="EBIT (estimado)" value={formatCurrency(ebitComputed)} icon={Target} />
-                      <InfoRow label="EV/EBIT" value={formatNumber(evToEbit)} icon={FileText} />
-                      <InfoRow label="Volume Médio" value={formatCurrency(info.averageVolume)} icon={BarChart3} />
-                      <InfoRow label="Beta" value={formatNumber(info.beta)} icon={Activity} />
-                      <InfoRow label="Média 50 dias" value={formatCurrency(info.fiftyDayAverage)} icon={TrendingUp} />
-                      <InfoRow label="Média 200 dias" value={formatCurrency(info.twoHundredDayAverage)} icon={TrendingUp} />
-                      <InfoRow label="Máx 52 Semanas" value={formatCurrency(info.fiftyTwoWeekHigh)} icon={TrendingUp} />
-                      <InfoRow label="Mín 52 Semanas" value={formatCurrency(info.fiftyTwoWeekLow)} icon={TrendingDown} />
-            </div>
-                  </InfoSection>
-            </div>
-              </motion.div>
+              <DetalhesVisaoGeralTab
+                ticker={ticker}
+                info={info}
+                logoUrl={logoUrl}
+                historico={historico}
+                loadingHistorico={loadingHistorico}
+                strategyDetails={strategyDetails}
+                tipoAtivo={tipoAtivo}
+                fiiInfo={fiiInfo}
+                grahamBadge={grahamBadge}
+                bazinBadge={bazinBadge}
+                enterpriseValue={enterpriseValue}
+                ebitComputed={ebitComputed}
+                evToEbit={evToEbit}
+              />
             )}
 
             {activeTab === 'fundamentals' && (
-              <motion.div
-                key="fundamentals"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-6"
-              >
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <InfoSection title="Resultados e Crescimento" icon={TrendingUp} color="green">
-                    <div className="space-y-1">
-                      <InfoRow label="Receita Total" value={formatCurrency(info.totalRevenue)} icon={DollarSign} />
-                      <InfoRow label="Lucro Líquido" value={formatCurrency(info.netIncomeToCommon)} icon={DollarSign} />
-                      <InfoRow label="EBITDA" value={formatCurrency(info.ebitda)} icon={DollarSign} />
-                      <InfoRow label="Lucro por Ação (EPS)" value={formatCurrency(info.trailingEps, '')} icon={Award} />
-                      <InfoRow label="BVPS" value={formatCurrency(info.bookValue)} icon={FileText} />
-                      <InfoRow label="Crescimento Receita (5y)" value={formatPercentage(info.revenueGrowth ? info.revenueGrowth * 100 : null)} icon={TrendingUp} />
-                      <InfoRow label="Crescimento Lucro (5y)" value={formatPercentage(info.earningsGrowth ? info.earningsGrowth * 100 : null)} icon={TrendingUp} />
-            </div>
-                  </InfoSection>
-
-                  <InfoSection title="Endividamento" icon={TrendingDown} color="red">
-                    <div className="space-y-1">
-                      <InfoRow label="Dívida Líquida" value={formatNumber(info.debtToEquity)} icon={AlertTriangle} />
-                      <InfoRow label="Dívida/EBITDA" value={formatPercentage(info.debtToEbitda ? info.debtToEbitda * 100 : null)} icon={AlertTriangle} />
-                      <InfoRow label="Dívida/Ativos" value={formatPercentage(info.debtToAssets ? info.debtToAssets * 100 : null)} icon={AlertTriangle} />
-                      <InfoRow label="Dívida/Capital" value={formatPercentage(info.debtToCapital ? info.debtToCapital * 100 : null)} icon={AlertTriangle} />
-                      <InfoRow label="Dívida/Fluxo de Caixa" value={formatPercentage(info.debtToCashFlow ? info.debtToCashFlow * 100 : null)} icon={AlertTriangle} />
-                      <InfoRow label="Dívida/Fluxo de Caixa Livre" value={formatPercentage(info.debtToFreeCashFlow ? info.debtToFreeCashFlow * 100 : null)} icon={AlertTriangle} />
-                      <InfoRow label="Dívida/EBIT" value={formatPercentage(info.debtToEbit ? info.debtToEbit * 100 : null)} icon={AlertTriangle} />
-                      <InfoRow label="Dívida/Lucro Líquido" value={formatPercentage(info.debtToNetIncome ? info.debtToNetIncome * 100 : null)} icon={AlertTriangle} />
-          </div>
-                  </InfoSection>
-
-                  <InfoSection title="Dividendos" icon={DollarSign} color="purple">
-                    <div className="space-y-1">
-                      <InfoRow label="Último Dividendo" value={formatCurrency(info.lastDiv)} icon={DollarSign} />
-                      <InfoRow label="Dividendos por Ação" value={formatCurrency(info.dividendRate)} icon={DollarSign} />
-                      <InfoRow label="Payout Ratio" value={formatPercentage(info.payoutRatio ? info.payoutRatio * 100 : null)} icon={PieChart} />
-                      {/* FII extras */}
-                      <InfoRow label="DY 12 meses (calc.)" value={fiiInfo?.dy_12m != null ? `${fiiInfo.dy_12m.toFixed(2)}%` : '-'} icon={TrendingUp} />
-                      <InfoRow label="Dividendo médio (12m)" value={formatCurrency(fiiInfo?.dividendo_medio_12m)} icon={DollarSign} />
-                      <InfoRow label="Último rendimento" value={formatCurrency(fiiInfo?.ultimo_rendimento_valor)} icon={DollarSign} />
-                      <InfoRow label="Data último rendimento" value={fiiInfo?.ultimo_rendimento_data ? new Date(fiiInfo.ultimo_rendimento_data).toLocaleDateString('pt-BR') : '-'} icon={Calendar} />
-          </div>
-                  </InfoSection>
-
-                  <InfoSection title="Eficiência Operacional" icon={Activity} color="blue">
-                    <div className="space-y-1">
-                      <InfoRow label="Margem Bruta" value={formatPercentage(info.grossMargins ? info.grossMargins * 100 : null)} icon={TrendingUp} />
-                      <InfoRow label="Margem Operacional" value={formatPercentage(info.operatingMargins ? info.operatingMargins * 100 : null)} icon={TrendingUp} />
-                      <InfoRow label="Margem Líquida" value={formatPercentage(info.profitMargins ? info.profitMargins * 100 : null)} icon={TrendingUp} />
-                      <InfoRow label="ROA" value={formatPercentage(info.returnOnAssets ? info.returnOnAssets * 100 : null)} icon={Activity} />
-                      <InfoRow label="ROIC" value={formatPercentage(info.returnOnInvestedCapital ? info.returnOnInvestedCapital * 100 : null)} icon={Activity} />
-          </div>
-                  </InfoSection>
-        </div>
-              </motion.div>
+              <DetalhesFundamentalsTab
+                info={info}
+                fiiInfo={fiiInfo}
+              />
             )}
 
             {activeTab === 'charts' && (
-              <motion.div
-                key="charts"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-6"
-              >
-                {/* Controles dos gráficos */}
-        <div className="flex items-center gap-4">
-          <label className="font-medium flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-blue-500" />
-            Período dos Gráficos:
-          </label>
-          <select
-            value={periodo}
-            onChange={handlePeriodoChange}
-            className="px-3 py-2 border border-border rounded-lg bg-background text-foreground"
-            aria-label="Selecionar período dos gráficos"
-          >
-            <option value="1mo">1 mês</option>
-            <option value="3mo">3 meses</option>
-            <option value="6mo">6 meses</option>
-            <option value="1y">1 ano</option>
-            <option value="5y">5 anos</option>
-            <option value="max">Máximo</option>
-          </select>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Gráfico de Preço */}
-                  <InfoSection title="Evolução do Preço de Fechamento" icon={TrendingUp} color="blue">
-            {loadingHistorico ? (
-                      <LoadingSpinner text="Carregando gráfico..." />
-                    ) : chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                        <RechartsLineChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis 
-                    dataKey="Date" 
-                            stroke="hsl(var(--muted-foreground))"
-                    tickFormatter={(value) => new Date(value).toLocaleDateString('pt-BR')}
-                  />
-                          <YAxis stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: 'hsl(var(--card))', 
-                              border: '1px solid hsl(var(--border))', 
-                              borderRadius: '8px',
-                              color: 'hsl(var(--foreground))'
-                            }}
-                    labelFormatter={(value) => new Date(value).toLocaleDateString('pt-BR')}
-                    formatter={(value: number) => [formatCurrency(value), 'Preço']}
-                  />
-                  <Line type="monotone" dataKey="Close" stroke="#3b82f6" strokeWidth={2} />
-                        </RechartsLineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                Histórico não disponível
-              </div>
-            )}
-                  </InfoSection>
-
-          {/* Gráfico de Dividend Yield */}
-                  <InfoSection title="Evolução do Dividend Yield" icon={BarChart3} color="green">
-            {loadingHistorico ? (
-                      <LoadingSpinner text="Carregando gráfico..." />
-                    ) : dividendYieldChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={dividendYieldChartData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis 
-                    dataKey="Date" 
-                            stroke="hsl(var(--muted-foreground))"
-                    tickFormatter={(value) => new Date(value).toLocaleDateString('pt-BR')}
-                  />
-                          <YAxis stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip 
-                            contentStyle={{ 
-                              backgroundColor: 'hsl(var(--card))', 
-                              border: '1px solid hsl(var(--border))', 
-                              borderRadius: '8px',
-                              color: 'hsl(var(--foreground))'
-                            }}
-                    labelFormatter={(value) => new Date(value).toLocaleDateString('pt-BR')}
-                    formatter={(value: number, name: string) => [
-                      name === 'DividendYield' ? `${value.toFixed(2)}%` : formatCurrency(value), 
-                      name === 'DividendYield' ? 'Dividend Yield' : name === 'Dividend' ? 'Dividendo' : 'Preço'
-                    ]}
-                  />
-                  <Bar dataKey="DividendYield" fill="#10b981" name="Dividend Yield" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                Dados não disponíveis
-              </div>
-            )}
-                  </InfoSection>
-          </div>
-
-          {/* Gráfico de Dividendos em Valores */}
-                <InfoSection title="Evolução dos Dividendos" icon={DollarSign} color="purple">
-            {loadingHistorico ? (
-                    <LoadingSpinner text="Carregando gráfico..." />
-                  ) : dividendYieldChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                      <RechartsLineChart data={dividendYieldChartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis 
-                    dataKey="Date" 
-                          stroke="hsl(var(--muted-foreground))"
-                    tickFormatter={(value) => new Date(value).toLocaleDateString('pt-BR')}
-                  />
-                        <YAxis stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--card))', 
-                            border: '1px solid hsl(var(--border))', 
-                            borderRadius: '8px',
-                            color: 'hsl(var(--foreground))'
-                          }}
-                    labelFormatter={(value) => new Date(value).toLocaleDateString('pt-BR')}
-                    formatter={(value: number) => [formatCurrency(value), 'Dividendo']}
-                  />
-                  <Line type="monotone" dataKey="Dividend" stroke="#f59e0b" strokeWidth={2} />
-                      </RechartsLineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                Dados não disponíveis
-              </div>
-            )}
-                </InfoSection>
-              </motion.div>
+              <DetalhesChartsTab
+                periodo={periodo}
+                handlePeriodoChange={handlePeriodoChange}
+                loadingHistorico={loadingHistorico}
+                chartData={chartData}
+                dividendYieldChartData={dividendYieldChartData}
+              />
             )}
 
             {activeTab === 'dividends' && (
-              <motion.div
-                key="dividends"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-6"
-              >
-                {/* Controles dos proventos */}
-                <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
-                  <label className="font-medium flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-green-500" />
-                    Período dos Proventos:
-                  </label>
-                  <select
-                    value={periodoDividendos}
-                    onChange={handlePeriodoDividendosChange}
-                    className="px-3 py-2 border border-border rounded-lg bg-background text-foreground"
-                    aria-label="Selecionar período dos proventos"
-                  >
-                    <option value="1mo">1 mês</option>
-                    <option value="3mo">3 meses</option>
-                    <option value="6mo">6 meses</option>
-                    <option value="1y">1 ano</option>
-                    <option value="2y">2 anos</option>
-                    <option value="5y">5 anos</option>
-                    <option value="max">Máximo</option>
-                  </select>
-          </div>
-
-                {/* Tabela de Proventos */}
-                <InfoSection title="Histórico de Proventos" icon={DollarSign} color="green">
-                  {dividendData.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[700px]">
-                        <thead className="bg-muted/30">
-                          <tr>
-                            <th className="px-4 py-3 text-left font-medium">Data</th>
-                            <th className="px-4 py-3 text-left font-medium">Valor do Dividendo</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dividendData.map((item, index) => (
-                            <motion.tr 
-                              key={item.Date} 
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: index * 0.05 }}
-                              className={`${index % 2 === 0 ? 'bg-background' : 'bg-muted/20'} hover:bg-muted/40 transition-colors`}
-                            >
-                              <td className="px-4 py-3 font-medium">
-                                {new Date(item.Date).toLocaleDateString('pt-BR')}
-                              </td>
-                              <td className="px-4 py-3 font-semibold text-green-600">
-                                {formatCurrency(item.Dividend)}
-                              </td>
-                            </motion.tr>
-                          ))}
-                        </tbody>
-                      </table>
-        </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <DollarSign className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                      <p>Nenhum provento encontrado para este período.</p>
-                    </div>
-                  )}
-                </InfoSection>
-
-                {/* Resumo dos Proventos */}
-                {dividendData.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <InfoSection title="Total de Proventos" icon={DollarSign} color="green">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-green-600">
-                          {formatCurrency(dividendData.reduce((sum, item) => sum + item.Dividend, 0))}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Soma de todos os proventos
-                        </p>
-            </div>
-                    </InfoSection>
-
-                    <InfoSection title="Média por Provento" icon={TrendingUp} color="blue">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-blue-600">
-                          {formatCurrency(dividendData.reduce((sum, item) => sum + item.Dividend, 0) / dividendData.length)}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Média do período
-                        </p>
-                      </div>
-                    </InfoSection>
-
-                    <InfoSection title="Maior Provento" icon={Award} color="purple">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-purple-600">
-                          {formatCurrency(Math.max(...dividendData.map(item => item.Dividend)))}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Maior valor do período
-                        </p>
-                      </div>
-                    </InfoSection>
-                  </div>
-                )}
-              </motion.div>
+              <DetalhesDividendsTab
+                periodoDividendos={periodoDividendos}
+                handlePeriodoDividendosChange={handlePeriodoDividendosChange}
+                dividendData={dividendData}
+              />
             )}
 
             {activeTab === 'history' && (
-              <motion.div
-                key="history"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-6"
-              >
-                <InfoSection title="História e Atuação" icon={FileText} color="indigo">
-                  <div className="space-y-3">
-                    <div className="text-sm leading-relaxed text-foreground/90">
-                      {(info.longBusinessSummary && String(info.longBusinessSummary).trim())
-                        ? String(info.longBusinessSummary)
-                        : 'Resumo não disponível.'}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <InfoRow label="Setor" value={info.sector} icon={Building2} />
-                      <InfoRow label="Indústria" value={info.industry} icon={Target} />
-                      <InfoRow label="País" value={info.country} icon={Globe} />
-                      <InfoRow label="Funcionários" value={info.fullTimeEmployees?.toLocaleString('pt-BR')} icon={Users} />
-                      <InfoRow label="Endereço" value={[info.address1, info.address2, info.city, info.state, info.zip, info.country].filter(Boolean).join(', ') || '-'} icon={FileText} />
-                      <InfoRow label="Telefone" value={info.phone} icon={FileText} />
-                      <InfoRow label="Website" value={info.website} icon={ExternalLink} />
-                    </div>
-                  </div>
-                </InfoSection>
-
-                <InfoSection title="Diretoria e Contatos (se disponível)" icon={Users} color="blue">
-                  <div className="space-y-1">
-                    <InfoRow label="Cidade" value={info.city} icon={Globe} />
-                    <InfoRow label="Estado" value={info.state} icon={Globe} />
-                    <InfoRow label="Código Postal" value={info.zip} icon={FileText} />
-                    <InfoRow label="Fax" value={info.fax} icon={FileText} />
-                  </div>
-                </InfoSection>
-              </motion.div>
+              <DetalhesHistoryTab
+                info={info}
+              />
             )}
 
             {activeTab === 'comparison' && (
-              <motion.div
-                key="comparison"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-6"
-              >
-                {/* Input para comparação */}
-                <InfoSection title="Comparação com Outros Ativos" icon={Zap} color="yellow">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                      <label className="font-medium flex items-center gap-2">
-                        <Zap className="w-5 h-5 text-yellow-500" />
-                        Comparar com outros ativos:
-                      </label>
-                      <div className="flex-1 max-w-md">
-                        <input
-                          type="text"
-                          placeholder="Digite tickers separados por vírgula (ex: PETR4, ITUB4, VALE3)"
-                          ref={compararInputRef}
-                          onKeyDown={handleCompararKeyDown}
-                          className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={handleComparar}
-                        className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                      >
-                        Comparar
-                      </motion.button>
-                    </div>
-
-                    {/* Tabela de Comparação */}
-                    {loadingComparacao ? (
-                      <LoadingSpinner text="Carregando comparação..." />
-                    ) : comparacao && comparacao.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-[900px]">
-                          <thead className="bg-muted/30">
-                            <tr>
-                              <th className="px-4 py-3 text-left font-medium">Ticker</th>
-                              <th className="px-4 py-3 text-left font-medium">Nome</th>
-                              <th className="px-4 py-3 text-left font-medium">Preço Atual</th>
-                              <th className="px-4 py-3 text-left font-medium">P/L</th>
-                              <th className="px-4 py-3 text-left font-medium">P/VP</th>
-                              <th className="px-4 py-3 text-left font-medium">DY</th>
-                              <th className="px-4 py-3 text-left font-medium">ROE</th>
-                              <th className="px-4 py-3 text-left font-medium">Setor</th>
-                              <th className="px-4 py-3 text-left font-medium">País</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {comparacao.map((ativo, index) => (
-                              <motion.tr 
-                                key={ativo.ticker} 
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: index * 0.1 }}
-                                className={`${index % 2 === 0 ? 'bg-background' : 'bg-muted/20'} hover:bg-muted/40 transition-colors`}
-                              >
-                <td className="px-4 py-3 min-w-[120px]">
-                  <TickerWithLogo ticker={ativo.ticker} size="sm" />
-                </td>
-                                <td className="px-4 py-3">{ativo.nome}</td>
-                                <td className="px-4 py-3 font-semibold">{formatCurrency(ativo.preco_atual)}</td>
-                                <td className="px-4 py-3">{formatNumber(ativo.pl)}</td>
-                                <td className="px-4 py-3">{formatNumber(ativo.pvp)}</td>
-                                <td className="px-4 py-3 text-green-600 font-medium">{formatDividendYield(ativo.dy)}</td>
-                                <td className="px-4 py-3">{formatPercentage(ativo.roe ? ativo.roe * 100 : null)}</td>
-                                <td className="px-4 py-3 text-sm text-muted-foreground">{ativo.setor}</td>
-                                <td className="px-4 py-3 text-sm text-muted-foreground">{ativo.pais}</td>
-                              </motion.tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : null}
-
-                    {/* Gráficos de comparação */}
-                    {comparisonData.length > 0 && (
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-                        <InfoSection title="Comparação de Preços" icon={DollarSign} color="green">
-                          <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={comparisonData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                              <XAxis dataKey="ticker" stroke="hsl(var(--muted-foreground))" />
-                              <YAxis stroke="hsl(var(--muted-foreground))" />
-                <Tooltip 
-                                contentStyle={{ 
-                                  backgroundColor: 'hsl(var(--card))', 
-                                  border: '1px solid hsl(var(--border))', 
-                                  borderRadius: '8px',
-                                  color: 'hsl(var(--foreground))'
-                                }}
-                                formatter={(value: number) => [formatCurrency(value), 'Preço']}
-                              />
-                              <Bar dataKey="preco" fill="#10b981" />
-                            </BarChart>
-            </ResponsiveContainer>
-                        </InfoSection>
-
-                        <InfoSection title="Comparação de P/L" icon={Target} color="blue">
-                          <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={comparisonData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                              <XAxis dataKey="ticker" stroke="hsl(var(--muted-foreground))" />
-                              <YAxis stroke="hsl(var(--muted-foreground))" />
-                              <Tooltip 
-                                contentStyle={{ 
-                                  backgroundColor: 'hsl(var(--card))', 
-                                  border: '1px solid hsl(var(--border))', 
-                                  borderRadius: '8px',
-                                  color: 'hsl(var(--foreground))'
-                                }}
-                                formatter={(value: number) => [value.toFixed(2), 'P/L']}
-                              />
-                              <Bar dataKey="pl" fill="#3b82f6" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </InfoSection>
-
-                        <InfoSection title="Comparação de P/VP" icon={FileText} color="indigo">
-                          <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={comparisonData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                              <XAxis dataKey="ticker" stroke="hsl(var(--muted-foreground))" />
-                              <YAxis stroke="hsl(var(--muted-foreground))" />
-                              <Tooltip 
-                                contentStyle={{ 
-                                  backgroundColor: 'hsl(var(--card))', 
-                                  border: '1px solid hsl(var(--border))', 
-                                  borderRadius: '8px',
-                                  color: 'hsl(var(--foreground))'
-                                }}
-                                formatter={(value: number) => [value.toFixed(2), 'P/VP']}
-                              />
-                              <Bar dataKey="pvp" fill="#8b5cf6" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </InfoSection>
-
-                        <InfoSection title="Comparação de Dividend Yield" icon={TrendingUp} color="purple">
-                          <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={comparisonData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                              <XAxis dataKey="ticker" stroke="hsl(var(--muted-foreground))" />
-                              <YAxis stroke="hsl(var(--muted-foreground))" />
-                              <Tooltip 
-                                contentStyle={{ 
-                                  backgroundColor: 'hsl(var(--card))', 
-                                  border: '1px solid hsl(var(--border))', 
-                                  borderRadius: '8px',
-                                  color: 'hsl(var(--foreground))'
-                                }}
-                                formatter={(value: number) => [`${value.toFixed(2)}%`, 'DY']}
-                              />
-                              <Bar dataKey="dy" fill="#a855f7" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </InfoSection>
-
-                        <InfoSection title="Comparação de ROE" icon={Activity} color="orange">
-                          <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={comparisonData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                              <XAxis dataKey="ticker" stroke="hsl(var(--muted-foreground))" />
-                              <YAxis stroke="hsl(var(--muted-foreground))" />
-                <Tooltip 
-                                contentStyle={{ 
-                                  backgroundColor: 'hsl(var(--card))', 
-                                  border: '1px solid hsl(var(--border))', 
-                                  borderRadius: '8px',
-                                  color: 'hsl(var(--foreground))'
-                                }}
-                                formatter={(value: number) => [`${value.toFixed(2)}%`, 'ROE']}
-                              />
-                              <Bar dataKey="roe" fill="#f59e0b" />
-                            </BarChart>
-            </ResponsiveContainer>
-                        </InfoSection>
-            </div>
-          )}
-        </div>
-                </InfoSection>
-              </motion.div>
+              <DetalhesComparisonTab
+                compararInputRef={compararInputRef}
+                handleCompararKeyDown={handleCompararKeyDown}
+                handleComparar={handleComparar}
+                loadingComparacao={loadingComparacao}
+                comparacao={comparacao}
+                comparisonData={comparisonData}
+              />
             )}
 
             {activeTab === 'concepts' && (
-              <motion.div
-                key="concepts"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-6"
-              >
-                {/* Preço Justo de Graham */}
-                <InfoSection title="Preço Justo de Graham" icon={Target} color="blue">
-                  <div className="space-y-4">
-                    <div className="text-sm text-muted-foreground leading-relaxed">
-                      Fórmula clássica (adaptada): <strong>V = LPA × (8,5 + 2g) × (4,4 / Y)</strong><br/>
-                      Onde: LPA = lucro por ação (EPS), g = crescimento esperado anual (%), Y = taxa de juros de referência (%).<br/>
-                      Quanto maior o crescimento e menor a taxa de juros, maior o preço justo estimado.
-                    </div>
-                    {/* Selos */}
-                    <div className="flex flex-wrap gap-2">
-                      {grahamBadge && (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${
-                          grahamBadge.color === 'green' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-300 dark:border-green-800' :
-                          grahamBadge.color === 'yellow' ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/10 dark:text-yellow-300 dark:border-yellow-800' :
-                          'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-300 dark:border-red-800'
-                        }`}>
-                          {grahamBadge.label}
-                        </span>
-                      )}
-                    </div>
-                    {/* Parâmetros e resultados */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">LPA (EPS)</label>
-                        <input
-                          type="text"
-                          value={grahamEPSText}
-                          onChange={(e)=>setGrahamEPSText(e.target.value)}
-                          onKeyDown={(e)=>{ if (e.key==='Enter') commitGrahamEPS() }}
-                          className="w-full px-3 py-2 border border-border rounded bg-background text-foreground"
-                          placeholder="Ex.: 5.32"
-                        />
-                        <div className="text-xs text-muted-foreground mt-1">Pressione Enter para aplicar; padrão: EPS automático.</div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Crescimento (g) %</label>
-                        <input
-                          type="text"
-                          value={grahamGText}
-                          onChange={(e)=>setGrahamGText(e.target.value)}
-                          onKeyDown={(e)=>{ if (e.key==='Enter') commitGrahamG() }}
-                          className="w-full px-3 py-2 border border-border rounded bg-background text-foreground"
-                          placeholder="Ex.: 10"
-                        />
-                        <div className="text-xs text-muted-foreground mt-1">Pressione Enter para aplicar; padrão: crescimento automático.</div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Taxa de juros (Y) %</label>
-                        <input
-                          type="text"
-                          value={grahamYText}
-                          onChange={(e)=>setGrahamYText(e.target.value)}
-                          onKeyDown={(e)=>{ if (e.key==='Enter') commitGrahamY() }}
-                          className="w-full px-3 py-2 border border-border rounded bg-background text-foreground"
-                          placeholder="Ex.: 15"
-                        />
-                        <div className="text-xs text-muted-foreground mt-1">Pressione Enter para aplicar; padrão: taxa automática (SELIC se BR).</div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <MetricCard title="Preço Justo (Graham)" value={formatCurrency(grahamFairPrice)} icon={DollarSign} color="green" />
-                      <MetricCard title="Preço Atual" value={formatCurrency(info.currentPrice)} icon={DollarSign} color="purple" />
-                      <MetricCard title="Margem vs Atual" value={grahamFairPrice!=null&&info.currentPrice? `${(((grahamFairPrice-info.currentPrice)/info.currentPrice)*100).toFixed(2)}%` : '-'} icon={TrendingUp} color="orange" />
-                    </div>
-                  </div>
-                </InfoSection>
-
-                {/* Método Bazin */}
-                <InfoSection title="Método Bazin (Teto por Dividendos)" icon={DollarSign} color="green">
-                  <div className="space-y-4">
-                    <div className="text-sm text-muted-foreground leading-relaxed">
-                      Fórmula: <strong>Preço Teto = Dividendos dos últimos 12 meses / (Taxa de DY desejada)</strong>.<br/>
-                      Ex.: se a empresa pagou R$ 2,00 em 12 meses e você deseja 8% ao ano, o teto seria 2 / 0,08 = R$ 25,00.
-                    </div>
-                    {/* Selo */}
-                    <div className="flex flex-wrap gap-2">
-                      {bazinBadge && (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${
-                          bazinBadge.color === 'green' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/10 dark:text-green-300 dark:border-green-800' :
-                          'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/10 dark:text-red-300 dark:border-red-800'
-                        }`}>
-                          {bazinBadge.label}
-                        </span>
-                      )}
-                    </div>
-                    {/* Parâmetros e resultados */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Dividendos 12m</label>
-                        <div className="px-3 py-2 border border-border rounded bg-background text-foreground">
-                          {formatCurrency(dividends12m)}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">Se indisponível, usa dividendRate anual do yfinance.</div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Taxa DY desejada (%)</label>
-                        <input type="number" value={bazinRatePct} onChange={(e)=>setBazinRatePct(parseFloat(e.target.value)||0)} className="w-full px-3 py-2 border border-border rounded bg-background text-foreground" placeholder="Ex.: 8" title="Taxa mínima desejada de DY em %"/>
-                        <div className="text-xs text-muted-foreground mt-1">Ajuste conforme seu objetivo (ex.: 8% a.a.).</div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Preço Teto (Bazin)</label>
-                        <div className="px-3 py-2 border border-border rounded bg-background text-foreground">
-                          {formatCurrency(bazinCeilingPrice)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <MetricCard title="Preço Teto (Bazin)" value={formatCurrency(bazinCeilingPrice)} icon={DollarSign} color="green" />
-                      <MetricCard title="Preço Atual" value={formatCurrency(info.currentPrice)} icon={DollarSign} color="purple" />
-                      <MetricCard title="Margem vs Atual" value={bazinCeilingPrice!=null&&info.currentPrice? `${(((bazinCeilingPrice-info.currentPrice)/info.currentPrice)*100).toFixed(2)}%` : '-'} icon={TrendingUp} color="orange" />
-                    </div>
-                  </div>
-                </InfoSection>
-              </motion.div>
+              <DetalhesConceptsTab
+                info={info}
+                grahamBadge={grahamBadge}
+                bazinBadge={bazinBadge}
+                grahamEPSText={grahamEPSText}
+                setGrahamEPSText={setGrahamEPSText}
+                commitGrahamEPS={commitGrahamEPS}
+                grahamGText={grahamGText}
+                setGrahamGText={setGrahamGText}
+                commitGrahamG={commitGrahamG}
+                grahamYText={grahamYText}
+                setGrahamYText={setGrahamYText}
+                commitGrahamY={commitGrahamY}
+                grahamFairPrice={grahamFairPrice}
+                dividends12m={dividends12m}
+                bazinRatePct={bazinRatePct}
+                setBazinRatePct={setBazinRatePct}
+                bazinCeilingPrice={bazinCeilingPrice}
+              />
             )}
           </AnimatePresence>
       </div>
