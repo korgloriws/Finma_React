@@ -1646,10 +1646,10 @@ export default function GuiaMercadoPage() {
             <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto">
               Conhecimento completo para investir com confiança. Estratégias, indicadores e análise de ativos.
             </p>
-          </div>
         </div>
+      </div>
 
-              {/* Sistema de Abas com Design Moderno */}
+        {/* Sistema de Abas com Design Moderno */}
         <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-xl">
           <div className="space-y-4 mb-6">
             {/* Menu de Navegação Responsivo */}
@@ -1725,7 +1725,7 @@ export default function GuiaMercadoPage() {
             </div>
           </div>
 
-                    {/* Conteúdo das Abas */}
+          {/* Conteúdo das Abas */}
           <div className="space-y-8">
 
             {activeTab === 'geral' && (

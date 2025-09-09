@@ -17,6 +17,7 @@ import {
   DollarSign,
   ArrowUpRight,
   ArrowDownRight,
+  Calculator,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { carteiraService } from '../services/api'
@@ -31,6 +32,7 @@ import CarteiraProventosTab from '../components/carteira/CarteiraProventosTab'
 import CarteiraInsightsTab from '../components/carteira/CarteiraInsightsTab'
 import CarteiraRebalanceamentoTab from '../components/carteira/CarteiraRebalanceamentoTab'
 import CarteiraMovimentacoesTab from '../components/carteira/CarteiraMovimentacoesTab'
+import CarteiraProjecaoTab from '../components/carteira/CarteiraProjecaoTab'
 import CarteiraRelatoriosTab from '../components/carteira/CarteiraRelatoriosTab'
 
 export default function CarteiraPage() {
@@ -48,7 +50,7 @@ export default function CarteiraPage() {
   const [filtroAno, setFiltroAno] = useState<number>(new Date().getFullYear())
   const [activeTab, setActiveTab] = useState(() => {
     const tabFromUrl = searchParams.get('tab')
-    const validTabs = ['ativos', 'graficos', 'ranking', 'proventos', 'insights', 'rebalance', 'movimentacoes', 'relatorios']
+    const validTabs = ['ativos', 'graficos', 'ranking', 'proventos', 'insights', 'rebalance', 'movimentacoes', 'relatorios', 'projecao']
     return validTabs.includes(tabFromUrl || '') ? tabFromUrl! : 'ativos'
   })
   const [manageTipoOpen, setManageTipoOpen] = useState<{open: boolean; tipo?: string}>({open: false})
@@ -526,6 +528,7 @@ export default function CarteiraPage() {
         <TabButton id="rebalance" label="Rebalanceamento" icon={Target} isActive={activeTab === 'rebalance'} />
         <TabButton id="movimentacoes" label="Movimentações" icon={History} isActive={activeTab === 'movimentacoes'} />
         <TabButton id="relatorios" label="Relatórios" icon={FileText} isActive={activeTab === 'relatorios'} />
+        <TabButton id="projecao" label="Projeção" icon={Calculator} isActive={activeTab === 'projecao'} />
       </div>
 
       {/* Conteúdo das Abas */}
@@ -690,10 +693,18 @@ export default function CarteiraPage() {
             carteiraService={carteiraService}
           />
         )}
+
+        {activeTab === 'projecao' && (
+          <CarteiraProjecaoTab
+            carteira={carteira || []}
+            historicoCarteira={historicoCarteira}
+            proventosRecebidos={proventosRecebidos || []}
+          />
+        )}
       </div>
     </div>
   )
-}
+} 
 
 
 
