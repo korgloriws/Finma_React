@@ -2785,44 +2785,86 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
         if not usuario:
             return {"success": False, "message": "Usuário não autenticado"}
         _ensure_indexador_schema()
+        
         if _is_postgres():
             conn = _pg_conn_for_user(usuario)
             try:
                 with conn.cursor() as cursor:
-                    # movimentação
+                    # Verificar se o ativo já existe na carteira
+                    cursor.execute(
+                        'SELECT id, quantidade FROM carteira WHERE ticker = %s',
+                        (info["ticker"],)
+                    )
+                    ativo_existente = cursor.fetchone()
+                    
+                    # Registrar movimentação
                     cursor.execute(
                         'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
                         (data_adicao, info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], "compra")
                     )
-                    # carteira
-                    cursor.execute(
-                        'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-                        (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct) 
-                    )
+                    
+                    if ativo_existente:
+                        # Ativo já existe - somar quantidades
+                        id_existente, quantidade_existente = ativo_existente
+                        nova_quantidade = quantidade_existente + quantidade
+                        novo_valor_total = float(info["preco_atual"] or 0) * nova_quantidade
+                        
+                        cursor.execute(
+                            'UPDATE carteira SET quantidade = %s, valor_total = %s, preco_atual = %s, dy = %s, pl = %s, pvp = %s, roe = %s WHERE id = %s',
+                            (nova_quantidade, novo_valor_total, info["preco_atual"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), id_existente)
+                        )
+                        mensagem = f"Quantidade do ativo {info['ticker']} atualizada: {quantidade_existente} + {quantidade} = {nova_quantidade}"
+                    else:
+                        # Ativo não existe - criar novo registro
+                        cursor.execute(
+                            'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                            (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct) 
+                        )
+                        mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
             finally:
                 conn.close()
         else:
             db_path = get_db_path(usuario, "carteira")
             conn = sqlite3.connect(db_path, check_same_thread=False)
             cursor = conn.cursor()
-            # Primeiro registrar a movimentação usando a mesma conexão
+            
+            # Verificar se o ativo já existe na carteira
+            cursor.execute('SELECT id, quantidade FROM carteira WHERE ticker = ?', (info["ticker"],))
+            ativo_existente = cursor.fetchone()
+            
+            # Registrar movimentação
             resultado_movimentacao = registrar_movimentacao(data_adicao, info["ticker"], info["nome_completo"], 
                                  quantidade, info["preco_atual"], "compra", conn)
             if not resultado_movimentacao["success"]:
                 conn.close()
                 return resultado_movimentacao
-            cursor.execute('''
-                INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, 
-                                    data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], 
-                  valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), 
-                  info.get("pvp"), info.get("roe"), indexador, indexador_pct))
+            
+            if ativo_existente:
+                # Ativo já existe - somar quantidades
+                id_existente, quantidade_existente = ativo_existente
+                nova_quantidade = quantidade_existente + quantidade
+                novo_valor_total = float(info["preco_atual"] or 0) * nova_quantidade
+                
+                cursor.execute('''
+                    UPDATE carteira SET quantidade = ?, valor_total = ?, preco_atual = ?, dy = ?, pl = ?, pvp = ?, roe = ?
+                    WHERE id = ?
+                ''', (nova_quantidade, novo_valor_total, info["preco_atual"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), id_existente))
+                mensagem = f"Quantidade do ativo {info['ticker']} atualizada: {quantidade_existente} + {quantidade} = {nova_quantidade}"
+            else:
+                # Ativo não existe - criar novo registro
+                cursor.execute('''
+                    INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, 
+                                        data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], 
+                      valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), 
+                      info.get("pvp"), info.get("roe"), indexador, indexador_pct))
+                mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
+            
             conn.commit()
             conn.close()
         
-        print(f"DEBUG: Atualização SQLite concluída. {atualizados} ativos atualizados, {len(erros)} erros")
-        return {"success": True, "message": "Ativo adicionado com sucesso"}
+        return {"success": True, "message": mensagem}
     except Exception as e:
         return {"success": False, "message": f"Erro ao adicionar ativo: {str(e)}"}
 
