@@ -243,12 +243,20 @@ export default function CarteiraPage() {
       queryClient.invalidateQueries({ queryKey: ['historico-carteira', user] })
       queryClient.invalidateQueries({ queryKey: ['proventos', user] })
       queryClient.invalidateQueries({ queryKey: ['proventos-recebidos', user] })
+      
+      // Limpar formulário após sucesso
       setInputTicker('')
       setInputQuantidade('')
       setInputTipo('')
       setInputPreco('')
       setInputIndexador('')
       setInputIndexadorPct('')
+      
+      toast.success('Ativo adicionado com sucesso!')
+    },
+    onError: (error: any) => {
+      console.error('Erro ao adicionar ativo:', error)
+      toast.error('Erro ao adicionar ativo. Tente novamente.')
     },
   })
 
@@ -699,6 +707,8 @@ export default function CarteiraPage() {
             carteira={carteira || []}
             historicoCarteira={historicoCarteira}
             proventosRecebidos={proventosRecebidos || []}
+            filtroPeriodo={filtroPeriodo}
+            setFiltroPeriodo={(value: string) => setFiltroPeriodo(value as "mensal" | "trimestral" | "semestral" | "anual" | "maximo")}
           />
         )}
       </div>

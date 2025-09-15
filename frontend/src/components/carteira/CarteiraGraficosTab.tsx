@@ -103,7 +103,7 @@ export default function CarteiraGraficosTab({
             ) : historicoCarteira && historicoCarteira.datas && historicoCarteira.datas.length > 0 ? (
               <>
                 {/* Resumo estatístico */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
                   <div className="bg-muted/50 rounded-lg p-3 md:p-4">
                     <div className="text-xs md:text-sm text-muted-foreground">Patrimônio Inicial</div>
                     <div className="text-base md:text-lg font-bold text-foreground">
@@ -116,8 +116,23 @@ export default function CarteiraGraficosTab({
                       {formatCurrency(historicoCarteira.carteira_valor?.[historicoCarteira.carteira_valor.length - 1] || 0)}
                     </div>
                   </div>
-                  <div className="bg-muted/50 rounded-lg p-3 md:p-4 sm:col-span-2 lg:col-span-1">
-                    <div className="text-xs md:text-sm text-muted-foreground">Crescimento</div>
+                  <div className="bg-muted/50 rounded-lg p-3 md:p-4">
+                    <div className="text-xs md:text-sm text-muted-foreground">Ganho/Perda (R$)</div>
+                    <div className={`text-base md:text-lg font-bold ${
+                      (historicoCarteira.carteira_valor?.[historicoCarteira.carteira_valor.length - 1] || 0) > (historicoCarteira.carteira_valor?.[0] || 0) 
+                        ? 'text-green-600' 
+                        : 'text-red-600'
+                    }`}>
+                      {(() => {
+                        const inicial = historicoCarteira.carteira_valor?.[0] || 0
+                        const atual = historicoCarteira.carteira_valor?.[historicoCarteira.carteira_valor.length - 1] || 0
+                        const diferenca = atual - inicial
+                        return `${diferenca >= 0 ? '+' : ''}${formatCurrency(diferenca, '')}`
+                      })()}
+                    </div>
+                  </div>
+                  <div className="bg-muted/50 rounded-lg p-3 md:p-4">
+                    <div className="text-xs md:text-sm text-muted-foreground">Ganho/Perda (%)</div>
                     <div className={`text-base md:text-lg font-bold ${
                       (historicoCarteira.carteira_valor?.[historicoCarteira.carteira_valor.length - 1] || 0) > (historicoCarteira.carteira_valor?.[0] || 0) 
                         ? 'text-green-600' 
@@ -134,48 +149,120 @@ export default function CarteiraGraficosTab({
                   </div>
                 </div>
                 
-                {/* Gráfico comparativo rebase 100 */}
-                <div className="h-64 sm:h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={historicoCarteira.datas.map((d, i) => ({
-                    data: d,
-                    carteira: historicoCarteira.carteira?.[i] ?? null,
-                    ibov: historicoCarteira.ibov?.[i] ?? null,
-                    ivvb11: historicoCarteira.ivvb11?.[i] ?? null,
-                    ifix: historicoCarteira.ifix?.[i] ?? null,
-                    ipca: historicoCarteira.ipca?.[i] ?? null,
-                  }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis 
-                      dataKey="data" 
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                    />
-                    <YAxis 
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                      tickFormatter={(value) => `${value}`}
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))', 
-                        border: '1px solid hsl(var(--border))', 
-                        borderRadius: '8px',
-                        color: 'hsl(var(--foreground))'
-                      }}
-                      formatter={(value: any, name: string) => [
-                        name === 'carteira' ? `${value?.toFixed?.(2)}` : `${value?.toFixed?.(2)}`,
-                        name.toUpperCase()
-                      ]}
-                      labelFormatter={(label) => `Período: ${label}`}
-                    />
-                    <Area type="monotone" dataKey="carteira" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} strokeWidth={2} />
-                    <Area type="monotone" dataKey="ibov" stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} strokeWidth={1.5} />
-                    <Area type="monotone" dataKey="ivvb11" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.1} strokeWidth={1.5} />
-                    <Area type="monotone" dataKey="ifix" stroke="#a855f7" fill="#a855f7" fillOpacity={0.1} strokeWidth={1.5} />
-                    <Area type="monotone" dataKey="ipca" stroke="#ef4444" fill="#ef4444" fillOpacity={0.06} strokeWidth={1.2} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {/* Gráfico de Valores Absolutos */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-medium text-muted-foreground mb-3">Valores Absolutos</h4>
+                  <div className="h-64 sm:h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={historicoCarteira.datas.map((d, i) => ({
+                        data: d,
+                        carteira: historicoCarteira.carteira_valor?.[i] ?? null,
+                        ibov: historicoCarteira.ibov?.[i] ?? null,
+                        ivvb11: historicoCarteira.ivvb11?.[i] ?? null,
+                        ifix: historicoCarteira.ifix?.[i] ?? null,
+                        ipca: historicoCarteira.ipca?.[i] ?? null,
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis 
+                          dataKey="data" 
+                          stroke="hsl(var(--muted-foreground))"
+                          fontSize={12}
+                        />
+                        <YAxis 
+                          stroke="hsl(var(--muted-foreground))"
+                          fontSize={12}
+                          tickFormatter={(value) => formatCurrency(value, '')}
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--card))', 
+                            border: '1px solid hsl(var(--border))', 
+                            borderRadius: '8px',
+                            color: 'hsl(var(--foreground))',
+                            fontSize: '12px'
+                          }}
+                          formatter={(value: any, name: string) => {
+                            if (name === 'carteira') {
+                              return [formatCurrency(value), 'Carteira']
+                            }
+                            return [`${value?.toFixed?.(2)}%`, name.toUpperCase()]
+                          }}
+                          labelFormatter={(label) => `Data: ${label}`}
+                        />
+                        <Area type="monotone" dataKey="carteira" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} strokeWidth={2} />
+                        <Area type="monotone" dataKey="ibov" stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="ivvb11" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.1} strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="ifix" stroke="#a855f7" fill="#a855f7" fillOpacity={0.1} strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="ipca" stroke="#ef4444" fill="#ef4444" fillOpacity={0.06} strokeWidth={1.2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Gráfico Comparativo (Rebase 100) */}
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-3">Comparativo de Performance (Rebase 100)</h4>
+                  <div className="h-64 sm:h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={historicoCarteira.datas.map((d, i) => ({
+                        data: d,
+                        carteira: historicoCarteira.carteira?.[i] ?? null,
+                        ibov: historicoCarteira.ibov?.[i] ?? null,
+                        ivvb11: historicoCarteira.ivvb11?.[i] ?? null,
+                        ifix: historicoCarteira.ifix?.[i] ?? null,
+                        ipca: historicoCarteira.ipca?.[i] ?? null,
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis 
+                          dataKey="data" 
+                          stroke="hsl(var(--muted-foreground))"
+                          fontSize={12}
+                        />
+                        <YAxis 
+                          stroke="hsl(var(--muted-foreground))"
+                          fontSize={12}
+                          tickFormatter={(value) => `${value}%`}
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--card))', 
+                            border: '1px solid hsl(var(--border))', 
+                            borderRadius: '8px',
+                            color: 'hsl(var(--foreground))',
+                            fontSize: '12px'
+                          }}
+                          formatter={(value: any, name: string) => {
+                            const valorInicial = name === 'carteira' ? (historicoCarteira.carteira_valor?.[0] || 0) : 100
+                            const valorAtual = value
+                            const variacao = valorAtual - 100
+                            const variacaoAbs = name === 'carteira' ? 
+                              (historicoCarteira.carteira_valor?.[historicoCarteira.datas.findIndex(d => d === value)] || 0) - valorInicial :
+                              null
+                            
+                            return [
+                              <div key={name} className="space-y-1">
+                                <div className="font-medium">{name.toUpperCase()}</div>
+                                <div>Performance: <span className="font-semibold">{valorAtual?.toFixed(2)}%</span></div>
+                                <div>Variação: <span className={`font-semibold ${variacao >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {variacao >= 0 ? '+' : ''}{variacao?.toFixed(2)}%
+                                </span></div>
+                                {variacaoAbs !== null && (
+                                  <div>Valor: <span className="font-semibold">{formatCurrency(variacaoAbs + valorInicial)}</span></div>
+                                )}
+                              </div>,
+                              ''
+                            ]
+                          }}
+                          labelFormatter={(label) => `Data: ${label}`}
+                        />
+                        <Area type="monotone" dataKey="carteira" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} strokeWidth={2} />
+                        <Area type="monotone" dataKey="ibov" stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="ivvb11" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.1} strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="ifix" stroke="#a855f7" fill="#a855f7" fillOpacity={0.1} strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="ipca" stroke="#ef4444" fill="#ef4444" fillOpacity={0.06} strokeWidth={1.2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </>
             ) : (

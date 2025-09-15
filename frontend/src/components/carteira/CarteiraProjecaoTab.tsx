@@ -16,6 +16,8 @@ interface CarteiraProjecaoTabProps {
   carteira: any[]
   historicoCarteira?: any
   proventosRecebidos?: any[]
+  filtroPeriodo?: string
+  setFiltroPeriodo?: (value: string) => void
 }
 
 interface ProjecaoData {
@@ -28,7 +30,9 @@ interface ProjecaoData {
 export default function CarteiraProjecaoTab({
   carteira,
   historicoCarteira,
-  proventosRecebidos
+  proventosRecebidos,
+  filtroPeriodo,
+  setFiltroPeriodo
 }: CarteiraProjecaoTabProps) {
   const [anosProjecao, setAnosProjecao] = useState(5)
   const [considerarDividendos, setConsiderarDividendos] = useState(true)
@@ -46,34 +50,68 @@ export default function CarteiraProjecaoTab({
     }
 
     const datas = historicoCarteira.datas
-    const valores = historicoCarteira.valores
+    const valores: Array<number | null | undefined> = historicoCarteira.carteira_valor
     
     if (datas.length < 2) return 0.12
 
-    // Pegar o primeiro e último valor do último ano
+    // Pegar dados dos últimos 12 meses
     const umAnoAtras = new Date()
     umAnoAtras.setFullYear(umAnoAtras.getFullYear() - 1)
     
-    let valorInicialAno = null
-    let valorFinalAno = null
+    // Filtrar dados dos últimos 12 meses
+    const dadosUltimoAno = datas
+      .map((data: string, index: number) => ({
+        data: new Date(data),
+        valor: Number(valores[index])
+      }))
+      .filter((item: { data: Date; valor: number }) => item.data >= umAnoAtras && Number.isFinite(item.valor) && item.valor > 0)
+      .sort((a: { data: Date; valor: number }, b: { data: Date; valor: number }) => a.data.getTime() - b.data.getTime())
+
+    if (dadosUltimoAno.length < 2) return 0.12
+
+    // Calcular crescimento mensal para cada mês
+    const crescimentosMensais = []
+    for (let i = 1; i < dadosUltimoAno.length; i++) {
+      const valorAnterior = Number(dadosUltimoAno[i - 1].valor)
+      const valorAtual = Number(dadosUltimoAno[i].valor)
+      if (!Number.isFinite(valorAnterior) || !Number.isFinite(valorAtual) || valorAnterior <= 0) continue
+      const crescimentoMensal = (valorAtual - valorAnterior) / valorAnterior
+      if (Number.isFinite(crescimentoMensal)) {
+        crescimentosMensais.push(crescimentoMensal)
+      }
+    }
+
+    if (crescimentosMensais.length === 0) return 0.12
+
+    // Calcular média dos crescimentos mensais
+    const crescimentoMedioMensal = crescimentosMensais.reduce((sum, crescimento) => sum + crescimento, 0) / crescimentosMensais.length
     
-    // Encontrar valores do último ano
-    for (let i = datas.length - 1; i >= 0; i--) {
-      const data = new Date(datas[i])
-      if (data <= umAnoAtras && valorInicialAno === null) {
-        valorInicialAno = valores[i]
-      }
-      if (i === datas.length - 1) {
-        valorFinalAno = valores[i]
-      }
-    }
+    // Converter para crescimento anual: (1 + taxa_mensal)^12 - 1
+    let crescimentoAnual = Math.pow(1 + crescimentoMedioMensal, 12) - 1
+    // Sanitizar: limitar entre -90% e +200% ao ano para evitar explosões numéricas
+    if (!Number.isFinite(crescimentoAnual)) crescimentoAnual = 0.12
+    crescimentoAnual = Math.max(-0.9, Math.min(2.0, crescimentoAnual))
+    
+    // Debug: mostrar informações sobre o cálculo
+    console.log('Debug Crescimento:', {
+      dadosUltimoAno: dadosUltimoAno.length,
+      crescimentosMensais: crescimentosMensais.length,
+      crescimentoMedioMensal: crescimentoMedioMensal,
+      crescimentoAnual: crescimentoAnual,
+      valores: valores?.slice(0, 5) // Primeiros 5 valores para debug
+    })
+    
+    return Math.max(0, crescimentoAnual) // Não permitir crescimento negativo
+  }, [historicoCarteira])
 
-    if (valorInicialAno && valorFinalAno && valorInicialAno > 0) {
-      const crescimento = (valorFinalAno - valorInicialAno) / valorInicialAno
-      return Math.max(0, crescimento) // Não permitir crescimento negativo
-    }
-
-    return 0.12 // 12% como padrão
+  const historicoIncompleto = useMemo(() => {
+    const datas = Array.isArray(historicoCarteira?.datas) ? historicoCarteira.datas : []
+    const valores = Array.isArray(historicoCarteira?.carteira_valor) ? historicoCarteira.carteira_valor : []
+    const pontosValidos = datas.reduce((acc: number, _d: string, i: number) => {
+      const v = Number(valores[i])
+      return acc + (Number.isFinite(v) && v > 0 ? 1 : 0)
+    }, 0)
+    return pontosValidos < 2
   }, [historicoCarteira])
 
   // Calcular dividendos médios mensais - APENAS dados históricos reais
@@ -106,8 +144,10 @@ export default function CarteiraProjecaoTab({
 
   // Calcular projeção
   const projecao = useMemo(() => {
-    const valorInicialNum = parseFloat(valorInicial) || valorAtualCarteira
-    const taxaMensal = crescimentoMedioAnual / 12
+    const valorInicialNumRaw = parseFloat(valorInicial)
+    const valorInicialNum = Number.isFinite(valorInicialNumRaw) && valorInicialNumRaw > 0 ? valorInicialNumRaw : valorAtualCarteira
+    const taxaMensalRaw = crescimentoMedioAnual / 12
+    const taxaMensal = Number.isFinite(taxaMensalRaw) ? taxaMensalRaw : 0
     const dividendosMensais = dividendosMediosMensais
     const meses = anosProjecao * 12
 
@@ -119,21 +159,21 @@ export default function CarteiraProjecaoTab({
     for (let mes = 0; mes <= meses; mes++) {
       dados.push({
         mes,
-        valor: valorAtual,
-        valorComDividendos: valorComDividendosAtual,
-        dividendosAcumulados
+        valor: Number.isFinite(valorAtual) ? valorAtual : 0,
+        valorComDividendos: Number.isFinite(valorComDividendosAtual) ? valorComDividendosAtual : 0,
+        dividendosAcumulados: Number.isFinite(dividendosAcumulados) ? dividendosAcumulados : 0
       })
 
       if (mes < meses) {
         // Crescimento mensal
-        const crescimento = valorAtual * taxaMensal
-        valorAtual += crescimento
+        const crescimento = Number.isFinite(valorAtual) ? (valorAtual * taxaMensal) : 0
+        valorAtual = (Number.isFinite(valorAtual) ? valorAtual : 0) + (Number.isFinite(crescimento) ? crescimento : 0)
 
         if (considerarDividendos) {
           // Adicionar dividendos mensais
-          const dividendosMes = dividendosMensais
-          dividendosAcumulados += dividendosMes
-          valorComDividendosAtual += crescimento + dividendosMes
+          const dividendosMes = Number.isFinite(dividendosMensais) ? dividendosMensais : 0
+          dividendosAcumulados = (Number.isFinite(dividendosAcumulados) ? dividendosAcumulados : 0) + dividendosMes
+          valorComDividendosAtual = (Number.isFinite(valorComDividendosAtual) ? valorComDividendosAtual : 0) + (Number.isFinite(crescimento) ? crescimento : 0) + dividendosMes
         } else {
           valorComDividendosAtual = valorAtual
         }
@@ -149,9 +189,28 @@ export default function CarteiraProjecaoTab({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Calculator className="w-6 h-6 text-blue-600" />
-        <h2 className="text-2xl font-bold">Calculadora de Projeção</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <Calculator className="w-6 h-6 text-blue-600" />
+          <h2 className="text-2xl font-bold">Calculadora de Projeção</h2>
+        </div>
+        {filtroPeriodo && setFiltroPeriodo && (
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium">Período de análise:</label>
+            <select
+              value={filtroPeriodo}
+              onChange={(e) => setFiltroPeriodo(e.target.value)}
+              className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
+              aria-label="Período de análise para cálculo de crescimento"
+            >
+              <option value="mensal">Mensal</option>
+              <option value="trimestral">Trimestral</option>
+              <option value="semestral">Semestral</option>
+              <option value="anual">Anual</option>
+              <option value="maximo">Máximo</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Avisos importantes */}
@@ -173,6 +232,25 @@ export default function CarteiraProjecaoTab({
             </div>
           </div>
         </motion.div>
+
+        {historicoIncompleto && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-blue-50 border border-blue-200 rounded-lg p-4"
+          >
+            <div className="flex items-start gap-3">
+              <Calendar className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-blue-800">
+                <p className="font-medium mb-1">Dados históricos insuficientes</p>
+                <p>
+                  Estamos usando uma taxa padrão para estimar o crescimento anual,
+                  pois o histórico disponível não é suficiente para um cálculo baseado em dados reais.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
          {/* Aviso sobre dividendos */}
          {(!proventosRecebidos || proventosRecebidos.length === 0) && (
@@ -273,6 +351,12 @@ export default function CarteiraProjecaoTab({
               </span>
             </div>
             <div className="flex justify-between">
+              <span className="text-muted-foreground">Fonte do crescimento:</span>
+              <span className="font-medium">
+                {historicoIncompleto ? 'Padrão (fallback)' : 'Histórico da carteira'}
+              </span>
+            </div>
+            <div className="flex justify-between">
               <span className="text-muted-foreground">Dividendos médios mensais:</span>
               <span className="font-medium text-blue-600">
                 {formatCurrency(dividendosMediosMensais)}
@@ -286,7 +370,13 @@ export default function CarteiraProjecaoTab({
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Período de análise:</span>
-              <span className="font-medium">Últimos 12 meses</span>
+              <span className="font-medium">
+                {filtroPeriodo === 'mensal' ? 'Mensal' :
+                 filtroPeriodo === 'trimestral' ? 'Trimestral' :
+                 filtroPeriodo === 'semestral' ? 'Semestral' :
+                 filtroPeriodo === 'anual' ? 'Anual' :
+                 filtroPeriodo === 'maximo' ? 'Máximo' : 'Últimos 12 meses'}
+              </span>
             </div>
              <div className="flex justify-between">
                <span className="text-muted-foreground">Fonte dos dividendos:</span>
