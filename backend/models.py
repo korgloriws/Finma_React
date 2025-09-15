@@ -2593,35 +2593,37 @@ def calcular_preco_com_indexador(preco_inicial, indexador, indexador_pct, data_a
         
         print(f"DEBUG: Dias desde adição: {dias_desde_adicao}")
         
+        # Aplicar percentual do indexador (ex: 110% = 1.1)
+        fator_percentual = indexador_pct / 100
+        if fator_percentual <= 0:
+            return preco_inicial
+
         # Calcular fator de correção
         if indexador in ["SELIC", "CDI"]:
-            # Para SELIC e CDI: usar taxa anual composta diariamente
-            # Taxa diária = (1 + taxa_anual)^(1/252) - 1
+            # Para SELIC e CDI: usar taxa anual composta diariamente por dia civil (365)
+            # Taxa diária (365) = (1 + taxa_anual)^(1/365) - 1
             taxa_anual_decimal = taxa_atual / 100
-            taxa_diaria = (1 + taxa_anual_decimal) ** (1/252) - 1
-            fator_correcao = (1 + taxa_diaria) ** dias_desde_adicao
-            
-            print(f"DEBUG: Taxa anual {indexador}: {taxa_atual}%, taxa diária: {taxa_diaria:.6f}, fator correção: {fator_correcao:.6f}")
-            print(f"DEBUG: Fator correção para {dias_desde_adicao} dias: {fator_correcao:.6f}")
-            
+            taxa_diaria = (1 + taxa_anual_decimal) ** (1/365) - 1
+            taxa_diaria_indexada = taxa_diaria * fator_percentual
+            fator_correcao = (1 + taxa_diaria_indexada) ** dias_desde_adicao
+            print(
+                f"DEBUG: {indexador} anual={taxa_atual}% | diaria365={taxa_diaria:.8f} | diaria_indexada={taxa_diaria_indexada:.8f} | fator={fator_correcao:.6f}"
+            )
         elif indexador == "IPCA":
-            # Para IPCA: usar taxa mensal acumulada
+            # Para IPCA: usar taxa mensal acumulada (série 433 é mensal)
             meses_desde_adicao = dias_desde_adicao / 30.44  # média de dias por mês
-            fator_correcao = (1 + taxa_atual / 100) ** meses_desde_adicao
-            print(f"DEBUG: Taxa mensal IPCA: {taxa_atual}%, meses desde adição: {meses_desde_adicao:.2f}, fator correção: {fator_correcao:.6f}")
+            taxa_mensal_decimal = (taxa_atual / 100) * fator_percentual
+            fator_correcao = (1 + taxa_mensal_decimal) ** meses_desde_adicao
+            print(
+                f"DEBUG: IPCA mensal={taxa_atual}% | mensal_indexada={taxa_mensal_decimal*100:.4f}% | meses={meses_desde_adicao:.2f} | fator={fator_correcao:.6f}"
+            )
         else:
             print(f"DEBUG: Indexador não reconhecido: {indexador}")
             return preco_inicial
         
-        # Aplicar percentual do indexador (ex: 110% = 1.1)
-        fator_percentual = indexador_pct / 100
-        print(f"DEBUG: Fator percentual: {fator_percentual}")
-        
-        # CORREÇÃO: Aplicar percentual ANTES da correção temporal
-        # Ex: 115% do CDI = preço_inicial * 1.15 * fator_correcao
-        preco_final = preco_inicial * fator_percentual * fator_correcao
+        # Preço final
+        preco_final = preco_inicial * fator_correcao
         print(f"DEBUG: Preço inicial: {preco_inicial}, preço final: {preco_final}")
-        print(f"DEBUG: Cálculo: {preco_inicial} * {fator_percentual} * {fator_correcao} = {preco_final}")
         
         return round(preco_final, 4)
         

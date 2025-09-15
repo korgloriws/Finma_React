@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { useQuery } from '@tanstack/react-query'
+import { carteiraService } from '../../services/api'
 import { 
   Calculator, 
   TrendingUp, 
@@ -29,7 +31,7 @@ interface ProjecaoData {
 
 export default function CarteiraProjecaoTab({
   carteira,
-  historicoCarteira,
+  historicoCarteira: _historicoCarteira,
   proventosRecebidos,
   filtroPeriodo,
   setFiltroPeriodo
@@ -38,111 +40,122 @@ export default function CarteiraProjecaoTab({
   const [considerarDividendos, setConsiderarDividendos] = useState(true)
   const [valorInicial, setValorInicial] = useState('')
 
-  // Calcular valor atual da carteira
+
   const valorAtualCarteira = useMemo(() => {
     return carteira?.reduce((total, ativo) => total + (ativo.valor_total || 0), 0) || 0
   }, [carteira])
 
-  // Calcular crescimento médio anual baseado no histórico
+
+  // Histórico mensal dedicado para o cálculo de crescimento
+  const { data: historicoMensal } = useQuery({
+    queryKey: ['carteira-historico-mensal-projecao'],
+    queryFn: () => carteiraService.getHistorico('mensal'),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  })
+
   const crescimentoMedioAnual = useMemo(() => {
-    if (!historicoCarteira?.datas || historicoCarteira.datas.length < 2) {
-      return 0.12 // 12% como padrão se não houver histórico
-    }
-
-    const datas = historicoCarteira.datas
-    const valores: Array<number | null | undefined> = historicoCarteira.carteira_valor
-    
-    if (datas.length < 2) return 0.12
-
-    // Pegar dados dos últimos 12 meses
-    const umAnoAtras = new Date()
-    umAnoAtras.setFullYear(umAnoAtras.getFullYear() - 1)
-    
-    // Filtrar dados dos últimos 12 meses
-    const dadosUltimoAno = datas
-      .map((data: string, index: number) => ({
-        data: new Date(data),
-        valor: Number(valores[index])
-      }))
-      .filter((item: { data: Date; valor: number }) => item.data >= umAnoAtras && Number.isFinite(item.valor) && item.valor > 0)
-      .sort((a: { data: Date; valor: number }, b: { data: Date; valor: number }) => a.data.getTime() - b.data.getTime())
-
-    if (dadosUltimoAno.length < 2) return 0.12
-
-    // Calcular crescimento mensal para cada mês
-    const crescimentosMensais = []
-    for (let i = 1; i < dadosUltimoAno.length; i++) {
-      const valorAnterior = Number(dadosUltimoAno[i - 1].valor)
-      const valorAtual = Number(dadosUltimoAno[i].valor)
-      if (!Number.isFinite(valorAnterior) || !Number.isFinite(valorAtual) || valorAnterior <= 0) continue
-      const crescimentoMensal = (valorAtual - valorAnterior) / valorAnterior
-      if (Number.isFinite(crescimentoMensal)) {
-        crescimentosMensais.push(crescimentoMensal)
+    const datas: string[] = Array.isArray(historicoMensal?.datas) ? historicoMensal!.datas : []
+    const valoresAbs: Array<number | null | undefined> = Array.isArray(historicoMensal?.carteira_valor) ? historicoMensal!.carteira_valor : []
+    const valoresRebased: Array<number | null | undefined> = Array.isArray(historicoMensal?.carteira) ? (historicoMensal as any).carteira : []
+    // Escolher a série com mais passos válidos
+    const countValidSteps = (arr: Array<number | null | undefined>) => {
+      let c = 0
+      for (let i = 1; i < arr.length; i++) {
+        const prev = Number(arr[i - 1])
+        const cur = Number(arr[i])
+        if (Number.isFinite(prev) && Number.isFinite(cur) && prev > 0 && cur > 0) c++
       }
+      return c
     }
-
-    if (crescimentosMensais.length === 0) return 0.12
-
-    // Calcular média dos crescimentos mensais
-    const crescimentoMedioMensal = crescimentosMensais.reduce((sum, crescimento) => sum + crescimento, 0) / crescimentosMensais.length
-    
-    // Converter para crescimento anual: (1 + taxa_mensal)^12 - 1
-    let crescimentoAnual = Math.pow(1 + crescimentoMedioMensal, 12) - 1
-    // Sanitizar: limitar entre -90% e +200% ao ano para evitar explosões numéricas
-    if (!Number.isFinite(crescimentoAnual)) crescimentoAnual = 0.12
+    const stepsAbs = countValidSteps(valoresAbs)
+    const stepsReb = countValidSteps(valoresRebased)
+    const valores: Array<number | null | undefined> = stepsAbs >= stepsReb ? valoresAbs : valoresRebased
+    if (datas.length < 2 || valores.length < 2) return 0
+    const retornosMensais: number[] = []
+    for (let i = 1; i < valores.length; i++) {
+      const prev = Number(valores[i - 1])
+      const cur = Number(valores[i])
+      if (!Number.isFinite(prev) || !Number.isFinite(cur) || prev <= 0 || cur <= 0) continue
+      const r = (cur - prev) / prev
+      if (Number.isFinite(r)) retornosMensais.push(r)
+    }
+    if (retornosMensais.length === 0) return 0
+    const mediaMensal = retornosMensais.reduce((s, r) => s + r, 0) / retornosMensais.length
+    let crescimentoAnual = Math.pow(1 + mediaMensal, 12) - 1
+    if (!Number.isFinite(crescimentoAnual)) crescimentoAnual = 0
     crescimentoAnual = Math.max(-0.9, Math.min(2.0, crescimentoAnual))
-    
-    // Debug: mostrar informações sobre o cálculo
-    console.log('Debug Crescimento:', {
-      dadosUltimoAno: dadosUltimoAno.length,
-      crescimentosMensais: crescimentosMensais.length,
-      crescimentoMedioMensal: crescimentoMedioMensal,
-      crescimentoAnual: crescimentoAnual,
-      valores: valores?.slice(0, 5) // Primeiros 5 valores para debug
-    })
-    
-    return Math.max(0, crescimentoAnual) // Não permitir crescimento negativo
-  }, [historicoCarteira])
+    return Math.max(0, crescimentoAnual)
+  }, [historicoMensal])
+
+  // Estatísticas mensais: quantidade de meses, último mês e média mensal
+  const monthlyStats = useMemo(() => {
+    const datas: string[] = Array.isArray(historicoMensal?.datas) ? historicoMensal!.datas : []
+    const valoresAbs: Array<number | null | undefined> = Array.isArray((historicoMensal as any)?.carteira_valor) ? (historicoMensal as any).carteira_valor : []
+    const valoresRebased: Array<number | null | undefined> = Array.isArray((historicoMensal as any)?.carteira) ? (historicoMensal as any).carteira : []
+    const countValidSteps = (arr: Array<number | null | undefined>) => {
+      let c = 0
+      for (let i = 1; i < arr.length; i++) {
+        const prev = Number(arr[i - 1])
+        const cur = Number(arr[i])
+        if (Number.isFinite(prev) && Number.isFinite(cur) && prev > 0 && cur > 0) c++
+      }
+      return c
+    }
+    const stepsAbs = countValidSteps(valoresAbs)
+    const stepsReb = countValidSteps(valoresRebased)
+    const valores: Array<number | null | undefined> = stepsAbs >= stepsReb ? valoresAbs : valoresRebased
+    const records: { label: string; r: number }[] = []
+    for (let i = 1; i < valores.length; i++) {
+      const prev = Number(valores[i - 1])
+      const cur = Number(valores[i])
+      if (!Number.isFinite(prev) || !Number.isFinite(cur) || prev <= 0 || cur <= 0) continue
+      const r = (cur - prev) / prev
+      if (!Number.isFinite(r)) continue
+      const label = Array.isArray(datas) && datas[i] ? datas[i] : `${i}`
+      records.push({ label, r })
+    }
+    const count = records.length
+    const avg = count > 0 ? records.reduce((s, it) => s + it.r, 0) / count : 0
+    const last = count > 0 ? records[count - 1] : null
+    return { count, avg, last }
+  }, [historicoMensal])
 
   const historicoIncompleto = useMemo(() => {
-    const datas = Array.isArray(historicoCarteira?.datas) ? historicoCarteira.datas : []
-    const valores = Array.isArray(historicoCarteira?.carteira_valor) ? historicoCarteira.carteira_valor : []
+    const datas = Array.isArray(historicoMensal?.datas) ? historicoMensal!.datas : []
+    const valores = Array.isArray((historicoMensal as any)?.carteira_valor)
+      ? (historicoMensal as any).carteira_valor
+      : (Array.isArray((historicoMensal as any)?.carteira) ? (historicoMensal as any).carteira : [])
     const pontosValidos = datas.reduce((acc: number, _d: string, i: number) => {
       const v = Number(valores[i])
       return acc + (Number.isFinite(v) && v > 0 ? 1 : 0)
     }, 0)
     return pontosValidos < 2
-  }, [historicoCarteira])
+  }, [historicoMensal])
 
-  // Calcular dividendos médios mensais - APENAS dados históricos reais
+  
   const dividendosMediosMensais = useMemo(() => {
-    // Usar APENAS dados históricos de proventos reais (mesma fonte da aba de proventos)
-    if (proventosRecebidos && proventosRecebidos.length > 0) {
-      const agora = new Date()
-      const umAnoAtras = new Date()
-      umAnoAtras.setFullYear(agora.getFullYear() - 1)
-
-      // Extrair todos os proventos individuais de todos os ativos
-      const todosProventos = proventosRecebidos.flatMap(ativo => ativo.proventos_recebidos || [])
-      
-      const dividendosUltimoAno = todosProventos
-        .filter(provento => {
-          const dataProvento = new Date(provento.data)
-          return dataProvento >= umAnoAtras && dataProvento <= agora
-        })
-        .reduce((total, provento) => total + (provento.valor_recebido || 0), 0)
-
-      if (dividendosUltimoAno > 0) {
-        return dividendosUltimoAno / 12 // Média mensal baseada em dados históricos
+    if (!proventosRecebidos || proventosRecebidos.length === 0) return 0
+    const eventos = proventosRecebidos.flatMap((a: any) => a.proventos_recebidos || [])
+    if (!eventos || eventos.length === 0) return 0
+    let minDt: Date | null = null
+    let maxDt: Date | null = null
+    let soma = 0
+    for (const e of eventos) {
+      const d = new Date(e.data)
+      if (!isNaN(d.getTime())) {
+        if (!minDt || d < minDt) minDt = d
+        if (!maxDt || d > maxDt) maxDt = d
       }
+      soma += Number(e.valor_recebido || 0)
     }
-
-    // Se não há dados históricos, retornar 0 (não estimar)
-    return 0
+    if (!minDt || !maxDt) return 0
+    const months = Math.max(1, Math.round(((maxDt.getFullYear() - minDt.getFullYear()) * 12) + (maxDt.getMonth() - minDt.getMonth()) + 1))
+    return soma / months
   }, [proventosRecebidos])
 
 
-  // Calcular projeção
+
   const projecao = useMemo(() => {
     const valorInicialNumRaw = parseFloat(valorInicial)
     const valorInicialNum = Number.isFinite(valorInicialNumRaw) && valorInicialNumRaw > 0 ? valorInicialNumRaw : valorAtualCarteira
@@ -165,12 +178,12 @@ export default function CarteiraProjecaoTab({
       })
 
       if (mes < meses) {
-        // Crescimento mensal
+
         const crescimento = Number.isFinite(valorAtual) ? (valorAtual * taxaMensal) : 0
         valorAtual = (Number.isFinite(valorAtual) ? valorAtual : 0) + (Number.isFinite(crescimento) ? crescimento : 0)
 
         if (considerarDividendos) {
-          // Adicionar dividendos mensais
+         
           const dividendosMes = Number.isFinite(dividendosMensais) ? dividendosMensais : 0
           dividendosAcumulados = (Number.isFinite(dividendosAcumulados) ? dividendosAcumulados : 0) + dividendosMes
           valorComDividendosAtual = (Number.isFinite(valorComDividendosAtual) ? valorComDividendosAtual : 0) + (Number.isFinite(crescimento) ? crescimento : 0) + dividendosMes
@@ -347,7 +360,25 @@ export default function CarteiraProjecaoTab({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Crescimento médio anual:</span>
               <span className="font-medium text-green-600">
-                {formatPercentage(crescimentoMedioAnual)}
+                {formatPercentage(crescimentoMedioAnual * 100)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Meses analisados:</span>
+              <span className="font-medium">
+                {monthlyStats.count}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Crescimento do último mês{monthlyStats.last?.label ? ` (${monthlyStats.last.label})` : ''}:</span>
+              <span className="font-medium">
+                {monthlyStats.last ? formatPercentage(monthlyStats.last.r * 100) : '-'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Média mensal:</span>
+              <span className="font-medium">
+                {formatPercentage(monthlyStats.avg * 100)}
               </span>
             </div>
             <div className="flex justify-between">

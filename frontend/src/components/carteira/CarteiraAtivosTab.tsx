@@ -168,7 +168,7 @@ function TabelaAtivosPorTipo({
                     <th className="px-3 py-2 text-left font-medium text-sm">Preço Atual</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">Valor Total</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">Indexado</th>
-                    <th className="px-3 py-2 text-left font-medium text-sm">Rentab. Estimada</th>
+                    <th className="px-3 py-2 text-left font-medium text-sm">Rentab. Estimada (anual)</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">Preço Médio</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">Valorização</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">Rendimento</th>
@@ -257,7 +257,7 @@ function TabelaAtivosPorTipo({
             
                             const baseAnual = raw <= 2 ? ((Math.pow(1 + (raw/100), 12) - 1) * 100) : raw
                             const anual = (pct/100) * baseAnual
-                            return `${anual.toFixed(1)}% a.m.`
+                            return `${anual.toFixed(1)}% a.a.`
                           })()}
                         </td>
                         <td className="px-3 py-2 text-sm">{precoMedio != null ? formatCurrency(precoMedio) : '-'}</td>
