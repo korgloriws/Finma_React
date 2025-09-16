@@ -44,7 +44,7 @@ function RebalanceConfigForm({ defaultPeriodo, defaultLastRebalanceDate, onSave 
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 items-end">
       <div>
         <label htmlFor="periodo-select" className="block text-sm font-medium mb-2">Período de Rebalanceamento</label>
         <select 
@@ -63,7 +63,7 @@ function RebalanceConfigForm({ defaultPeriodo, defaultLastRebalanceDate, onSave 
       
           <div>
         <label className="block text-sm font-medium mb-2">Último Rebalanceamento</label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-col sm:flex-row">
               <select
                 aria-label="Mês"
             title="Selecione o mês do último rebalanceamento"
@@ -73,7 +73,7 @@ function RebalanceConfigForm({ defaultPeriodo, defaultLastRebalanceDate, onSave 
                   const y = lastMonth ? lastMonth.split('-')[0] : String(new Date().getFullYear())
                   setLastMonth(`${y}-${m}`)
                 }}
-                className="px-3 py-2 border border-border rounded bg-background text-foreground"
+                className="px-3 py-2 border border-border rounded bg-background text-foreground w-full sm:w-auto"
               >
                 <option value="">Mês</option>
             {Array.from({length:12}, (_,i) => String(i+1).padStart(2,'0')).map(m => (
@@ -89,7 +89,7 @@ function RebalanceConfigForm({ defaultPeriodo, defaultLastRebalanceDate, onSave 
                   const m = lastMonth ? lastMonth.split('-')[1] : String(new Date().getMonth()+1).padStart(2,'0')
                   setLastMonth(`${y}-${m}`)
                 }}
-                className="px-3 py-2 border border-border rounded bg-background text-foreground"
+                className="px-3 py-2 border border-border rounded bg-background text-foreground w-full sm:w-auto"
               >
                 <option value="">Ano</option>
             {Array.from({length:8}, (_,i) => String(new Date().getFullYear()-i)).map(y => (
@@ -198,16 +198,16 @@ function TargetsForm({ defaultTargets, onSave, onChange }: {
         <div className="text-sm font-medium">Tipos e Pesos (%)</div>
         <div className="max-h-[300px] overflow-auto space-y-2">
               {Object.entries(targets).map(([key, val]) => (
-            <div key={key} className="flex items-center gap-3 p-3 bg-background rounded-lg border border-border">
-              <div className="flex-1 min-w-[140px]">
+            <div key={key} className="flex items-center gap-2 sm:gap-3 p-3 bg-background rounded-lg border border-border flex-wrap">
+              <div className="flex-1 min-w-[120px]">
                 <span className="font-medium">{key}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <input 
                   type="number" 
                   value={val} 
                   onChange={(e) => handleChangeTarget(key, e.target.value)} 
-                  className="w-20 px-3 py-2 border border-border rounded bg-background text-foreground text-center"
+                  className="w-full sm:w-20 px-3 py-2 border border-border rounded bg-background text-foreground text-center"
                   min="0"
                   max="100"
                   step="0.1"
@@ -218,7 +218,7 @@ function TargetsForm({ defaultTargets, onSave, onChange }: {
                   </div>
               <button 
                 onClick={() => handleRemoveClass(key)} 
-                className="px-3 py-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                className="px-3 py-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors ml-auto"
               >
                 Remover
               </button>
@@ -268,7 +268,7 @@ function TargetsForm({ defaultTargets, onSave, onChange }: {
               </div>
       
       {/* Total e botão salvar */}
-      <div className="flex items-center justify-between pt-4 border-t border-border">
+      <div className="flex items-center justify-between pt-4 border-t border-border flex-col sm:flex-row gap-2">
         <div className={`text-sm font-medium ${Math.abs(total-100) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
           Total: {total.toFixed(2)}%
             </div>

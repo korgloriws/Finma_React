@@ -36,9 +36,11 @@ export default function CarteiraProjecaoTab({
   filtroPeriodo,
   setFiltroPeriodo
 }: CarteiraProjecaoTabProps) {
-  const [anosProjecao, setAnosProjecao] = useState(5)
+  const [anosProjecao, setAnosProjecao] = useState(1)
   const [considerarDividendos, setConsiderarDividendos] = useState(true)
   const [valorInicial, setValorInicial] = useState('')
+  const [considerarAportes, setConsiderarAportes] = useState(false)
+  const [aporteMensal, setAporteMensal] = useState('')
 
 
   const valorAtualCarteira = useMemo(() => {
@@ -46,7 +48,7 @@ export default function CarteiraProjecaoTab({
   }, [carteira])
 
 
-  // Histórico mensal dedicado para o cálculo de crescimento
+
   const { data: historicoMensal } = useQuery({
     queryKey: ['carteira-historico-mensal-projecao'],
     queryFn: () => carteiraService.getHistorico('mensal'),
@@ -163,11 +165,14 @@ export default function CarteiraProjecaoTab({
     const taxaMensal = Number.isFinite(taxaMensalRaw) ? taxaMensalRaw : 0
     const dividendosMensais = dividendosMediosMensais
     const meses = anosProjecao * 12
+    const aporteMensalNumRaw = parseFloat(aporteMensal)
+    const aporteMensalNum = considerarAportes && Number.isFinite(aporteMensalNumRaw) && aporteMensalNumRaw > 0 ? aporteMensalNumRaw : 0
 
     const dados: ProjecaoData[] = []
     let valorAtual = valorInicialNum
     let valorComDividendosAtual = valorInicialNum
     let dividendosAcumulados = 0
+    let aportesAcumulados = 0
 
     for (let mes = 0; mes <= meses; mes++) {
       dados.push({
@@ -190,15 +195,22 @@ export default function CarteiraProjecaoTab({
         } else {
           valorComDividendosAtual = valorAtual
         }
+
+        if (aporteMensalNum > 0) {
+          valorAtual += aporteMensalNum
+          valorComDividendosAtual += aporteMensalNum
+          aportesAcumulados += aporteMensalNum
+        }
       }
     }
 
     return dados
-  }, [valorInicial, valorAtualCarteira, crescimentoMedioAnual, dividendosMediosMensais, anosProjecao, considerarDividendos])
+  }, [valorInicial, valorAtualCarteira, crescimentoMedioAnual, dividendosMediosMensais, anosProjecao, considerarDividendos, considerarAportes, aporteMensal])
 
   const valorFinal = projecao[projecao.length - 1]?.valor || 0
   const valorFinalComDividendos = projecao[projecao.length - 1]?.valorComDividendos || 0
   const totalDividendos = projecao[projecao.length - 1]?.dividendosAcumulados || 0
+  const totalAportes = (anosProjecao * 12) * (parseFloat(aporteMensal) || 0) * (considerarAportes ? 1 : 0)
 
   return (
     <div className="space-y-6">
@@ -343,6 +355,33 @@ export default function CarteiraProjecaoTab({
                 Considerar reinvestimento de dividendos
               </label>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="considerarAportes"
+                  checked={considerarAportes}
+                  onChange={(e) => setConsiderarAportes(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <label htmlFor="considerarAportes" className="text-sm font-medium">
+                  Considerar aportes mensais
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">Aporte mensal</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={aporteMensal}
+                  onChange={(e) => setAporteMensal(e.target.value)}
+                  placeholder="Ex.: 500"
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  disabled={!considerarAportes}
+                />
+              </div>
+            </div>
           </div>
         </motion.div>
 
@@ -381,12 +420,7 @@ export default function CarteiraProjecaoTab({
                 {formatPercentage(monthlyStats.avg * 100)}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Fonte do crescimento:</span>
-              <span className="font-medium">
-                {historicoIncompleto ? 'Padrão (fallback)' : 'Histórico da carteira'}
-              </span>
-            </div>
+
             <div className="flex justify-between">
               <span className="text-muted-foreground">Dividendos médios mensais:</span>
               <span className="font-medium text-blue-600">
@@ -467,6 +501,19 @@ export default function CarteiraProjecaoTab({
             </p>
             <p className="text-xs text-purple-700">
               Em {anosProjecao} anos
+            </p>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="w-4 h-4 text-amber-600" />
+              <span className="text-sm font-medium text-amber-800">Aportes Totais</span>
+            </div>
+            <p className="text-xl font-bold text-amber-900">
+              {formatCurrency(totalAportes)}
+            </p>
+            <p className="text-xs text-amber-700">
+              {considerarAportes ? `Em ${anosProjecao} anos` : 'Sem aportes'}
             </p>
           </div>
         </div>

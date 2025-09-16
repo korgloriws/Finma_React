@@ -21,15 +21,15 @@ export default function CarteiraMovimentacoesTab({
 }: CarteiraMovimentacoesTabProps) {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <h2 className="text-xl font-semibold">🔄 Movimentações</h2>
-        <div className="flex items-center gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">Mês</label>
+        <div className="flex flex-col xs:flex-row items-stretch xs:items-end gap-2 sm:gap-4 w-full sm:w-auto">
+          <div className="w-full xs:w-auto">
+            <label className="block text-sm font-medium mb-1">Mês</label>
             <select
               value={filtroMes}
               onChange={(e) => setFiltroMes(parseInt(e.target.value))}
-              className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
+              className="w-full xs:w-auto px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
               aria-label="Selecionar mês"
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map(mes => (
@@ -40,12 +40,12 @@ export default function CarteiraMovimentacoesTab({
             </select>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium mb-2">Ano</label>
+          <div className="w-full xs:w-auto">
+            <label className="block text-sm font-medium mb-1">Ano</label>
             <select
               value={filtroAno}
               onChange={(e) => setFiltroAno(parseInt(e.target.value))}
-              className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
+              className="w-full xs:w-auto px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
               aria-label="Selecionar ano"
             >
               {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(ano => (

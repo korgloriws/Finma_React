@@ -61,7 +61,7 @@ export default function CarteiraProventosTab({
       ) : (
         <div className="space-y-6">
           {/* Seção 1: Proventos Pagos (Histórico) */}
-          <div className="bg-muted/30 rounded-lg p-6">
+          <div className="bg-muted/30 rounded-lg p-4 md:p-6">
             <h3 className="text-lg font-semibold mb-4">📊 Proventos Pagos (Histórico)</h3>
             
             {loadingProventos ? (
@@ -104,7 +104,9 @@ export default function CarteiraProventosTab({
                     <div key={ativo.ticker} className="bg-background rounded-lg p-4 border border-border">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <TickerWithLogo ticker={ativo.ticker} nome={ativo.nome} size="md" />
+                          <div className="min-w-0 truncate">
+                            <TickerWithLogo ticker={ativo.ticker} nome={ativo.nome} size="md" />
+                          </div>
                           {ativo.erro && (
                             <span className="text-xs sm:text-sm text-red-500 bg-red-100 px-2 py-1 rounded">
                               {ativo.erro}
@@ -125,7 +127,7 @@ export default function CarteiraProventosTab({
                         <>
                           {/* Desktop Table View */}
                           <div className="hidden md:block overflow-x-auto">
-                            <table className="w-full min-w-[600px]">
+                            <table className="w-full min-w-[640px]">
                               <thead className="bg-muted/30">
                                 <tr>
                                   <th className="px-4 py-2 text-left font-medium">Data</th>
@@ -189,7 +191,7 @@ export default function CarteiraProventosTab({
           </div>
 
           {/* Seção 2: Proventos Recebidos */}
-          <div className="bg-muted/30 rounded-lg p-6">
+          <div className="bg-muted/30 rounded-lg p-4 md:p-6">
             <h3 className="text-lg font-semibold mb-4">💰 Proventos Recebidos (Baseado na Carteira)</h3>
             
             {loadingProventosRecebidos ? (
@@ -229,7 +231,9 @@ export default function CarteiraProventosTab({
                     <div key={provento.ticker} className="bg-muted/30 rounded-lg p-4 md:p-6">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <TickerWithLogo ticker={provento.ticker} nome={provento.nome} size="md" />
+                          <div className="min-w-0 truncate">
+                            <TickerWithLogo ticker={provento.ticker} nome={provento.nome} size="md" />
+                          </div>
                           <div className="text-xs sm:text-sm text-muted-foreground">
                             <div>{provento.quantidade_carteira} ações</div>
                             {provento.data_aquisicao && (
@@ -253,7 +257,7 @@ export default function CarteiraProventosTab({
                         <>
                           {/* Desktop Table View */}
                           <div className="hidden md:block overflow-x-auto">
-                            <table className="w-full min-w-[700px]">
+                            <table className="w-full min-w-[720px]">
                               <thead className="bg-muted/30">
                                 <tr>
                                   <th className="px-4 py-2 text-left font-medium">Data</th>
