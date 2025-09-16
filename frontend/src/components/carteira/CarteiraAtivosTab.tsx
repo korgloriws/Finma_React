@@ -12,7 +12,7 @@ import { formatCurrency, formatDividendYield, formatPercentage, formatNumber } f
 import TickerWithLogo from '../TickerWithLogo'
 
 
-// Componente para tabela de ativos por tipo
+
 function TabelaAtivosPorTipo({ 
   tipo, 
   carteira, 
@@ -24,6 +24,8 @@ function TabelaAtivosPorTipo({
   editingId, 
   editQuantidade, 
   setEditQuantidade, 
+  editPreco,
+  setEditPreco,
   handleEditar, 
   handleSalvarEdicao, 
   handleCancelarEdicao, 
@@ -41,6 +43,8 @@ function TabelaAtivosPorTipo({
   editingId: number | null
   editQuantidade: string
   setEditQuantidade: (value: string) => void
+  editPreco: string
+  setEditPreco: (value: string) => void
   handleEditar: (id: number, quantidade: number) => void
   handleSalvarEdicao: () => void
   handleCancelarEdicao: () => void
@@ -235,7 +239,20 @@ function TabelaAtivosPorTipo({
                             ativo?.quantidade
                           )}
                         </td>
-                        <td className="px-3 py-2 text-sm font-semibold">{formatCurrency(ativo?.preco_atual)}</td>
+                        <td className="px-3 py-2 text-sm font-semibold">
+                          {editingId === ativo?.id ? (
+                            <input
+                              type="text"
+                              value={editPreco}
+                              onChange={(e) => setEditPreco(e.target.value)}
+                              className="w-24 px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
+                              aria-label="Editar preço"
+                              placeholder="Preço"
+                            />
+                          ) : (
+                            formatCurrency(ativo?.preco_atual)
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-sm font-semibold">{formatCurrency(ativo?.valor_total)}</td>
                         <td className="px-3 py-2 text-xs text-muted-foreground">
                           {ativo?.indexador ? `${ativo.indexador} ${ativo.indexador_pct ? `${ativo.indexador_pct}%` : ''}` : '-'}
@@ -544,6 +561,8 @@ interface CarteiraAtivosTabProps {
   editingId: number | null
   editQuantidade: string
   setEditQuantidade: (value: string) => void
+  editPreco: string
+  setEditPreco: (value: string) => void
   handleEditar: (id: number, quantidade: number) => void
   handleSalvarEdicao: () => void
   handleCancelarEdicao: () => void
@@ -584,6 +603,8 @@ export default function CarteiraAtivosTab({
   editingId,
   editQuantidade,
   setEditQuantidade,
+  editPreco,
+  setEditPreco,
   handleEditar,
   handleSalvarEdicao,
   handleCancelarEdicao,
@@ -756,6 +777,8 @@ export default function CarteiraAtivosTab({
               editingId={editingId}
               editQuantidade={editQuantidade}
               setEditQuantidade={setEditQuantidade}
+              editPreco={editPreco}
+              setEditPreco={setEditPreco}
               handleEditar={handleEditar}
               handleSalvarEdicao={handleSalvarEdicao}
               handleCancelarEdicao={handleCancelarEdicao}

@@ -1288,15 +1288,14 @@ def api_remover_ativo(id):
 
 @server.route("/api/carteira/atualizar/<int:id>", methods=["PUT"])
 def api_atualizar_ativo(id):
-    """API para atualizar a quantidade de um ativo"""
+    """API para atualizar quantidade e/ou preço do ativo"""
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         quantidade = data.get('quantidade')
-        
-        if not quantidade:
-            return jsonify({"error": "Quantidade é obrigatória"}), 400
-            
-        resultado = atualizar_ativo_carteira(id, quantidade)
+        preco_atual = data.get('preco_atual')
+        if quantidade is None and preco_atual is None:
+            return jsonify({"error": "Informe quantidade e/ou preco_atual"}), 400
+        resultado = atualizar_ativo_carteira(id, quantidade, preco_atual)
         try:
             if cache:
                 cache.clear()

@@ -177,10 +177,11 @@ export const carteiraService = {
   },
 
 
-  atualizarAtivo: async (id: number, quantidade: number): Promise<any> => {
-    const response = await api.put(`/carteira/atualizar/${id}`, {
-      quantidade
-    })
+  atualizarAtivo: async (id: number, payload: { quantidade?: number; preco_atual?: number }): Promise<any> => {
+    const body: any = {}
+    if (typeof payload.quantidade === 'number') body.quantidade = payload.quantidade
+    if (typeof payload.preco_atual === 'number') body.preco_atual = payload.preco_atual
+    const response = await api.put(`/carteira/atualizar/${id}`, body)
     return response.data
   },
 

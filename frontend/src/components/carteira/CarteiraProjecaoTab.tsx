@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { Loader2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { carteiraService } from '../../services/api'
 import { 
@@ -36,7 +37,7 @@ export default function CarteiraProjecaoTab({
   filtroPeriodo,
   setFiltroPeriodo
 }: CarteiraProjecaoTabProps) {
-  const [anosProjecao, setAnosProjecao] = useState(1)
+  const [anosProjecao, setAnosProjecao] = useState<string>('5')
   const [considerarDividendos, setConsiderarDividendos] = useState(true)
   const [valorInicial, setValorInicial] = useState('')
   const [considerarAportes, setConsiderarAportes] = useState(false)
@@ -49,7 +50,7 @@ export default function CarteiraProjecaoTab({
 
 
 
-  const { data: historicoMensal } = useQuery({
+  const { data: historicoMensal, isLoading: loadingHistoricoMensal } = useQuery({
     queryKey: ['carteira-historico-mensal-projecao'],
     queryFn: () => carteiraService.getHistorico('mensal'),
     staleTime: 60_000,
@@ -60,7 +61,7 @@ export default function CarteiraProjecaoTab({
     const datas: string[] = Array.isArray(historicoMensal?.datas) ? historicoMensal!.datas : []
     const valoresAbs: Array<number | null | undefined> = Array.isArray(historicoMensal?.carteira_valor) ? historicoMensal!.carteira_valor : []
     const valoresRebased: Array<number | null | undefined> = Array.isArray(historicoMensal?.carteira) ? (historicoMensal as any).carteira : []
-    // Escolher a série com mais passos válidos
+
     const countValidSteps = (arr: Array<number | null | undefined>) => {
       let c = 0
       for (let i = 1; i < arr.length; i++) {
@@ -164,7 +165,8 @@ export default function CarteiraProjecaoTab({
     const taxaMensalRaw = crescimentoMedioAnual / 12
     const taxaMensal = Number.isFinite(taxaMensalRaw) ? taxaMensalRaw : 0
     const dividendosMensais = dividendosMediosMensais
-    const meses = anosProjecao * 12
+    const anosInt = Math.max(1, parseInt(String(anosProjecao)) || 1)
+    const meses = anosInt * 12
     const aporteMensalNumRaw = parseFloat(aporteMensal)
     const aporteMensalNum = considerarAportes && Number.isFinite(aporteMensalNumRaw) && aporteMensalNumRaw > 0 ? aporteMensalNumRaw : 0
 
@@ -207,10 +209,22 @@ export default function CarteiraProjecaoTab({
     return dados
   }, [valorInicial, valorAtualCarteira, crescimentoMedioAnual, dividendosMediosMensais, anosProjecao, considerarDividendos, considerarAportes, aporteMensal])
 
+  const anosIntOut = Math.max(1, parseInt(String(anosProjecao)) || 1)
   const valorFinal = projecao[projecao.length - 1]?.valor || 0
   const valorFinalComDividendos = projecao[projecao.length - 1]?.valorComDividendos || 0
   const totalDividendos = projecao[projecao.length - 1]?.dividendosAcumulados || 0
-  const totalAportes = (anosProjecao * 12) * (parseFloat(aporteMensal) || 0) * (considerarAportes ? 1 : 0)
+  const totalAportes = (anosIntOut * 12) * (parseFloat(aporteMensal) || 0) * (considerarAportes ? 1 : 0)
+
+  if (loadingHistoricoMensal) {
+    return (
+      <div className="min-h-[320px] flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">Carregando projeção...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -337,7 +351,7 @@ export default function CarteiraProjecaoTab({
                 min="1"
                 max="30"
                 value={anosProjecao}
-                onChange={(e) => setAnosProjecao(parseInt(e.target.value) || 5)}
+                onChange={(e) => setAnosProjecao(e.target.value)}
                 className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 title="Período de projeção em anos"
               />
@@ -586,7 +600,7 @@ export default function CarteiraProjecaoTab({
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: anosProjecao }, (_, i) => {
+              {Array.from({ length: Math.max(1, parseInt(String(anosProjecao)) || 1) }, (_, i) => {
                 const mesIndex = (i + 1) * 12
                 const dadosAno = projecao[mesIndex]
                 if (!dadosAno) return null

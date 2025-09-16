@@ -2919,7 +2919,7 @@ def remover_ativo_carteira(id):
     except Exception as e:
         return {"success": False, "message": f"Erro ao remover ativo: {str(e)}"}
 
-def atualizar_ativo_carteira(id, quantidade):
+def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None):
   
     try:
         usuario = get_usuario_atual()
@@ -2930,31 +2930,39 @@ def atualizar_ativo_carteira(id, quantidade):
             conn = _pg_conn_for_user(usuario)
             try:
                 with conn.cursor() as cursor:
-                    cursor.execute('SELECT ticker, nome_completo, preco_atual FROM carteira WHERE id = %s', (id,))
+                    cursor.execute('SELECT ticker, nome_completo, preco_atual, quantidade FROM carteira WHERE id = %s', (id,))
                     ativo = cursor.fetchone()
                     if not ativo:
                         return {"success": False, "message": "Ativo não encontrado"}
-                    valor_total = float(ativo[2]) * quantidade
-                    cursor.execute('UPDATE carteira SET quantidade = %s, valor_total = %s WHERE id = %s', (quantidade, valor_total, id))
+                    current_price = float(ativo[2]) if ativo[2] is not None else 0.0
+                    current_qty = float(ativo[3]) if ativo[3] is not None else 0.0
+                    new_qty = float(quantidade) if quantidade is not None else current_qty
+                    new_price = float(preco_atual) if preco_atual is not None else current_price
+                    valor_total = new_price * new_qty
+                    cursor.execute('UPDATE carteira SET quantidade = %s, preco_atual = %s, valor_total = %s WHERE id = %s', (new_qty, new_price, valor_total, id))
                 return {"success": True, "message": "Ativo atualizado com sucesso"}
             finally:
                 conn.close()
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
-        cursor.execute('SELECT ticker, nome_completo, preco_atual FROM carteira WHERE id = ?', (id,))
+        cursor.execute('SELECT ticker, nome_completo, preco_atual, quantidade FROM carteira WHERE id = ?', (id,))
         ativo = cursor.fetchone()
         
         if not ativo:
             return {"success": False, "message": "Ativo não encontrado"}
             
-        valor_total = ativo[2] * quantidade
+        current_price = float(ativo[2]) if ativo[2] is not None else 0.0
+        current_qty = float(ativo[3]) if ativo[3] is not None else 0.0
+        new_qty = float(quantidade) if quantidade is not None else current_qty
+        new_price = float(preco_atual) if preco_atual is not None else current_price
+        valor_total = new_price * new_qty
         
         cursor.execute('''
             UPDATE carteira 
-            SET quantidade = ?, valor_total = ?
+            SET quantidade = ?, preco_atual = ?, valor_total = ?
             WHERE id = ?
-        ''', (quantidade, valor_total, id))
+        ''', (new_qty, new_price, valor_total, id))
         
         conn.commit()
         conn.close()

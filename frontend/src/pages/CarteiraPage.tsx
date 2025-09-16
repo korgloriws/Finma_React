@@ -46,6 +46,7 @@ export default function CarteiraPage() {
   const [inputIndexadorPct, setInputIndexadorPct] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editQuantidade, setEditQuantidade] = useState('')
+  const [editPreco, setEditPreco] = useState('')
   const [filtroMes, setFiltroMes] = useState<number>(new Date().getMonth() + 1)
   const [filtroAno, setFiltroAno] = useState<number>(new Date().getFullYear())
   const [activeTab, setActiveTab] = useState(() => {
@@ -272,8 +273,8 @@ export default function CarteiraPage() {
   })
 
   const atualizarMutation = useMutation({
-    mutationFn: ({ id, quantidade }: { id: number; quantidade: number }) =>
-      carteiraService.atualizarAtivo(id, quantidade),
+    mutationFn: ({ id, quantidade, preco_atual }: { id: number; quantidade?: number; preco_atual?: number }) =>
+      carteiraService.atualizarAtivo(id, { quantidade, preco_atual }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['carteira', user] })
       queryClient.invalidateQueries({ queryKey: ['historico-carteira', user] })
@@ -281,6 +282,7 @@ export default function CarteiraPage() {
       queryClient.invalidateQueries({ queryKey: ['proventos-recebidos', user] })
       setEditingId(null)
       setEditQuantidade('')
+      setEditPreco('')
     },
   })
 
@@ -321,16 +323,24 @@ export default function CarteiraPage() {
   const handleEditar = useCallback((id: number, quantidade: number) => {
     setEditingId(id)
     setEditQuantidade(quantidade.toString())
-  }, [])
+    const ativo = (carteira || []).find((a: any) => a?.id === id)
+    setEditPreco(ativo && typeof ativo.preco_atual === 'number' ? String(ativo.preco_atual) : '')
+  }, [carteira])
 
   const handleSalvarEdicao = useCallback(() => {
-    if (!editingId || !editQuantidade.trim()) return
-    
-    const quantidade = parseFloat(editQuantidade.replace(',', '.'))
-    if (isNaN(quantidade) || quantidade <= 0) return
-    
-    atualizarMutation.mutate({ id: editingId, quantidade })
-  }, [editingId, editQuantidade, atualizarMutation])
+    if (!editingId) return
+    const payload: { id: number; quantidade?: number; preco_atual?: number } = { id: editingId }
+    if (editQuantidade.trim()) {
+      const quantidade = parseFloat(editQuantidade.replace(',', '.'))
+      if (!isNaN(quantidade) && quantidade > 0) payload.quantidade = quantidade
+    }
+    if (editPreco.trim()) {
+      const preco = parseFloat(editPreco.replace(',', '.'))
+      if (!isNaN(preco) && preco >= 0) payload.preco_atual = preco
+    }
+    if (payload.quantidade == null && payload.preco_atual == null) return
+    atualizarMutation.mutate(payload)
+  }, [editingId, editQuantidade, editPreco, atualizarMutation])
 
   const handleCancelarEdicao = useCallback(() => {
     setEditingId(null)
@@ -610,6 +620,8 @@ export default function CarteiraPage() {
             editingId={editingId}
             editQuantidade={editQuantidade}
             setEditQuantidade={setEditQuantidade}
+            editPreco={editPreco}
+            setEditPreco={setEditPreco}
             handleEditar={handleEditar}
             handleSalvarEdicao={handleSalvarEdicao}
             handleCancelarEdicao={handleCancelarEdicao}

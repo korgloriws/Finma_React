@@ -520,30 +520,54 @@ function RebalanceHistory({ history, onRegisterHistory }: {
   history: string[]
   onRegisterHistory: (date: string) => void
 }) {
-  const [selectedDate, setSelectedDate] = useState<string>('')
+  const [selectedMonth, setSelectedMonth] = useState<string>('')
+  const [selectedYear, setSelectedYear] = useState<string>('')
 
   const handleRegister = () => {
-    if (selectedDate) {
-      onRegisterHistory(`${selectedDate}-01 00:00:00`)
-      setSelectedDate('')
+    if (selectedMonth && selectedYear) {
+      onRegisterHistory(`${selectedYear}-${selectedMonth}-01 00:00:00`)
+      setSelectedMonth('')
+      setSelectedYear('')
     }
   }
 
   return (
     <div className="space-y-4">
       {/* Registrar novo histórico */}
-      <div className="flex items-center gap-2">
-        <input
-          type="month"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="px-3 py-2 border border-border rounded bg-background text-foreground"
-          title="Selecione o mês e ano do rebalanceamento"
-          aria-label="Data do rebalanceamento"
-        />
+      <div className="flex items-end gap-2 flex-col sm:flex-row">
+        <div>
+          <label className="block text-sm font-medium mb-1">Mês</label>
+          <select
+            aria-label="Mês do rebalanceamento"
+            title="Selecione o mês do rebalanceamento"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="px-3 py-2 border border-border rounded bg-background text-foreground w-full sm:w-auto"
+          >
+            <option value="">Mês</option>
+            {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Ano</label>
+          <select
+            aria-label="Ano do rebalanceamento"
+            title="Selecione o ano do rebalanceamento"
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(e.target.value)}
+            className="px-3 py-2 border border-border rounded bg-background text-foreground w-full sm:w-auto"
+          >''
+            <option value="">Ano</option>
+            {Array.from({ length: 8 }, (_, i) => String(new Date().getFullYear() - i)).map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
         <button
           onClick={handleRegister}
-          disabled={!selectedDate}
+          disabled={!selectedMonth || !selectedYear}
           className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
           Registrar
