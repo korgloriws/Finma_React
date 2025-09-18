@@ -534,7 +534,7 @@ function TabelaAtivosPorTipo({
 }
 
 interface CarteiraAtivosTabProps {
-  // Formulário de adição
+
   inputTicker: string
   setInputTicker: (value: string) => void
   inputQuantidade: string
@@ -550,14 +550,14 @@ interface CarteiraAtivosTabProps {
   handleAdicionar: () => void
   adicionarMutation: any
   
-  // Dados da carteira
+
   carteira: any[]
   loadingCarteira: boolean
   ativosPorTipo: Record<string, any[]>
   valorTotal: number
   topAtivos: any[]
   
-  // Estados de edição
+
   editingId: number | null
   editQuantidade: string
   setEditQuantidade: (value: string) => void

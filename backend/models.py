@@ -29,7 +29,7 @@ def _sanitize_db_url(url: str) -> str:
         from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
         parsed = urlparse(url)
         query_pairs = dict(parse_qsl(parsed.query))
-        # Remover channel_binding=require (pode causar falha em ambientes sem suporte)
+
         if query_pairs.get("channel_binding", "").lower() == "require":
             query_pairs.pop("channel_binding", None)
         # Garantir sslmode=require
@@ -205,7 +205,7 @@ def list_asset_types():
         conn.close()
 
 def _ensure_indexador_schema():
-    """Garante colunas de indexação na tabela carteira: indexador (TEXT) e indexador_pct (REAL)."""
+
     usuario = get_usuario_atual()
     if not usuario:
         return
@@ -221,6 +221,14 @@ def _ensure_indexador_schema():
                     c.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS indexador_pct NUMERIC')
                 except Exception:
                     pass
+                try:
+                    c.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS indexador_base_preco NUMERIC')
+                except Exception:
+                    pass
+                try:
+                    c.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS indexador_base_data TEXT')
+                except Exception:
+                    pass
         finally:
             conn.close()
     else:
@@ -234,6 +242,14 @@ def _ensure_indexador_schema():
                 pass
             try:
                 cur.execute('ALTER TABLE carteira ADD COLUMN indexador_pct REAL')
+            except Exception:
+                pass
+            try:
+                cur.execute('ALTER TABLE carteira ADD COLUMN indexador_base_preco REAL')
+            except Exception:
+                pass
+            try:
+                cur.execute('ALTER TABLE carteira ADD COLUMN indexador_base_data TEXT')
             except Exception:
                 pass
             conn.commit()
@@ -2652,7 +2668,7 @@ def atualizar_precos_indicadores_carteira():
             conn = _pg_conn_for_user(usuario)
             try:
                 with conn.cursor() as c:
-                    c.execute('SELECT id, ticker, quantidade, preco_atual, data_adicao, indexador, indexador_pct FROM carteira')
+                    c.execute('SELECT id, ticker, quantidade, preco_atual, data_adicao, indexador, indexador_pct, indexador_base_preco, indexador_base_data FROM carteira')
                     rows = c.fetchall()
                     for row in rows:
                         _id, _ticker, _qtd = row[0], str(row[1] or ''), float(row[2] or 0)
@@ -2660,6 +2676,8 @@ def atualizar_precos_indicadores_carteira():
                         _data_adicao = row[4]
                         _indexador = row[5]
                         _indexador_pct = float(row[6]) if row[6] is not None else None
+                        base_preco = float(row[7]) if (len(row) > 7 and row[7] is not None) else None
+                        base_data = row[8] if (len(row) > 8) else None
                         
                         if not _ticker:
                             continue
@@ -2668,11 +2686,15 @@ def atualizar_precos_indicadores_carteira():
                         if _indexador and _indexador_pct:
                             print(f"DEBUG: Ativo {_ticker} tem indexador {_indexador} com {_indexador_pct}%")
                             
-                            # Para ativos com indexador, precisamos do preço inicial (não o atual)
-                            # Vamos buscar o preço inicial das movimentações
-                            c.execute('SELECT preco FROM movimentacoes WHERE ticker = %s ORDER BY data ASC LIMIT 1', (_ticker,))
-                            mov_row = c.fetchone()
-                            preco_inicial = float(mov_row[0]) if mov_row else _preco_atual
+                            # Preço base: se houve edição manual (indexador_base_preco), usa como base
+                            if base_preco is not None and base_data:
+                                preco_inicial = base_preco
+                                _data_adicao = base_data
+                            else:
+                                # Caso contrário, base das movimentações
+                                c.execute('SELECT preco FROM movimentacoes WHERE ticker = %s ORDER BY data ASC LIMIT 1', (_ticker,))
+                                mov_row = c.fetchone()
+                                preco_inicial = float(mov_row[0]) if mov_row else _preco_atual
                             
                             print(f"DEBUG: Preço inicial encontrado: {preco_inicial}")
                             
@@ -2709,7 +2731,7 @@ def atualizar_precos_indicadores_carteira():
             conn = sqlite3.connect(db_path, check_same_thread=False)
             try:
                 cur = conn.cursor()
-                cur.execute('SELECT id, ticker, quantidade, preco_atual, data_adicao, indexador, indexador_pct FROM carteira')
+                cur.execute('SELECT id, ticker, quantidade, preco_atual, data_adicao, indexador, indexador_pct, indexador_base_preco, indexador_base_data FROM carteira')
                 rows = cur.fetchall()
                 for row in rows:
                     _id, _ticker, _qtd = row[0], str(row[1] or ''), float(row[2] or 0)
@@ -2717,6 +2739,8 @@ def atualizar_precos_indicadores_carteira():
                     _data_adicao = row[4]
                     _indexador = row[5]
                     _indexador_pct = float(row[6]) if row[6] is not None else None
+                    base_preco = float(row[7]) if (len(row) > 7 and row[7] is not None) else None
+                    base_data = row[8] if (len(row) > 8) else None
                     
                     if not _ticker:
                         continue
@@ -2725,9 +2749,13 @@ def atualizar_precos_indicadores_carteira():
                     if _indexador and _indexador_pct:
                         print(f"DEBUG: Ativo {_ticker} tem indexador {_indexador} com {_indexador_pct}%")
                         
-                        cur.execute('SELECT preco FROM movimentacoes WHERE ticker = ? ORDER BY data ASC LIMIT 1', (_ticker,))
-                        mov_row = cur.fetchone()
-                        preco_inicial = float(mov_row[0]) if mov_row else _preco_atual
+                        if base_preco is not None and base_data:
+                            preco_inicial = base_preco
+                            _data_adicao = base_data
+                        else:
+                            cur.execute('SELECT preco FROM movimentacoes WHERE ticker = ? ORDER BY data ASC LIMIT 1', (_ticker,))
+                            mov_row = cur.fetchone()
+                            preco_inicial = float(mov_row[0]) if mov_row else _preco_atual
                         
                         print(f"DEBUG: Preço inicial encontrado: {preco_inicial}")
                         
@@ -2936,7 +2964,7 @@ def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None):
             conn = _pg_conn_for_user(usuario)
             try:
                 with conn.cursor() as cursor:
-                    cursor.execute('SELECT ticker, nome_completo, preco_atual, quantidade FROM carteira WHERE id = %s', (id,))
+                    cursor.execute('SELECT ticker, nome_completo, preco_atual, quantidade, indexador, indexador_pct FROM carteira WHERE id = %s', (id,))
                     ativo = cursor.fetchone()
                     if not ativo:
                         return {"success": False, "message": "Ativo não encontrado"}
@@ -2945,14 +2973,20 @@ def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None):
                     new_qty = float(quantidade) if quantidade is not None else current_qty
                     new_price = float(preco_atual) if preco_atual is not None else current_price
                     valor_total = new_price * new_qty
-                    cursor.execute('UPDATE carteira SET quantidade = %s, preco_atual = %s, valor_total = %s WHERE id = %s', (new_qty, new_price, valor_total, id))
+       
+                    has_indexador = (len(ativo) > 4 and ativo[4] is not None and ativo[5] is not None)
+                    if preco_atual is not None and has_indexador:
+                        base_data = datetime.now().strftime('%Y-%m-%d')
+                        cursor.execute('UPDATE carteira SET quantidade = %s, preco_atual = %s, valor_total = %s, indexador_base_preco = %s, indexador_base_data = %s WHERE id = %s', (new_qty, new_price, valor_total, new_price, base_data, id))
+                    else:
+                        cursor.execute('UPDATE carteira SET quantidade = %s, preco_atual = %s, valor_total = %s WHERE id = %s', (new_qty, new_price, valor_total, id))
                 return {"success": True, "message": "Ativo atualizado com sucesso"}
             finally:
                 conn.close()
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
-        cursor.execute('SELECT ticker, nome_completo, preco_atual, quantidade FROM carteira WHERE id = ?', (id,))
+        cursor.execute('SELECT ticker, nome_completo, preco_atual, quantidade, indexador, indexador_pct FROM carteira WHERE id = ?', (id,))
         ativo = cursor.fetchone()
         
         if not ativo:
@@ -2964,11 +2998,20 @@ def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None):
         new_price = float(preco_atual) if preco_atual is not None else current_price
         valor_total = new_price * new_qty
         
-        cursor.execute('''
-            UPDATE carteira 
-            SET quantidade = ?, preco_atual = ?, valor_total = ?
-            WHERE id = ?
-        ''', (new_qty, new_price, valor_total, id))
+        has_indexador = (len(ativo) > 4 and ativo[4] is not None and ativo[5] is not None)
+        if preco_atual is not None and has_indexador:
+            base_data = datetime.now().strftime('%Y-%m-%d')
+            cursor.execute('''
+                UPDATE carteira 
+                SET quantidade = ?, preco_atual = ?, valor_total = ?, indexador_base_preco = ?, indexador_base_data = ?
+                WHERE id = ?
+            ''', (new_qty, new_price, valor_total, new_price, base_data, id))
+        else:
+            cursor.execute('''
+                UPDATE carteira 
+                SET quantidade = ?, preco_atual = ?, valor_total = ?
+                WHERE id = ?
+            ''', (new_qty, new_price, valor_total, id))
         
         conn.commit()
         conn.close()

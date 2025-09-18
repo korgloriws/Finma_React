@@ -131,36 +131,9 @@ export default function CarteiraPage() {
   const queryClient = useQueryClient()
 
 
-  const [didInitialRefresh, setDidInitialRefresh] = useState(false)
-  useEffect(() => {
-    if (!user) return
-    const keyBase = typeof user === 'string' ? user : 'auth'
-    const flagKey = `finma_carteira_refreshed_${keyBase}`
-    const already = sessionStorage.getItem(flagKey)
-    if (already) return
-    ;(async () => {
-      try {
-        sessionStorage.setItem(flagKey, '1')
-        await carteiraService.refreshCarteira()
-      } catch (_) {}
-      finally {
-        queryClient.invalidateQueries({ queryKey: ['carteira', user] })
-        queryClient.invalidateQueries({ queryKey: ['carteira-insights', user] })
-      }
-    })()
-  }, [user, queryClient])
   const { data: carteira, isLoading: loadingCarteira } = useQuery<AtivoCarteira[]>({
     queryKey: ['carteira', user], 
-    queryFn: async () => {
-      const flagKey = `finma_carteira_refreshed_${user || 'anon'}`
-      const already = sessionStorage.getItem(flagKey)
-      if (!already && !didInitialRefresh) {
-        sessionStorage.setItem(flagKey, '1')
-        setDidInitialRefresh(true)
-        return await carteiraService.getCarteiraRefresh()
-      }
-      return await carteiraService.getCarteira()
-    },
+    queryFn: async () => await carteiraService.getCarteira(),
     enabled: !!user, 
     staleTime: 0,
   })
