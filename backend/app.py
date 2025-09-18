@@ -36,6 +36,7 @@ from models import (
     delete_asset_type,
     atualizar_precos_indicadores_carteira,
     obter_taxas_indexadores,
+    _upgrade_controle_schema,
 )
 from models import cache
 import requests
@@ -1884,7 +1885,21 @@ def api_receitas():
             nome = data.get('nome')
             valor = data.get('valor')
             if valor and nome:
-                salvar_receita(nome, valor)
+                try:
+                    _upgrade_controle_schema()
+                except Exception:
+                    pass
+                salvar_receita(
+                    nome, valor,
+                    data=data.get('data'),
+                    categoria=data.get('categoria'),
+                    tipo=data.get('tipo'),
+                    recorrencia=data.get('recorrencia'),
+                    parcelas_total=data.get('parcelas_total'),
+                    parcela_atual=data.get('parcela_atual'),
+                    grupo_parcela=data.get('grupo_parcela'),
+                    observacao=data.get('observacao')
+                )
                 try:
                     if cache:
                         cache.clear()
@@ -1894,10 +1909,22 @@ def api_receitas():
             return jsonify({"error": "Nome e valor são obrigatórios"}), 400
         elif request.method == "PUT":
             data = request.get_json()
+            try:
+                _upgrade_controle_schema()
+            except Exception:
+                pass
             atualizar_receita(
                 data.get('id'),
-                data.get('nome'),
-                data.get('valor')
+                nome=data.get('nome'),
+                valor=data.get('valor'),
+                data=data.get('data'),
+                categoria=data.get('categoria'),
+                tipo=data.get('tipo'),
+                recorrencia=data.get('recorrencia'),
+                parcelas_total=data.get('parcelas_total'),
+                parcela_atual=data.get('parcela_atual'),
+                grupo_parcela=data.get('grupo_parcela'),
+                observacao=data.get('observacao')
             )
             try:
                 if cache:
@@ -1943,10 +1970,22 @@ def api_cartoes():
     try:
         if request.method == "POST":
             data = request.get_json()
+            try:
+                _upgrade_controle_schema()
+            except Exception:
+                pass
             adicionar_cartao(
                 data.get('nome'),
                 data.get('valor'),
-                data.get('pago')
+                data.get('pago'),
+                data=data.get('data'),
+                categoria=data.get('categoria'),
+                tipo=data.get('tipo'),
+                recorrencia=data.get('recorrencia'),
+                parcelas_total=data.get('parcelas_total'),
+                parcela_atual=data.get('parcela_atual'),
+                grupo_parcela=data.get('grupo_parcela'),
+                observacao=data.get('observacao')
             )
             try:
                 if cache:
@@ -1956,11 +1995,23 @@ def api_cartoes():
             return jsonify({"message": "Cartão adicionado com sucesso"})
         elif request.method == "PUT":
             data = request.get_json()
+            try:
+                _upgrade_controle_schema()
+            except Exception:
+                pass
             atualizar_cartao(
                 data.get('id'),
-                data.get('nome'),
-                data.get('valor'),
-                data.get('pago')
+                nome=data.get('nome'),
+                valor=data.get('valor'),
+                pago=data.get('pago'),
+                data=data.get('data'),
+                categoria=data.get('categoria'),
+                tipo=data.get('tipo'),
+                recorrencia=data.get('recorrencia'),
+                parcelas_total=data.get('parcelas_total'),
+                parcela_atual=data.get('parcela_atual'),
+                grupo_parcela=data.get('grupo_parcela'),
+                observacao=data.get('observacao')
             )
             try:
                 if cache:
@@ -2005,7 +2056,21 @@ def api_outros():
     try:
         if request.method == "POST":
             data = request.get_json()
-            adicionar_outro_gasto(data.get('nome'), data.get('valor'))
+            try:
+                _upgrade_controle_schema()
+            except Exception:
+                pass
+            adicionar_outro_gasto(
+                data.get('nome'), data.get('valor'),
+                data=data.get('data'),
+                categoria=data.get('categoria'),
+                tipo=data.get('tipo'),
+                recorrencia=data.get('recorrencia'),
+                parcelas_total=data.get('parcelas_total'),
+                parcela_atual=data.get('parcela_atual'),
+                grupo_parcela=data.get('grupo_parcela'),
+                observacao=data.get('observacao')
+            )
             try:
                 if cache:
                     cache.clear()
@@ -2014,7 +2079,23 @@ def api_outros():
             return jsonify({"message": "Gasto adicionado com sucesso"})
         elif request.method == "PUT":
             data = request.get_json()
-            atualizar_outro_gasto(data.get('id'), data.get('nome'), data.get('valor'))
+            try:
+                _upgrade_controle_schema()
+            except Exception:
+                pass
+            atualizar_outro_gasto(
+                data.get('id'), 
+                nome=data.get('nome'), 
+                valor=data.get('valor'),
+                data=data.get('data'),
+                categoria=data.get('categoria'),
+                tipo=data.get('tipo'),
+                recorrencia=data.get('recorrencia'),
+                parcelas_total=data.get('parcelas_total'),
+                parcela_atual=data.get('parcela_atual'),
+                grupo_parcela=data.get('grupo_parcela'),
+                observacao=data.get('observacao')
+            )
             try:
                 if cache:
                     cache.clear()

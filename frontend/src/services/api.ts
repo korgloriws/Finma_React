@@ -374,13 +374,22 @@ export const controleService = {
     return response.data
   },
 
-  adicionarReceita: async (nome: string, valor: number): Promise<any> => {
-    const response = await api.post('/controle/receitas', { nome, valor })
+  adicionarReceita: async (
+    nome: string, 
+    valor: number,
+    opts?: { data?: string; categoria?: string; tipo?: string; recorrencia?: string; parcelas_total?: number; parcela_atual?: number; grupo_parcela?: string; observacao?: string }
+  ): Promise<any> => {
+    const response = await api.post('/controle/receitas', { nome, valor, ...(opts || {}) })
     return response.data
   },
 
-  atualizarReceita: async (id: number, nome: string, valor: number): Promise<any> => {
-    const response = await api.put('/controle/receitas', { id, nome, valor })
+  atualizarReceita: async (
+    id: number, 
+    nome?: string, 
+    valor?: number,
+    opts?: { data?: string; categoria?: string; tipo?: string; recorrencia?: string; parcelas_total?: number; parcela_atual?: number; grupo_parcela?: string; observacao?: string }
+  ): Promise<any> => {
+    const response = await api.put('/controle/receitas', { id, nome, valor, ...(opts || {}) })
     return response.data
   },
 
@@ -399,13 +408,24 @@ export const controleService = {
     return response.data
   },
 
-  adicionarCartao: async (nome: string, valor: number, pago: string): Promise<any> => {
-    const response = await api.post('/controle/cartoes', { nome, valor, pago })
+  adicionarCartao: async (
+    nome: string, 
+    valor: number, 
+    pago: string,
+    opts?: { data?: string; categoria?: string; tipo?: string; recorrencia?: string; parcelas_total?: number; parcela_atual?: number; grupo_parcela?: string; observacao?: string }
+  ): Promise<any> => {
+    const response = await api.post('/controle/cartoes', { nome, valor, pago, ...(opts || {}) })
     return response.data
   },
 
-  atualizarCartao: async (id: number, nome: string, valor: number, pago: string): Promise<any> => {
-    const response = await api.put('/controle/cartoes', { id, nome, valor, pago })
+  atualizarCartao: async (
+    id: number, 
+    nome?: string, 
+    valor?: number, 
+    pago?: string,
+    opts?: { data?: string; categoria?: string; tipo?: string; recorrencia?: string; parcelas_total?: number; parcela_atual?: number; grupo_parcela?: string; observacao?: string }
+  ): Promise<any> => {
+    const response = await api.put('/controle/cartoes', { id, nome, valor, pago, ...(opts || {}) })
     return response.data
   },
 
@@ -424,13 +444,22 @@ export const controleService = {
     return response.data
   },
 
-  adicionarOutro: async (nome: string, valor: number): Promise<any> => {
-    const response = await api.post('/controle/outros', { nome, valor })
+  adicionarOutro: async (
+    nome: string, 
+    valor: number,
+    opts?: { data?: string; categoria?: string; tipo?: string; recorrencia?: string; parcelas_total?: number; parcela_atual?: number; grupo_parcela?: string; observacao?: string }
+  ): Promise<any> => {
+    const response = await api.post('/controle/outros', { nome, valor, ...(opts || {}) })
     return response.data
   },
 
-  atualizarOutro: async (id: number, nome: string, valor: number): Promise<any> => {
-    const response = await api.put('/controle/outros', { id, nome, valor })
+  atualizarOutro: async (
+    id: number, 
+    nome?: string, 
+    valor?: number,
+    opts?: { data?: string; categoria?: string; tipo?: string; recorrencia?: string; parcelas_total?: number; parcela_atual?: number; grupo_parcela?: string; observacao?: string }
+  ): Promise<any> => {
+    const response = await api.put('/controle/outros', { id, nome, valor, ...(opts || {}) })
     return response.data
   },
 

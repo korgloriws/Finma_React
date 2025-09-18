@@ -7,7 +7,7 @@ import { useAnalise } from '../../contexts/AnaliseContext'
 import TickerWithLogo from '../TickerWithLogo'
 import { formatNumber, formatCurrency } from '../../utils/formatters'
 
-// Componente para filtros de ações
+
 function FiltrosAcoes({ 
   filtros, 
   onFiltroChange, 
@@ -227,7 +227,7 @@ function FiltrosBdrs({
   )
 }
 
-// Componente para filtros de FIIs
+
 function FiltrosFiis({ 
   filtros, 
   onFiltroChange, 
@@ -315,7 +315,7 @@ function FiltrosFiis({
   )
 }
 
-// Componente para tabela de ativos
+
 function TabelaAtivos({ 
   ativos, 
   loading, 
@@ -398,7 +398,7 @@ function TabelaAtivos({
                   </span>
                 </td>
                 <td className="px-4 py-3 font-semibold">
-                  R$ {ativo.preco_atual.toFixed(2)}
+                  {formatCurrency(Number.isFinite(Number(ativo.preco_atual)) ? Number(ativo.preco_atual) : 0)}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
@@ -406,7 +406,7 @@ function TabelaAtivos({
                     ativo.dividend_yield >= 6 ? 'bg-yellow-100 text-yellow-800' : 
                     'bg-red-100 text-red-800'
                   }`}>
-                    {ativo.dividend_yield.toFixed(2)}%
+                    {Number.isFinite(Number(ativo.dividend_yield)) ? Number(ativo.dividend_yield).toFixed(2) : '0.00'}%
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -415,7 +415,7 @@ function TabelaAtivos({
                     ativo.pl <= 20 ? 'bg-yellow-100 text-yellow-800' : 
                     'bg-red-100 text-red-800'
                   }`}>
-                    {ativo.pl.toFixed(2)}
+                    {Number.isFinite(Number(ativo.pl)) ? Number(ativo.pl).toFixed(2) : '-'}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -424,7 +424,7 @@ function TabelaAtivos({
                     ativo.pvp <= 3 ? 'bg-yellow-100 text-yellow-800' : 
                     'bg-red-100 text-red-800'
                   }`}>
-                    {ativo.pvp.toFixed(2)}
+                    {Number.isFinite(Number(ativo.pvp)) ? Number(ativo.pvp).toFixed(2) : '-'}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -433,7 +433,7 @@ function TabelaAtivos({
                     ativo.roe >= 10 ? 'bg-yellow-100 text-yellow-800' : 
                     'bg-red-100 text-red-800'
                   }`}>
-                    {ativo.roe.toFixed(2)}%
+                    {Number.isFinite(Number(ativo.roe)) ? Number(ativo.roe).toFixed(2) : '0.00'}%
                   </span>
                 </td>
                 <td className="px-4 py-3 text-sm text-muted-foreground">
@@ -472,11 +472,11 @@ function TabelaAtivos({
   )
 }
 
-// Componente principal da aba Lista
+
 export default function AnaliseListaTab() {
   const [activeSubTab, setActiveSubTab] = useState<'acoes' | 'bdrs' | 'fiis'>('acoes')
   
-  // Usar o contexto para gerenciar os dados
+
   const { 
     ativosAcoes, 
     ativosBdrs, 
@@ -486,7 +486,7 @@ export default function AnaliseListaTab() {
     setAtivosFiis 
   } = useAnalise()
   
-  // Estados para filtros
+
   const [filtrosAcoes, setFiltrosAcoes] = useState<FiltrosAnalise>({
     roe_min: 15,
     dy_min: 12,
@@ -509,22 +509,22 @@ export default function AnaliseListaTab() {
     liq_min: 1000000
   })
 
-  // Estados para loading
+ 
   const [loadingAcoes, setLoadingAcoes] = useState(false)
   const [loadingBdrs, setLoadingBdrs] = useState(false)
   const [loadingFiis, setLoadingFiis] = useState(false)
 
-  // Estados para erros
+ 
   const [errorAcoes, setErrorAcoes] = useState<string | null>(null)
   const [errorBdrs, setErrorBdrs] = useState<string | null>(null)
   const [errorFiis, setErrorFiis] = useState<string | null>(null)
 
-  // Estados para busca automática
+
   const [autoSearchAcoes, setAutoSearchAcoes] = useState(false)
   const [autoSearchBdrs, setAutoSearchBdrs] = useState(false)
   const [autoSearchFiis, setAutoSearchFiis] = useState(false)
 
-  // Query para buscar carteira (para verificar se ativo está na carteira)
+
   const { data: carteira } = useQuery({
     queryKey: ['carteira'],
     queryFn: carteiraService.getCarteira,
@@ -532,13 +532,13 @@ export default function AnaliseListaTab() {
     refetchOnWindowFocus: false
   })
 
-  // Função para verificar se ativo está na carteira
+
   const tickersNaCarteira = new Set(carteira?.map(ativo => ativo.ticker.toUpperCase()) || [])
   const isAtivoNaCarteira = (ticker: string) => {
     return tickersNaCarteira.has(ticker.toUpperCase())
   }
 
-  // Handlers para filtros
+
   const handleFiltroAcoesChange = useCallback((key: keyof FiltrosAnalise, value: number) => {
     setFiltrosAcoes(prev => ({ ...prev, [key]: value }))
     if (autoSearchAcoes) {
@@ -560,7 +560,7 @@ export default function AnaliseListaTab() {
     }
   }, [autoSearchFiis])
 
-  // Handlers para busca
+
   const handleBuscarAcoes = useCallback(async () => {
     setLoadingAcoes(true)
     setErrorAcoes(null)

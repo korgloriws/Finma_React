@@ -24,7 +24,7 @@ export default function AnaliseGraficosTab({
   ativosBdrs, 
   ativosFiis 
 }: AnaliseGraficosTabProps) {
-  // Combinar todos os ativos para os gráficos
+
   const todosAtivos = [
     ...ativosAcoes,
     ...ativosBdrs,
@@ -43,7 +43,6 @@ export default function AnaliseGraficosTab({
     )
   }
 
-  // Preparar dados para gráficos
   const topDy = todosAtivos
     .sort((a, b) => (b.dividend_yield || 0) - (a.dividend_yield || 0))
     .slice(0, 5)

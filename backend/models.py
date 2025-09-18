@@ -1892,26 +1892,32 @@ def obter_informacoes(ticker, tipo_ativo, max_retentativas=3):
                     print(f" Ativo {ticker} não encontrado na API do Yahoo Finance. Ignorando...")
                     return None
 
-            preco_atual = info.get("currentPrice", 0.0)
+            preco_atual = info.get("currentPrice")
+            if preco_atual is None:
+                preco_atual = info.get("regularMarketPrice") or 0.0
             roe_raw = info.get("returnOnEquity", 0.0)
-            dividend_yield_api = info.get("dividendYield", 0.0)
-            average_volume = info.get("averageVolume", 0)  
+            dividend_yield_api = info.get("dividendYield")
+            average_volume = info.get("averageVolume") or 0  
             liquidez_diaria = preco_atual * average_volume
 
-            trailing_pe_raw = info.get("trailingPE", float('inf'))
-            price_to_book_raw = info.get("priceToBook", float('inf'))
+            trailing_pe_raw = info.get("trailingPE")
+            price_to_book_raw = info.get("priceToBook")
 
             pl = to_float_or_inf(trailing_pe_raw)
+            if pl is None:
+                pl = float('inf') if tipo_ativo != 'FII' else 0.0
             pvp = to_float_or_inf(price_to_book_raw)
+            if pvp is None:
+                pvp = float('inf') if tipo_ativo != 'FII' else 0.0
 
             roe = round(roe_raw * 100, 2) if roe_raw else 0.0
             
 
-            if tipo_ativo == 'FII':
-
-                dividend_yield = round(dividend_yield_api * 100, 2) if dividend_yield_api and dividend_yield_api < 1 else round(dividend_yield_api, 2)
+            if dividend_yield_api is None:
+                dividend_yield = 0.0
+            elif tipo_ativo == 'FII':
+                dividend_yield = round((dividend_yield_api * 100) if dividend_yield_api < 1 else dividend_yield_api, 2)
             else:
-
                 dividend_yield = round(dividend_yield_api, 6)
                 
             setor = info.get("sector", "").strip() or "Desconhecido"
@@ -2978,7 +2984,7 @@ def obter_carteira():
         if not usuario:
             return {"success": False, "message": "Usuário não autenticado"}
 
-        # Garantir que colunas de indexação existam antes dos SELECTs
+        
         try:
             _ensure_indexador_schema()
         except Exception:
@@ -3827,7 +3833,14 @@ def init_controle_db(usuario=None):
                         id SERIAL PRIMARY KEY,
                         nome TEXT NOT NULL,
                         valor NUMERIC NOT NULL,
-                        data TEXT NOT NULL
+                        data TEXT NOT NULL,
+                        categoria TEXT,
+                        tipo TEXT,
+                        recorrencia TEXT,
+                        parcelas_total INTEGER,
+                        parcela_atual INTEGER,
+                        grupo_parcela TEXT,
+                        observacao TEXT
                     )
                 ''')
                 cursor.execute('''
@@ -3836,7 +3849,14 @@ def init_controle_db(usuario=None):
                         nome TEXT NOT NULL,
                         valor NUMERIC NOT NULL,
                         pago TEXT NOT NULL,
-                        data TEXT NOT NULL
+                        data TEXT NOT NULL,
+                        categoria TEXT,
+                        tipo TEXT,
+                        recorrencia TEXT,
+                        parcelas_total INTEGER,
+                        parcela_atual INTEGER,
+                        grupo_parcela TEXT,
+                        observacao TEXT
                     )
                 ''')
                 cursor.execute('''
@@ -3844,7 +3864,14 @@ def init_controle_db(usuario=None):
                         id SERIAL PRIMARY KEY,
                         nome TEXT NOT NULL,
                         valor NUMERIC NOT NULL,
-                        data TEXT NOT NULL
+                        data TEXT NOT NULL,
+                        categoria TEXT,
+                        tipo TEXT,
+                        recorrencia TEXT,
+                        parcelas_total INTEGER,
+                        parcela_atual INTEGER,
+                        grupo_parcela TEXT,
+                        observacao TEXT
                     )
                 ''')
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_receitas_data ON receitas(data)")
@@ -3864,7 +3891,14 @@ def init_controle_db(usuario=None):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             valor REAL NOT NULL,
-            data TEXT NOT NULL
+            data TEXT NOT NULL,
+            categoria TEXT,
+            tipo TEXT,
+            recorrencia TEXT,
+            parcelas_total INTEGER,
+            parcela_atual INTEGER,
+            grupo_parcela TEXT,
+            observacao TEXT
         )
     ''')
     
@@ -3875,7 +3909,14 @@ def init_controle_db(usuario=None):
             nome TEXT NOT NULL,
             valor REAL NOT NULL,
             pago TEXT NOT NULL,
-            data TEXT NOT NULL
+            data TEXT NOT NULL,
+            categoria TEXT,
+            tipo TEXT,
+            recorrencia TEXT,
+            parcelas_total INTEGER,
+            parcela_atual INTEGER,
+            grupo_parcela TEXT,
+            observacao TEXT
         )
     ''')
     
@@ -3885,7 +3926,14 @@ def init_controle_db(usuario=None):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             valor REAL NOT NULL,
-            data TEXT NOT NULL
+            data TEXT NOT NULL,
+            categoria TEXT,
+            tipo TEXT,
+            recorrencia TEXT,
+            parcelas_total INTEGER,
+            parcela_atual INTEGER,
+            grupo_parcela TEXT,
+            observacao TEXT
         )
     ''')
 
@@ -3903,29 +3951,93 @@ def init_controle_db(usuario=None):
     conn.commit()
     conn.close()
 
-def salvar_receita(nome, valor):
+def _upgrade_controle_schema(usuario=None):
+    if not usuario:
+        usuario = get_usuario_atual()
+        if not usuario:
+            return
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                tables = ['receitas','cartoes','outros_gastos']
+                add_columns = [
+                    ('categoria','TEXT'),
+                    ('tipo','TEXT'),
+                    ('recorrencia','TEXT'),
+                    ('parcelas_total','INTEGER'),
+                    ('parcela_atual','INTEGER'),
+                    ('grupo_parcela','TEXT'),
+                    ('observacao','TEXT'),
+                ]
+                for t in tables:
+                    for col, coltype in add_columns:
+                        try:
+                            cursor.execute(f"ALTER TABLE {t} ADD COLUMN IF NOT EXISTS {col} {coltype}")
+                        except Exception:
+                            pass
+            conn.commit()
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "controle")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cur = conn.cursor()
+            tables = ['receitas','cartoes','outros_gastos']
+            add_columns = [
+                ('categoria','TEXT'),
+                ('tipo','TEXT'),
+                ('recorrencia','TEXT'),
+                ('parcelas_total','INTEGER'),
+                ('parcela_atual','INTEGER'),
+                ('grupo_parcela','TEXT'),
+                ('observacao','TEXT'),
+            ]
+            for t in tables:
+                cur.execute(f"PRAGMA table_info({t})")
+                existing = {row[1] for row in cur.fetchall()}
+                for col, coltype in add_columns:
+                    if col not in existing:
+                        try:
+                            cur.execute(f"ALTER TABLE {t} ADD COLUMN {col} {coltype}")
+                        except Exception:
+                            pass
+            conn.commit()
+        finally:
+            conn.close()
+
+def salvar_receita(nome, valor, data=None, categoria=None, tipo=None, recorrencia=None, parcelas_total=None, parcela_atual=None, grupo_parcela=None, observacao=None):
 
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
-    data_atual = datetime.now().strftime('%Y-%m-%d')
+    data_atual = (data or datetime.now().strftime('%Y-%m-%d'))
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as cursor:
-                cursor.execute('INSERT INTO receitas (nome, valor, data) VALUES (%s, %s, %s)', (nome, valor, data_atual))
+                cursor.execute('''
+                    INSERT INTO receitas 
+                        (nome, valor, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (nome, valor, data_atual, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao))
         finally:
             conn.close()
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO receitas (nome, valor, data) VALUES (?, ?, ?)', (nome, valor, data_atual))
+    cursor.execute('''
+        INSERT INTO receitas 
+            (nome, valor, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (nome, valor, data_atual, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao))
     conn.commit()
     conn.close()
 
-def atualizar_receita(id_registro, nome, valor):
+def atualizar_receita(id_registro, nome=None, valor=None, data=None, categoria=None, tipo=None, recorrencia=None, parcelas_total=None, parcela_atual=None, grupo_parcela=None, observacao=None):
 
     usuario = get_usuario_atual()
     if not usuario:
@@ -3935,14 +4047,40 @@ def atualizar_receita(id_registro, nome, valor):
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as cursor:
-                cursor.execute('UPDATE receitas SET nome = %s, valor = %s WHERE id = %s', (nome, valor, id_registro))
+                cursor.execute('''
+                    UPDATE receitas SET 
+                        nome = COALESCE(%s, nome),
+                        valor = COALESCE(%s, valor),
+                        data = COALESCE(%s, data),
+                        categoria = COALESCE(%s, categoria),
+                        tipo = COALESCE(%s, tipo),
+                        recorrencia = COALESCE(%s, recorrencia),
+                        parcelas_total = COALESCE(%s, parcelas_total),
+                        parcela_atual = COALESCE(%s, parcela_atual),
+                        grupo_parcela = COALESCE(%s, grupo_parcela),
+                        observacao = COALESCE(%s, observacao)
+                    WHERE id = %s
+                ''', (nome, valor, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao, id_registro))
         finally:
             conn.close()
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('UPDATE receitas SET nome = ?, valor = ? WHERE id = ?', (nome, valor, id_registro))
+    cursor.execute('''
+        UPDATE receitas SET 
+            nome = COALESCE(?, nome),
+            valor = COALESCE(?, valor),
+            data = COALESCE(?, data),
+            categoria = COALESCE(?, categoria),
+            tipo = COALESCE(?, tipo),
+            recorrencia = COALESCE(?, recorrencia),
+            parcelas_total = COALESCE(?, parcelas_total),
+            parcela_atual = COALESCE(?, parcela_atual),
+            grupo_parcela = COALESCE(?, grupo_parcela),
+            observacao = COALESCE(?, observacao)
+        WHERE id = ?
+    ''', (nome, valor, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao, id_registro))
     conn.commit()
     conn.close()
 
@@ -4026,27 +4164,33 @@ def carregar_receitas_mes_ano(mes, ano, pessoa=None):
     finally:
         conn.close()
 
-def adicionar_cartao(nome, valor, pago):
+def adicionar_cartao(nome, valor, pago, data=None, categoria=None, tipo=None, recorrencia=None, parcelas_total=None, parcela_atual=None, grupo_parcela=None, observacao=None):
 
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
-    data_atual = datetime.now().strftime('%Y-%m-%d')
+    data_atual = (data or datetime.now().strftime('%Y-%m-%d'))
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as cursor:
-                cursor.execute('INSERT INTO cartoes (nome, valor, pago, data) VALUES (%s, %s, %s, %s)', 
-                               (nome, valor, pago, data_atual))
+                cursor.execute('''
+                    INSERT INTO cartoes 
+                        (nome, valor, pago, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (nome, valor, pago, data_atual, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao))
         finally:
             conn.close()
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO cartoes (nome, valor, pago, data) VALUES (?, ?, ?, ?)', 
-                  (nome, valor, pago, data_atual))
+    cursor.execute('''
+        INSERT INTO cartoes 
+            (nome, valor, pago, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (nome, valor, pago, data_atual, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao))
     conn.commit()
     conn.close()
 
@@ -4089,7 +4233,7 @@ def carregar_cartoes_mes_ano(mes, ano):
         conn.close()
     return df.to_dict('records')
 
-def atualizar_cartao(id_registro, nome, valor, pago):
+def atualizar_cartao(id_registro, nome=None, valor=None, pago=None, data=None, categoria=None, tipo=None, recorrencia=None, parcelas_total=None, parcela_atual=None, grupo_parcela=None, observacao=None):
     
     usuario = get_usuario_atual()
     if not usuario:
@@ -4099,16 +4243,42 @@ def atualizar_cartao(id_registro, nome, valor, pago):
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as cursor:
-                cursor.execute('UPDATE cartoes SET nome = %s, valor = %s, pago = %s WHERE id = %s', 
-                               (nome, valor, pago, id_registro))
+                cursor.execute('''
+                    UPDATE cartoes SET 
+                        nome = COALESCE(%s, nome),
+                        valor = COALESCE(%s, valor),
+                        pago = COALESCE(%s, pago),
+                        data = COALESCE(%s, data),
+                        categoria = COALESCE(%s, categoria),
+                        tipo = COALESCE(%s, tipo),
+                        recorrencia = COALESCE(%s, recorrencia),
+                        parcelas_total = COALESCE(%s, parcelas_total),
+                        parcela_atual = COALESCE(%s, parcela_atual),
+                        grupo_parcela = COALESCE(%s, grupo_parcela),
+                        observacao = COALESCE(%s, observacao)
+                    WHERE id = %s
+                ''', (nome, valor, pago, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao, id_registro))
         finally:
             conn.close()
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('UPDATE cartoes SET nome = ?, valor = ?, pago = ? WHERE id = ?', 
-                  (nome, valor, pago, id_registro))
+    cursor.execute('''
+        UPDATE cartoes SET 
+            nome = COALESCE(?, nome),
+            valor = COALESCE(?, valor),
+            pago = COALESCE(?, pago),
+            data = COALESCE(?, data),
+            categoria = COALESCE(?, categoria),
+            tipo = COALESCE(?, tipo),
+            recorrencia = COALESCE(?, recorrencia),
+            parcelas_total = COALESCE(?, parcelas_total),
+            parcela_atual = COALESCE(?, parcela_atual),
+            grupo_parcela = COALESCE(?, grupo_parcela),
+            observacao = COALESCE(?, observacao)
+        WHERE id = ?
+    ''', (nome, valor, pago, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao, id_registro))
     conn.commit()
     conn.close()
 
@@ -4133,27 +4303,33 @@ def remover_cartao(id_registro):
     conn.commit()
     conn.close()
 
-def adicionar_outro_gasto(nome, valor):
+def adicionar_outro_gasto(nome, valor, data=None, categoria=None, tipo=None, recorrencia=None, parcelas_total=None, parcela_atual=None, grupo_parcela=None, observacao=None):
     
     usuario = get_usuario_atual()
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
-    data_atual = datetime.now().strftime('%Y-%m-%d')
+    data_atual = (data or datetime.now().strftime('%Y-%m-%d'))
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as cursor:
-                cursor.execute('INSERT INTO outros_gastos (nome, valor, data) VALUES (%s, %s, %s)', 
-                               (nome, valor, data_atual))
+                cursor.execute('''
+                    INSERT INTO outros_gastos 
+                        (nome, valor, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (nome, valor, data_atual, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao))
         finally:
             conn.close()
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO outros_gastos (nome, valor, data) VALUES (?, ?, ?)', 
-                  (nome, valor, data_atual))
+    cursor.execute('''
+        INSERT INTO outros_gastos 
+            (nome, valor, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (nome, valor, data_atual, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao))
     conn.commit()
     conn.close()
 
@@ -4196,7 +4372,7 @@ def carregar_outros_mes_ano(mes, ano):
         conn.close()
     return df.to_dict('records')
 
-def atualizar_outro_gasto(id_registro, nome, valor):
+def atualizar_outro_gasto(id_registro, nome=None, valor=None, data=None, categoria=None, tipo=None, recorrencia=None, parcelas_total=None, parcela_atual=None, grupo_parcela=None, observacao=None):
     
     usuario = get_usuario_atual()
     if not usuario:
@@ -4206,16 +4382,40 @@ def atualizar_outro_gasto(id_registro, nome, valor):
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as cursor:
-                cursor.execute('UPDATE outros_gastos SET nome = %s, valor = %s WHERE id = %s', 
-                               (nome, valor, id_registro))
+                cursor.execute('''
+                    UPDATE outros_gastos SET 
+                        nome = COALESCE(%s, nome),
+                        valor = COALESCE(%s, valor),
+                        data = COALESCE(%s, data),
+                        categoria = COALESCE(%s, categoria),
+                        tipo = COALESCE(%s, tipo),
+                        recorrencia = COALESCE(%s, recorrencia),
+                        parcelas_total = COALESCE(%s, parcelas_total),
+                        parcela_atual = COALESCE(%s, parcela_atual),
+                        grupo_parcela = COALESCE(%s, grupo_parcela),
+                        observacao = COALESCE(%s, observacao)
+                    WHERE id = %s
+                ''', (nome, valor, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao, id_registro))
         finally:
             conn.close()
         return
     db_path = get_db_path(usuario, "controle")
     conn = sqlite3.connect(db_path, check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute('UPDATE outros_gastos SET nome = ?, valor = ? WHERE id = ?', 
-                  (nome, valor, id_registro))
+    cursor.execute('''
+        UPDATE outros_gastos SET 
+            nome = COALESCE(?, nome),
+            valor = COALESCE(?, valor),
+            data = COALESCE(?, data),
+            categoria = COALESCE(?, categoria),
+            tipo = COALESCE(?, tipo),
+            recorrencia = COALESCE(?, recorrencia),
+            parcelas_total = COALESCE(?, parcelas_total),
+            parcela_atual = COALESCE(?, parcela_atual),
+            grupo_parcela = COALESCE(?, grupo_parcela),
+            observacao = COALESCE(?, observacao)
+        WHERE id = ?
+    ''', (nome, valor, data, categoria, tipo, recorrencia, parcelas_total, parcela_atual, grupo_parcela, observacao, id_registro))
     conn.commit()
     conn.close()
 

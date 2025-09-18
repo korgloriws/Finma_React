@@ -1,5 +1,5 @@
-import { ReactNode, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import React, { ReactNode, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Moon, Sun, BarChart3, Wallet, Calculator, Home, Search, LogOut, User, Menu, X, TrendingUp, BookOpen, DollarSign } from 'lucide-react'
@@ -23,7 +23,10 @@ export default function Layout({ children }: LayoutProps) {
   const { isDark, toggleTheme } = useTheme()
   const { user, logout } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const handleLogout = async () => {
     try {
@@ -32,6 +35,57 @@ export default function Layout({ children }: LayoutProps) {
       console.error('Erro ao fazer logout:', error)
     }
   }
+
+  const searchItems: Array<{ label: string; path: string; keywords: string; params?: Record<string, string> }> = [
+    // Páginas principais
+    ...menuItems.map((m) => ({ label: m.label, path: m.path, keywords: m.label.toLowerCase() })),
+    // Abas conhecidas
+    { label: 'Análise – Lista', path: '/analise', keywords: 'analise lista oportunidades', params: { tab: 'lista' } },
+    { label: 'Análise – Gráficos', path: '/analise', keywords: 'analise graficos oportunidades', params: { tab: 'graficos' } },
+    { label: 'Análise – FIIs', path: '/analise', keywords: 'analise fiis lista fundos imobiliarios', params: { tab: 'lista', sub: 'fiis' } },
+    { label: 'Análise – Ações', path: '/analise', keywords: 'analise acoes lista', params: { tab: 'lista', sub: 'acoes' } },
+    { label: 'Análise – BDRs', path: '/analise', keywords: 'analise bdrs lista', params: { tab: 'lista', sub: 'bdrs' } },
+    { label: 'Controle – Financeiro', path: '/controle', keywords: 'controle financeiro receitas despesas fluxo', params: { tab: 'financeiro' } },
+    { label: 'Controle – Alimentação', path: '/controle', keywords: 'controle alimentacao marmitas', params: { tab: 'alimentacao' } },
+    { label: 'Carteira – Projeção', path: '/carteira', keywords: 'carteira projecao projeção simulacao', params: { tab: 'projecao' } },
+    { label: 'Carteira – Ativos', path: '/carteira', keywords: 'carteira ativos posicoes', params: { tab: 'ativos' } },
+    { label: 'Carteira – Proventos', path: '/carteira', keywords: 'carteira proventos dividendos', params: { tab: 'proventos' } },
+    { label: 'Carteira – Rebalanceamento', path: '/carteira', keywords: 'carteira rebalanceamento metas', params: { tab: 'rebalanceamento' } },
+  ]
+
+  const filteredResults = searchQuery
+    ? searchItems.filter((it) => {
+        const q = searchQuery.toLowerCase().trim()
+        return it.label.toLowerCase().includes(q) || it.keywords.includes(q)
+      }).slice(0, 8)
+    : []
+
+  const handleGoTo = (item: { path: string; params?: Record<string, string> }) => {
+    const sp = new URLSearchParams()
+    if (item.params) {
+      Object.entries(item.params).forEach(([k, v]) => sp.set(k, v))
+    }
+    const target = sp.toString() ? `${item.path}?${sp.toString()}` : item.path
+    navigate(target)
+    setSearchOpen(false)
+    setSearchQuery('')
+    setMobileMenuOpen(false)
+  }
+
+
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase()
+      if ((e.ctrlKey || e.metaKey) && key === 'k') {
+        e.preventDefault()
+        setSearchOpen((v) => !v)
+      } else if (key === 'escape') {
+        setSearchOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -44,6 +98,16 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center gap-2 mb-4 p-2 bg-accent/50 rounded-lg">
             <User size={16} className="text-muted-foreground" />
             <span className="text-sm font-medium text-foreground">{user}</span>
+          </div>
+          <div className="mt-2 mb-3">
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 bg-accent/50 hover:bg-accent rounded-lg text-sm text-muted-foreground transition-colors"
+              aria-label="Abrir busca"
+            >
+              <Search size={16} />
+              <span>Buscar (Ctrl+K)</span>
+            </button>
           </div>
           <p className="text-sm text-muted-foreground">Menu</p>
         </div>
@@ -107,6 +171,14 @@ export default function Layout({ children }: LayoutProps) {
               <User size={16} className="text-muted-foreground" />
               <span className="text-sm font-medium text-foreground">{user}</span>
             </div>
+            <button
+              onClick={() => setSearchOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 mb-2 bg-accent/50 hover:bg-accent rounded-lg text-sm text-muted-foreground transition-colors"
+              aria-label="Abrir busca"
+            >
+              <Search size={16} />
+              <span>Buscar</span>
+            </button>
             <nav className="flex-1">
               {menuItems.map((item) => {
                 const Icon = item.icon
@@ -172,6 +244,47 @@ export default function Layout({ children }: LayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* Command Palette / Busca Global */}
+      {searchOpen && (
+        <div className="fixed inset-0 z-[100]">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSearchOpen(false)} />
+          <div className="absolute inset-0 flex items-start justify-center pt-24 px-4">
+            <div className="w-full max-w-xl bg-card border border-border rounded-xl shadow-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/30">
+                <Search size={16} className="text-muted-foreground" />
+                <input
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && filteredResults[0]) handleGoTo(filteredResults[0])
+                  }}
+                  className="flex-1 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground"
+                  placeholder="Buscar páginas e abas..."
+                  aria-label="Buscar páginas e abas"
+                />
+              </div>
+              <div className="max-h-80 overflow-auto">
+                {filteredResults.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-muted-foreground">Nenhum resultado</div>
+                ) : (
+                  filteredResults.map((item, idx) => (
+                    <button
+                      key={`${item.path}-${idx}`}
+                      onClick={() => handleGoTo(item)}
+                      className="w-full text-left px-4 py-3 hover:bg-accent transition-colors"
+                    >
+                      <div className="text-sm text-foreground">{item.label}</div>
+                      <div className="text-xs text-muted-foreground">{item.path}{item.params ? `?${new URLSearchParams(item.params).toString()}` : ''}</div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 

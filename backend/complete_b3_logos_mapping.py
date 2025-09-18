@@ -141,7 +141,7 @@ COMPLETE_B3_LOGOS_MAPPING = {
     "CHME34.sa": "https://img.logo.dev/chemours.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "C1MS34.sa": "https://img.logo.dev/cms.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "CTSH34.sa": "https://img.logo.dev/cognizant.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
-    "CMCS34.sa": "https://img.logo.dev/comcast.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
+    "CMCS34.sa": "https://img.logo.dev/cmcsa.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "C1MA34.sa": "https://img.logo.dev/comerica.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "C1AG34.sa": "https://img.logo.dev/caterpillar.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "E1DI34.sa": "https://img.logo.dev/edison.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",

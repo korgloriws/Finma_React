@@ -85,6 +85,13 @@ export interface Receita {
   nome: string
   valor: number
   data: string
+  categoria?: string
+  tipo?: string // 'fixo' | 'variavel' | outro
+  recorrencia?: string // 'mensal' | 'semanal' | 'anual' | 'nenhuma'
+  parcelas_total?: number
+  parcela_atual?: number
+  grupo_parcela?: string
+  observacao?: string
 }
 
 export interface Cartao {
@@ -93,6 +100,13 @@ export interface Cartao {
   valor: number
   pago: string
   data: string
+  categoria?: string
+  tipo?: string
+  recorrencia?: string
+  parcelas_total?: number
+  parcela_atual?: number
+  grupo_parcela?: string
+  observacao?: string
 }
 
 export interface OutroGasto {
@@ -100,6 +114,37 @@ export interface OutroGasto {
   nome: string
   valor: number
   data: string
+  categoria?: string
+  tipo?: string
+  recorrencia?: string
+  parcelas_total?: number
+  parcela_atual?: number
+  grupo_parcela?: string
+  observacao?: string
+}
+
+export interface FluxoCaixaItem {
+  id?: number
+  fonte: 'receita' | 'cartao' | 'outro'
+  nome: string
+  valor: number
+  data: string
+  categoria?: string
+  tipo?: string
+  recorrencia?: string
+  parcelas_total?: number
+  parcela_atual?: number
+  grupo_parcela?: string
+  observacao?: string
+  projetado?: boolean
+}
+
+export interface FluxoCaixaDiaResumo {
+  data: string
+  receitas: number
+  despesas: number
+  saldo_dia: number
+  saldo_acumulado: number
 }
 
 export interface EvolucaoFinanceira {
