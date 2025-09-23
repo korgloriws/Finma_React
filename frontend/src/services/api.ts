@@ -82,6 +82,15 @@ export const ativoService = {
     }
   },
 
+  getLogosBatch: async (tickers: string[]): Promise<Record<string, string | null>> => {
+    try {
+      const response = await api.post('/logos', { tickers })
+      return (response.data?.logos || {}) as Record<string, string | null>
+    } catch {
+      return {}
+    }
+  },
+
   getExchangeRate: async (symbol: string): Promise<{ symbol: string; rate: number; date: string; volume: number }> => {
     const response = await api.get(`/exchange-rate/${symbol}`)
     return response.data
@@ -154,8 +163,12 @@ export const carteiraService = {
     tipo?: string,
     preco_inicial?: number,
     nome_personalizado?: string,
-    indexador?: 'CDI' | 'IPCA' | 'SELIC',
+    indexador?: 'CDI' | 'IPCA' | 'SELIC' | 'PREFIXADO',
     indexador_pct?: number,
+    data_aplicacao?: string,
+    vencimento?: string,
+    isento_ir?: boolean,
+    liquidez_diaria?: boolean,
   ): Promise<any> => {
     const normalizedTicker = normalizeTicker(ticker)
     const response = await api.post('/carteira/adicionar', {
@@ -166,6 +179,10 @@ export const carteiraService = {
       nome_personalizado,
       indexador,
       indexador_pct,
+      data_aplicacao,
+      vencimento,
+      isento_ir,
+      liquidez_diaria,
     })
     return response.data
   },
@@ -523,6 +540,13 @@ export const analiseService = {
     const response = await api.get('/analise/resumo')
     return response.data
   },
+}
+
+export const listasService = {
+  getTickersPorTipo: async (tipo: string): Promise<{ tipo?: string; tickers?: string[]; acoes?: string[]; fiis?: string[]; bdrs?: string[] }> => {
+    const response = await api.get(`/listas/ativos?tipo=${encodeURIComponent(tipo)}`)
+    return response.data
+  }
 }
 
 export const homeService = {

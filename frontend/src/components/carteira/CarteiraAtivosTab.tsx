@@ -547,6 +547,13 @@ interface CarteiraAtivosTabProps {
   setInputIndexador: (value: string) => void
   inputIndexadorPct: string
   setInputIndexadorPct: (value: string) => void
+  // Novos campos RF
+  inputDataAplicacao?: string
+  setInputDataAplicacao?: (value: string) => void
+  inputVencimento?: string
+  setInputVencimento?: (value: string) => void
+  inputIsentoIr?: boolean
+  setInputIsentoIr?: (value: boolean) => void
   handleAdicionar: () => void
   adicionarMutation: any
   
@@ -578,6 +585,8 @@ interface CarteiraAtivosTabProps {
   movimentacoesAll: any[]
   indicadores: any
   tiposDisponiveisComputed: string[]
+  tesouroTitulos?: { titulos: Array<any> }
+  onPickTesouro?: (item: any) => void
 }
 
 export default function CarteiraAtivosTab({
@@ -593,6 +602,12 @@ export default function CarteiraAtivosTab({
   setInputIndexador,
   inputIndexadorPct,
   setInputIndexadorPct,
+  inputDataAplicacao,
+  setInputDataAplicacao,
+  inputVencimento,
+  setInputVencimento,
+  inputIsentoIr,
+  setInputIsentoIr,
   handleAdicionar,
   adicionarMutation,
   carteira,
@@ -615,112 +630,13 @@ export default function CarteiraAtivosTab({
   setRenameTipoValue,
   movimentacoesAll,
   indicadores,
-  tiposDisponiveisComputed
+  tiposDisponiveisComputed,
+  tesouroTitulos,
+  onPickTesouro
 }: CarteiraAtivosTabProps) {
   return (
     <div className="space-y-6">
-      {/* Formulário de Adição */}
-      <div className="bg-muted/30 rounded-lg p-3 sm:p-4 md:p-6">
-        <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-3 sm:mb-4 flex items-center gap-2">
-          <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
-          Adicionar Ativo
-        </h2>
-        
-        <div className="space-y-3 sm:space-y-4">
-          {/* Primeira linha - Ticker e Quantidade */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          <div>
-              <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Ticker</label>
-            <input
-              type="text"
-              value={inputTicker}
-              onChange={(e) => setInputTicker(e.target.value)}
-              placeholder="Ex: PETR4, AAPL, VISC11"
-                className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          
-          <div>
-              <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Quantidade</label>
-            <input
-              type="text"
-              value={inputQuantidade}
-              onChange={(e) => setInputQuantidade(e.target.value)}
-              placeholder="Ex: 100 ou 0,0012"
-                className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            </div>
-          </div>
-          
-          {/* Segunda linha - Tipo e Preço */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          <div>
-              <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Tipo</label>
-            <input
-              list="tipos-ativos"
-              value={inputTipo}
-              onChange={(e) => setInputTipo(e.target.value)}
-              placeholder="Ex.: Ação, FII, Criptomoeda, ..."
-                className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              aria-label="Selecionar ou digitar tipo de ativo"
-            />
-            <datalist id="tipos-ativos">
-              {(tiposDisponiveisComputed || []).map(t => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
-          </div>
-          
-          <div>
-              <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Preço (opcional)</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="Ex: 10,50 (se vazio tenta buscar)"
-                className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              value={inputPreco}
-              onChange={(e)=>setInputPreco(e.target.value)}
-            />
-          </div>
-          </div>
-
-          {/* Terceira linha - Indexador */}
-          <div>
-            <label className="block text-xs sm:text-sm font-medium mb-1 sm:mb-2">Indexador (opcional)</label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-              <select
-                value={inputIndexador}
-                onChange={(e)=>setInputIndexador(e.target.value as any)}
-                className="px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground"
-                aria-label="Selecionar indexador"
-              >
-                <option value="">Sem indexador</option>
-                <option value="CDI">CDI</option>
-                <option value="IPCA">IPCA</option>
-                <option value="SELIC">SELIC</option>
-              </select>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="Ex.: 110 (para 110%)"
-                className="w-full px-3 py-2 text-sm sm:text-base border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                value={inputIndexadorPct}
-                onChange={(e)=>setInputIndexadorPct(e.target.value)}
-              />
-            <button
-              onClick={handleAdicionar}
-              disabled={adicionarMutation.isPending}
-                className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 whitespace-nowrap flex items-center justify-center gap-1 sm:gap-2"
-            >
-                <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="hidden xs:inline">{adicionarMutation.isPending ? 'Adicionando...' : 'Adicionar'}</span>
-                <span className="xs:hidden">{adicionarMutation.isPending ? '...' : '+'}</span>
-            </button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Use N% do CDI/IPCA/SELIC. Ex.: 110 = 110%.</p>
-          </div>
-        </div>
-      </div>
+      {/* Formulário original removido: a adição de ativos acontece via modal */}
 
       {/* Resumo da Carteira */}
       {!loadingCarteira && carteira && carteira.length > 0 && (

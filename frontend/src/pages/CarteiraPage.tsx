@@ -18,6 +18,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Calculator,
+  PlusCircle,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { carteiraService } from '../services/api'
@@ -34,6 +35,7 @@ import CarteiraRebalanceamentoTab from '../components/carteira/CarteiraRebalance
 import CarteiraMovimentacoesTab from '../components/carteira/CarteiraMovimentacoesTab'
 import CarteiraProjecaoTab from '../components/carteira/CarteiraProjecaoTab'
 import CarteiraRelatoriosTab from '../components/carteira/CarteiraRelatoriosTab'
+import AddAtivoModal from '../components/carteira/AddAtivoModal'
 
 export default function CarteiraPage() {
   const { user } = useAuth()
@@ -42,8 +44,12 @@ export default function CarteiraPage() {
   const [inputQuantidade, setInputQuantidade] = useState('')
   const [inputTipo, setInputTipo] = useState('')
   const [inputPreco, setInputPreco] = useState('')
-  const [inputIndexador, setInputIndexador] = useState<'CDI' | 'IPCA' | 'SELIC' | ''>('')
+  const [inputIndexador, setInputIndexador] = useState<'CDI' | 'IPCA' | 'SELIC' | 'PREFIXADO' | ''>('')
   const [inputIndexadorPct, setInputIndexadorPct] = useState('')
+  // Novos campos RF
+  const [inputDataAplicacao, setInputDataAplicacao] = useState<string>('')
+  const [inputVencimento, setInputVencimento] = useState<string>('')
+  const [inputIsentoIr, setInputIsentoIr] = useState<boolean>(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editQuantidade, setEditQuantidade] = useState('')
   const [editPreco, setEditPreco] = useState('')
@@ -112,11 +118,24 @@ export default function CarteiraPage() {
       setIdealPreview({ periodo: initPeriodo, targets: initTargets })
     }
   }, [rbConfig, idealPreview])
+
+  // Atalho: Ctrl+I para abrir a modal de adição
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+        e.preventDefault()
+        setAddModalOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   const idealTargets = useMemo(() => {
     return idealPreview?.targets ?? (rbConfig as any)?.targets ?? {}
   }, [idealPreview, rbConfig])
   const [ocultarValor, setOcultarValor] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [addModalOpen, setAddModalOpen] = useState(false)
  
   const [expandedTipos, setExpandedTipos] = useState<Record<string, boolean>>({
     'Ação': true,
@@ -182,6 +201,14 @@ export default function CarteiraPage() {
     refetchOnWindowFocus: false,
   })
 
+  // Tesouro Direto - lista de títulos para autocompletar
+  const { data: tesouroData } = useQuery({
+    queryKey: ['tesouro-titulos'],
+    queryFn: carteiraService.getTesouroTitulos,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  })
+
   
   const { data: proventosRecebidos, isLoading: loadingProventosRecebidos } = useQuery({
     queryKey: ['proventos-recebidos', user, filtroProventos],
@@ -209,8 +236,8 @@ export default function CarteiraPage() {
 
   
   const adicionarMutation = useMutation({
-    mutationFn: ({ ticker, quantidade, tipo, preco_inicial, nome_personalizado, indexador, indexador_pct }: { ticker: string; quantidade: number; tipo: string; preco_inicial?: number; nome_personalizado?: string; indexador?: 'CDI'|'IPCA'|'SELIC'; indexador_pct?: number }) =>
-      carteiraService.adicionarAtivo(ticker, quantidade, tipo, preco_inicial, nome_personalizado, indexador, indexador_pct),
+    mutationFn: ({ ticker, quantidade, tipo, preco_inicial, nome_personalizado, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir }: { ticker: string; quantidade: number; tipo: string; preco_inicial?: number; nome_personalizado?: string; indexador?: 'CDI'|'IPCA'|'SELIC'|'PREFIXADO'; indexador_pct?: number; data_aplicacao?: string; vencimento?: string; isento_ir?: boolean }) =>
+      carteiraService.adicionarAtivo(ticker, quantidade, tipo, preco_inicial, nome_personalizado, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['carteira', user] })
       queryClient.invalidateQueries({ queryKey: ['movimentacoes', user] })
@@ -225,6 +252,9 @@ export default function CarteiraPage() {
       setInputPreco('')
       setInputIndexador('')
       setInputIndexadorPct('')
+      setInputDataAplicacao('')
+      setInputVencimento('')
+      setInputIsentoIr(false)
       
       toast.success('Ativo adicionado com sucesso!')
     },
@@ -276,7 +306,7 @@ export default function CarteiraPage() {
     }
     const finalTipo = inputTipo || ''
     const finalTicker = getDisplayTicker(normalizedTicker)
-    adicionarMutation.mutate({
+    const payload: any = {
       ticker: finalTicker,
       quantidade,
       tipo: finalTipo,
@@ -284,8 +314,42 @@ export default function CarteiraPage() {
       nome_personalizado: undefined,
       indexador: (inputIndexador || undefined) as any,
       indexador_pct: inputIndexadorPct && !isNaN(parseFloat(inputIndexadorPct.replace(',', '.'))) ? parseFloat(inputIndexadorPct.replace(',', '.')) : undefined,
-    })
+    }
+    if (inputDataAplicacao) payload.data_aplicacao = inputDataAplicacao
+    if (inputVencimento) payload.vencimento = inputVencimento
+    if (inputIsentoIr) payload.isento_ir = true
+    adicionarMutation.mutate(payload)
   }, [inputTicker, inputQuantidade, inputTipo, inputPreco, inputIndexador, inputIndexadorPct, adicionarMutation])
+
+  const handlePickTesouro = useCallback((item: any) => {
+    // Preenche campos com base no título escolhido
+    const idxNorm = (item?.indexador_normalizado || item?.indexador || '').toUpperCase()
+    const tipo = 'Renda Fixa Pública'
+    setInputTipo(tipo)
+    // Ticker simbólico: TD-<INDEX>-<AAAA>
+    const ano = item?.vencimento ? String(item.vencimento).slice(0,4) : 'NA'
+    const simb = `TD-${idxNorm || 'X'}-${ano}`
+    setInputTicker(simb)
+    // Indexador/taxa
+    if (idxNorm === 'PREFIXADO') {
+      setInputIndexador('PREFIXADO')
+      setInputIndexadorPct(typeof item?.taxa_compra_aa === 'number' ? String(item.taxa_compra_aa) : '')
+    } else if (idxNorm === 'IPCA') {
+      setInputIndexador('IPCA')
+      // spread não disponível; manter vazio para cálculo aproximado
+      setInputIndexadorPct('')
+    } else if (idxNorm === 'SELIC') {
+      setInputIndexador('SELIC')
+      setInputIndexadorPct('100')
+    } else {
+      setInputIndexador('')
+      setInputIndexadorPct('')
+    }
+    // Datas
+    const today = new Date()
+    setInputDataAplicacao(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`)
+    if (item?.vencimento) setInputVencimento(String(item.vencimento).slice(0,10))
+  }, [])
 
   const handleRemover = useCallback((id: number) => {
     if (confirm('Tem certeza que deseja remover este ativo?')) {
@@ -524,6 +588,20 @@ export default function CarteiraPage() {
 
       {/* Conteúdo das Abas */}
       <div className="bg-card border border-border rounded-lg p-6 shadow-lg">
+        {/* CTA destacado para adicionar ativo */}
+        <div className="mb-4 rounded-xl border border-border bg-gradient-to-r from-primary/10 to-primary/5 p-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs text-muted-foreground">Adicionar novo ativo</div>
+            <div className="text-base sm:text-lg font-semibold text-foreground truncate">Ações, FIIs, BDRs e Renda Fixa</div>
+            <div className="text-xs text-muted-foreground">Dica: pressione Ctrl+I para abrir rapidamente</div>
+          </div>
+          <button
+            onClick={()=>setAddModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow"
+          >
+            <PlusCircle size={18} /> Adicionar Ativo
+          </button>
+        </div>
         {/* Modal de gerenciamento de tipo */}
         {manageTipoOpen.open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -580,9 +658,15 @@ export default function CarteiraPage() {
             inputPreco={inputPreco}
             setInputPreco={setInputPreco}
             inputIndexador={inputIndexador}
-            setInputIndexador={(value: string) => setInputIndexador(value as "" | "CDI" | "IPCA" | "SELIC")}
+            setInputIndexador={(value: string) => setInputIndexador(value as "" | "CDI" | "IPCA" | "SELIC" | "PREFIXADO")}
             inputIndexadorPct={inputIndexadorPct}
             setInputIndexadorPct={setInputIndexadorPct}
+            inputDataAplicacao={inputDataAplicacao}
+            setInputDataAplicacao={setInputDataAplicacao}
+            inputVencimento={inputVencimento}
+            setInputVencimento={setInputVencimento}
+            inputIsentoIr={inputIsentoIr}
+            setInputIsentoIr={setInputIsentoIr}
             handleAdicionar={handleAdicionar}
             adicionarMutation={adicionarMutation}
             carteira={carteira || []}
@@ -606,6 +690,8 @@ export default function CarteiraPage() {
             movimentacoesAll={movimentacoesAll || []}
             indicadores={indicadores}
             tiposDisponiveisComputed={tiposDisponiveisComputed}
+            tesouroTitulos={tesouroData as any}
+            onPickTesouro={handlePickTesouro}
           />
         )}
 
@@ -697,6 +783,20 @@ export default function CarteiraPage() {
           />
         )}
       </div>
+      {/* FAB mobile para adicionar ativo rapidamente */}
+      <div className="md:hidden fixed bottom-6 right-6 z-20">
+        <button
+          onClick={() => setAddModalOpen(true)}
+          className="rounded-full p-4 bg-primary text-primary-foreground shadow-lg"
+          aria-label="Adicionar ativo"
+          title="Adicionar ativo"
+        >
+          <PlusCircle size={20} />
+        </button>
+      </div>
+      {addModalOpen && (
+        <AddAtivoModal open={addModalOpen} onClose={()=>setAddModalOpen(false)} />
+      )}
     </div>
   )
 } 

@@ -37,6 +37,9 @@ from models import (
     atualizar_precos_indicadores_carteira,
     obter_taxas_indexadores,
     _upgrade_controle_schema,
+    LISTA_ACOES,
+    LISTA_FIIS,
+    LISTA_BDRS,
 )
 from models import cache
 import requests
@@ -76,6 +79,8 @@ try:
     allowed_origins.update({
         'http://localhost:5173',
         'http://127.0.0.1:5173',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
     })
     CORS(
         server,
@@ -453,6 +458,25 @@ def api_analise_ativos():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@server.route("/api/listas/ativos", methods=["GET"])
+def api_listas_ativos():
+    try:
+        tipo = (request.args.get('tipo') or '').lower()
+        if tipo in ('acao','acoes','ação','ações'):
+            return jsonify({"tipo":"acoes","tickers": LISTA_ACOES})
+        if tipo in ('fii','fiis'):
+            return jsonify({"tipo":"fiis","tickers": LISTA_FIIS})
+        if tipo in ('bdr','bdrs'):
+            return jsonify({"tipo":"bdrs","tickers": LISTA_BDRS})
+        # Sem filtro: retorna todos (cuidado com tamanho)
+        return jsonify({
+            "acoes": LISTA_ACOES,
+            "fiis": LISTA_FIIS,
+            "bdrs": LISTA_BDRS,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @server.route("/api/analise/resumo", methods=["GET"])
 def api_analise_resumo():
     """API para obter resumo dos ativos"""
@@ -744,6 +768,24 @@ def api_get_logo_url(ticker):
         from complete_b3_logos_mapping import get_logo_url
         logo_url = get_logo_url(ticker)
         return jsonify({"logo_url": logo_url})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/logos", methods=["POST"])
+def api_get_logos_batch():
+    try:
+        data = request.get_json() or {}
+        tickers = data.get('tickers') or []
+        if not isinstance(tickers, list):
+            return jsonify({"error": "tickers deve ser lista"}), 400
+        from complete_b3_logos_mapping import get_logo_url
+        out = {}
+        for t in tickers[:500]:
+            try:
+                out[t] = get_logo_url(str(t))
+            except Exception:
+                out[t] = None
+        return jsonify({"logos": out})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1249,13 +1291,50 @@ def api_adicionar_ativo():
         tipo = data.get('tipo')
         preco_inicial = data.get('preco_inicial')
         nome_personalizado = data.get('nome_personalizado')
-        indexador = data.get('indexador')  # 'CDI' | 'IPCA' | 'SELIC' | None
-        indexador_pct = data.get('indexador_pct')  # percentual (ex.: 110 para 110%)
+        indexador = data.get('indexador')  # 'CDI' | 'IPCA' | 'SELIC' | 'PREFIXADO' | None
+        indexador_pct = data.get('indexador_pct')  # percentual (ex.: 110) ou taxa fixa (% a.a.)
+        data_aplicacao = data.get('data_aplicacao')  # 'YYYY-MM-DD'
+        vencimento = data.get('vencimento')  # 'YYYY-MM-DD'
+        isento_ir = data.get('isento_ir')  # bool
+        liquidez_diaria = data.get('liquidez_diaria')  # bool
         
         if not ticker or not quantidade:
             return jsonify({"error": "Ticker e quantidade são obrigatórios"}), 400
-            
-        resultado = adicionar_ativo_carteira(ticker, quantidade, tipo, preco_inicial, nome_personalizado, indexador, indexador_pct)
+
+        # Estimar preço histórico para RV quando data_aplicacao informada e sem preco
+        try:
+            tipo_lc = (tipo or '').strip().lower()
+            is_rv = any(k in tipo_lc for k in ['ação','acoes','acao','fii','bdr'])
+            if (preco_inicial is None or preco_inicial == '' or float(preco_inicial) == 0.0) and data_aplicacao and is_rv and not indexador:
+                t = (ticker or '').strip().upper()
+                t_yf = t + '.SA' if ('-' not in t and '.' not in t and len(t) <= 6) else t
+                from datetime import datetime, timedelta
+                try:
+                    base_date = datetime.strptime(str(data_aplicacao)[:10], '%Y-%m-%d').date()
+                except Exception:
+                    base_date = datetime.utcnow().date()
+                start = base_date - timedelta(days=14)
+                end = base_date + timedelta(days=1)
+                try:
+                    hist = yf.Ticker(t_yf).history(start=start.isoformat(), end=end.isoformat())
+                    if hist is not None and not hist.empty:
+                        close_val = None
+                        for idx, row in hist[::-1].iterrows():
+                            d = idx.date()
+                            if d <= base_date:
+                                close_val = float(row.get('Close') or row.get('Adj Close') or 0)
+                                break
+                        if close_val and close_val > 0:
+                            preco_inicial = close_val
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        resultado = adicionar_ativo_carteira(
+            ticker, quantidade, tipo, preco_inicial, nome_personalizado,
+            indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria
+        )
         # invalidar cache simples
         try:
             if cache:
@@ -1494,7 +1573,15 @@ def api_teste_indexador():
 @server.route("/api/tesouro/titulos", methods=["GET"])
 def api_tesouro_titulos():
     try:
-        
+        # Cache curto para evitar excesso de chamadas
+        try:
+            if cache:
+                cached = cache.get("tesouro_titulos")
+                if cached is not None:
+                    return jsonify(cached)
+        except Exception:
+            pass
+
         url = "https://www.tesourodireto.com.br/json/consulta/PrecoTaxaTitulo.json"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115 Safari/537.36",
@@ -1520,18 +1607,99 @@ def api_tesouro_titulos():
             except Exception:
                 pass
 
+        def _norm_index(idx: str | None) -> str | None:
+            if not idx:
+                return None
+            s = str(idx).lower()
+            if 'selic' in s:
+                return 'SELIC'
+            if 'ipca' in s:
+                return 'IPCA'
+            if 'prefix' in s or 'pre' in s:
+                return 'PREFIXADO'
+            return idx
+
+        def _familia(type_str: str | None, nome: str | None) -> str | None:
+            ts = (type_str or '').upper()
+            if ts in ('LFT', 'LTN', 'NTN-B', 'NTN-F'):
+                return ts
+            nome_s = (nome or '').upper()
+            if 'SELIC' in nome_s:
+                return 'LFT'
+            if 'PREFIX' in nome_s:
+                return 'LTN' if 'SEMET' not in nome_s else 'NTN-F'
+            if 'IPCA' in nome_s and 'SEMEST' in nome_s:
+                return 'NTN-B'
+            if 'IPCA' in nome_s:
+                return 'NTN-B PRINCIPAL'
+            return type_str
+
+        def _cupom(type_str: str | None, nome: str | None) -> bool:
+            ts = (type_str or '').upper()
+            if ts in ('NTN-B', 'NTN-F'):
+                return True
+            nome_s = (nome or '').upper()
+            return ('SEMEST' in nome_s) or ('JUROS' in nome_s)
+
+        from datetime import datetime as _dt
+
         titulos = []
+        updated_at = _dt.now().isoformat()
         for grupo in (data.get('response', {}).get('TrsrBondMkt', []) or []):
             for t in (grupo.get('TrsrBd', []) or []):
-                titulos.append({
-                    "nome": t.get('bond'),
-                    "vencimento": t.get('maturityDate'),
-                    "taxaCompra": t.get('invstRate'),
-                    "pu": t.get('minInvstAmt'),
-                    "indexador": t.get('index'),
-                    "tipoRent": t.get('type'),
-                })
-        return jsonify({"titulos": titulos})
+                nome = t.get('bond')
+                venc = t.get('maturityDate')
+                idx_raw = t.get('index')
+                type_raw = t.get('type')
+                taxa_compra = t.get('invstRate')
+                taxa_resgate = t.get('invstRedRate') if 'invstRedRate' in t else t.get('redRate')
+                pu = t.get('unitPrice') if 'unitPrice' in t else t.get('minInvstAmt')
+                min_invest = t.get('minInvstAmt')
+
+                # Heurística de disponibilidade
+                disponivel_compra = taxa_compra is not None and min_invest is not None
+                disponivel_resgate = taxa_resgate is not None
+
+                # Prazo até vencimento (dias)
+                prazo_dias = None
+                try:
+                    if venc:
+                        # remover timezone se vier com 'Z'
+                        v = str(venc).replace('Z', '')
+                        dt_venc = _dt.fromisoformat(v)
+                        prazo_dias = (dt_venc.date() - _dt.now().date()).days
+                except Exception:
+                    prazo_dias = None
+
+                item = {
+                    # Campos existentes para compatibilidade
+                    "nome": nome,
+                    "vencimento": venc,
+                    "taxaCompra": taxa_compra,
+                    "pu": pu,
+                    "indexador": idx_raw,
+                    "tipoRent": type_raw,
+                    # Campos novos/normalizados
+                    "indexador_normalizado": _norm_index(idx_raw),
+                    "familia_td": _familia(type_raw, nome),
+                    "cupom_semestral": _cupom(type_raw, nome),
+                    "taxa_compra_aa": taxa_compra,
+                    "taxa_resgate_aa": taxa_resgate,
+                    "min_invest": min_invest,
+                    "disponivel_compra": disponivel_compra,
+                    "disponivel_resgate": disponivel_resgate,
+                    "prazo_dias": prazo_dias,
+                    "updated_at": updated_at,
+                }
+                titulos.append(item)
+
+        payload = {"titulos": titulos}
+        try:
+            if cache:
+                cache.set("tesouro_titulos", payload, timeout=60)
+        except Exception:
+            pass
+        return jsonify(payload)
     except Exception as e:
         try:
             print(f"TESOURO ERROR: {e}")
