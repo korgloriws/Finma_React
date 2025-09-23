@@ -40,6 +40,11 @@ from models import (
     LISTA_ACOES,
     LISTA_FIIS,
     LISTA_BDRS,
+    _ensure_rf_catalog_schema,
+    rf_catalog_list,
+    rf_catalog_create,
+    rf_catalog_update,
+    rf_catalog_delete,
 )
 from models import cache
 import requests
@@ -474,6 +479,27 @@ def api_listas_ativos():
             "fiis": LISTA_FIIS,
             "bdrs": LISTA_BDRS,
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route('/api/rf/catalog', methods=['GET','POST','PUT','DELETE'])
+def api_rf_catalog():
+    try:
+        if request.method == 'GET':
+            return jsonify({ 'items': rf_catalog_list() })
+        data = request.get_json() or {}
+        if request.method == 'POST':
+            res = rf_catalog_create(data)
+            return jsonify(res)
+        if request.method == 'PUT':
+            id_ = int(data.get('id'))
+            res = rf_catalog_update(id_, data)
+            return jsonify(res)
+        if request.method == 'DELETE':
+            id_ = int(data.get('id'))
+            res = rf_catalog_delete(id_)
+            return jsonify(res)
+        return jsonify({"error":"Método não suportado"}), 405
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

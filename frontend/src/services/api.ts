@@ -549,6 +549,25 @@ export const listasService = {
   }
 }
 
+export const rfCatalogService = {
+  list: async (): Promise<{ items: Array<any> }> => {
+    const resp = await api.get('/rf/catalog')
+    return resp.data
+  },
+  create: async (item: any): Promise<any> => {
+    const resp = await api.post('/rf/catalog', item)
+    return resp.data
+  },
+  update: async (item: any): Promise<any> => {
+    const resp = await api.put('/rf/catalog', item)
+    return resp.data
+  },
+  remove: async (id: number): Promise<any> => {
+    const resp = await api.delete('/rf/catalog', { data: { id } })
+    return resp.data
+  },
+}
+
 export const homeService = {
   getResumo: async (mes: string, ano: string): Promise<any> => {
     const response = await api.get(`/home/resumo?mes=${mes}&ano=${ano}`)

@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { 
   TrendingUp, 
   PieChart, 
@@ -20,6 +21,7 @@ import {
   Cell,
   BarChart,
   Bar,
+  Legend,
 } from 'recharts'
 
 interface CarteiraGraficosTabProps {
@@ -49,6 +51,63 @@ export default function CarteiraGraficosTab({
   ativosPorTipo,
   topAtivos
 }: CarteiraGraficosTabProps) {
+  const [indiceRef, setIndiceRef] = useState<'ibov' | 'ivvb11' | 'ifix' | 'ipca' | 'cdi'>('ibov')
+
+  const initialWealth = useMemo(() => {
+    const arr = historicoCarteira?.carteira_valor || []
+    for (let i = 0; i < arr.length; i++) {
+      const v = arr[i]
+      if (typeof v === 'number' && !isNaN(v)) return v
+    }
+    return 0
+  }, [historicoCarteira])
+
+  const indiceSeries = useMemo(() => {
+    if (!historicoCarteira) return [] as Array<number | null>
+    const series = (historicoCarteira as any)[indiceRef] as Array<number | null> | undefined
+    return series || []
+  }, [historicoCarteira, indiceRef])
+
+  const indiceValorSeries = useMemo(() => {
+    if (!historicoCarteira || initialWealth <= 0) return [] as Array<number | null>
+    return (indiceSeries || []).map((v) => {
+      if (v == null || isNaN(Number(v))) return null
+      return initialWealth * (Number(v) / 100)
+    })
+  }, [historicoCarteira, indiceSeries, initialWealth])
+
+  const comparativoResumo = useMemo(() => {
+    const carteiraArr = historicoCarteira?.carteira_valor || []
+    if (!carteiraArr.length || !indiceValorSeries.length) return null as null | {
+      indiceNome: string
+      indiceInicial: number
+      indiceFinal: number
+      carteiraInicial: number
+      carteiraFinal: number
+      deltaIndice: number
+      deltaCarteira: number
+      gapAbsoluto: number
+    }
+    const carteiraInicial = carteiraArr.find((v) => typeof v === 'number') || 0
+    const carteiraFinal = [...carteiraArr].reverse().find((v) => typeof v === 'number') || 0
+    const indiceInicial = indiceValorSeries.find((v) => typeof v === 'number') || 0
+    const indiceFinal = [...indiceValorSeries].reverse().find((v) => typeof v === 'number') || 0
+    const deltaIndice = (indiceFinal || 0) - (indiceInicial || 0)
+    const deltaCarteira = (carteiraFinal || 0) - (carteiraInicial || 0)
+    const gapAbsoluto = (carteiraFinal || 0) - (indiceFinal || 0)
+    const nomeMap: Record<string, string> = { ibov: 'IBOV', ivvb11: 'IVVB11', ifix: 'IFIX', ipca: 'IPCA', cdi: 'CDI' }
+    return {
+      indiceNome: nomeMap[indiceRef],
+      indiceInicial: indiceInicial || 0,
+      indiceFinal: indiceFinal || 0,
+      carteiraInicial,
+      carteiraFinal,
+      deltaIndice,
+      deltaCarteira,
+      gapAbsoluto,
+    }
+  }, [historicoCarteira, indiceValorSeries, indiceRef])
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold mb-4">📈 Análise Gráfica</h2>
@@ -95,6 +154,18 @@ export default function CarteiraGraficosTab({
                   <option value="anual">Anual</option>
                   <option value="maximo">Máximo</option>
                 </select>
+                <select
+                  value={indiceRef}
+                  onChange={(e) => setIndiceRef(e.target.value as any)}
+                  className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm min-w-0 w-full sm:w-auto"
+                  aria-label="Índice de comparação"
+                >
+                  <option value="ibov">IBOV</option>
+                  <option value="ivvb11">IVVB11</option>
+                  <option value="ifix">IFIX</option>
+                  <option value="ipca">IPCA</option>
+                  <option value="cdi">CDI</option>
+                </select>
               </div>
             </div>
             
@@ -102,7 +173,7 @@ export default function CarteiraGraficosTab({
               <div className="animate-pulse h-64 bg-muted rounded-lg"></div>
             ) : historicoCarteira && historicoCarteira.datas && historicoCarteira.datas.length > 0 ? (
               <>
-                {/* Resumo estatístico */}
+                {/* Resumo estatístico e comparativo */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
                   <div className="bg-muted/50 rounded-lg p-3 md:p-4">
                     <div className="text-xs md:text-sm text-muted-foreground">Patrimônio Inicial</div>
@@ -148,19 +219,44 @@ export default function CarteiraGraficosTab({
                     </div>
                   </div>
                 </div>
+                {comparativoResumo && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
+                    <div className="bg-muted/50 rounded-lg p-3 md:p-4">
+                      <div className="text-xs md:text-sm text-muted-foreground">{`Se investido no ${comparativoResumo.indiceNome}`}</div>
+                      <div className="text-base md:text-lg font-bold text-foreground">
+                        {formatCurrency(comparativoResumo.indiceFinal)}
+                      </div>
+                      <div className={`text-xs md:text-sm ${comparativoResumo.deltaIndice >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {`${comparativoResumo.deltaIndice >= 0 ? '+' : ''}${formatCurrency(comparativoResumo.deltaIndice, '')}`}
+                      </div>
+                    </div>
+                    <div className="bg-muted/50 rounded-lg p-3 md:p-4">
+                      <div className="text-xs md:text-sm text-muted-foreground">Carteira (Final)</div>
+                      <div className="text-base md:text-lg font-bold text-foreground">
+                        {formatCurrency(comparativoResumo.carteiraFinal)}
+                      </div>
+                      <div className={`text-xs md:text-sm ${comparativoResumo.deltaCarteira >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {`${comparativoResumo.deltaCarteira >= 0 ? '+' : ''}${formatCurrency(comparativoResumo.deltaCarteira, '')}`}
+                      </div>
+                    </div>
+                    <div className="bg-muted/50 rounded-lg p-3 md:p-4">
+                      <div className="text-xs md:text-sm text-muted-foreground">Diferença vs Índice</div>
+                      <div className={`text-base md:text-lg font-bold ${comparativoResumo.gapAbsoluto >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {`${comparativoResumo.gapAbsoluto >= 0 ? '+' : ''}${formatCurrency(comparativoResumo.gapAbsoluto, '')}`}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 
-                {/* Gráfico de Valores Absolutos */}
-                <div className="mb-6">
-                  <h4 className="text-sm font-medium text-muted-foreground mb-3">Valores Absolutos</h4>
+                {/* Gráfico único: Carteira (R$) vs Índice simulado (R$) */}
+                <div className="mb-2">
+                  <h4 className="text-sm font-medium text-muted-foreground mb-3">Carteira vs {indiceRef.toUpperCase()} (simulado em R$)</h4>
                   <div className="h-64 sm:h-80">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={historicoCarteira.datas.map((d, i) => ({
                         data: d,
-                        carteira: historicoCarteira.carteira_valor?.[i] ?? null,
-                        ibov: historicoCarteira.ibov?.[i] ?? null,
-                        ivvb11: historicoCarteira.ivvb11?.[i] ?? null,
-                        ifix: historicoCarteira.ifix?.[i] ?? null,
-                        ipca: historicoCarteira.ipca?.[i] ?? null,
+                        carteira_valor: historicoCarteira.carteira_valor?.[i] ?? null,
+                        indice_valor: indiceValorSeries?.[i] ?? null,
                       }))}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                         <XAxis 
@@ -182,84 +278,14 @@ export default function CarteiraGraficosTab({
                             fontSize: '12px'
                           }}
                           formatter={(value: any, name: string) => {
-                            if (name === 'carteira') {
-                              return [formatCurrency(value), 'Carteira']
-                            }
-                            return [`${value?.toFixed?.(2)}%`, name.toUpperCase()]
+                            const label = name === 'carteira_valor' ? 'Carteira' : `${indiceRef.toUpperCase()} simulado`
+                            return [formatCurrency(value), label]
                           }}
                           labelFormatter={(label) => `Data: ${label}`}
                         />
-                        <Area type="monotone" dataKey="carteira" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} strokeWidth={2} />
-                        <Area type="monotone" dataKey="ibov" stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} strokeWidth={1.5} />
-                        <Area type="monotone" dataKey="ivvb11" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.1} strokeWidth={1.5} />
-                        <Area type="monotone" dataKey="ifix" stroke="#a855f7" fill="#a855f7" fillOpacity={0.1} strokeWidth={1.5} />
-                        <Area type="monotone" dataKey="ipca" stroke="#ef4444" fill="#ef4444" fillOpacity={0.06} strokeWidth={1.2} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Gráfico Comparativo (Rebase 100) */}
-                <div>
-                  <h4 className="text-sm font-medium text-muted-foreground mb-3">Comparativo de Performance (Rebase 100)</h4>
-                  <div className="h-64 sm:h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={historicoCarteira.datas.map((d, i) => ({
-                        data: d,
-                        carteira: historicoCarteira.carteira?.[i] ?? null,
-                        ibov: historicoCarteira.ibov?.[i] ?? null,
-                        ivvb11: historicoCarteira.ivvb11?.[i] ?? null,
-                        ifix: historicoCarteira.ifix?.[i] ?? null,
-                        ipca: historicoCarteira.ipca?.[i] ?? null,
-                      }))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis 
-                          dataKey="data" 
-                          stroke="hsl(var(--muted-foreground))"
-                          fontSize={12}
-                        />
-                        <YAxis 
-                          stroke="hsl(var(--muted-foreground))"
-                          fontSize={12}
-                          tickFormatter={(value) => `${value}%`}
-                        />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--card))', 
-                            border: '1px solid hsl(var(--border))', 
-                            borderRadius: '8px',
-                            color: 'hsl(var(--foreground))',
-                            fontSize: '12px'
-                          }}
-                          formatter={(value: any, name: string) => {
-                            const valorInicial = name === 'carteira' ? (historicoCarteira.carteira_valor?.[0] || 0) : 100
-                            const valorAtual = value
-                            const variacao = valorAtual - 100
-                            const variacaoAbs = name === 'carteira' ? 
-                              (historicoCarteira.carteira_valor?.[historicoCarteira.datas.findIndex(d => d === value)] || 0) - valorInicial :
-                              null
-                            
-                            return [
-                              <div key={name} className="space-y-1">
-                                <div className="font-medium">{name.toUpperCase()}</div>
-                                <div>Performance: <span className="font-semibold">{valorAtual?.toFixed(2)}%</span></div>
-                                <div>Variação: <span className={`font-semibold ${variacao >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {variacao >= 0 ? '+' : ''}{variacao?.toFixed(2)}%
-                                </span></div>
-                                {variacaoAbs !== null && (
-                                  <div>Valor: <span className="font-semibold">{formatCurrency(variacaoAbs + valorInicial)}</span></div>
-                                )}
-                              </div>,
-                              ''
-                            ]
-                          }}
-                          labelFormatter={(label) => `Data: ${label}`}
-                        />
-                        <Area type="monotone" dataKey="carteira" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} strokeWidth={2} />
-                        <Area type="monotone" dataKey="ibov" stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} strokeWidth={1.5} />
-                        <Area type="monotone" dataKey="ivvb11" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.1} strokeWidth={1.5} />
-                        <Area type="monotone" dataKey="ifix" stroke="#a855f7" fill="#a855f7" fillOpacity={0.1} strokeWidth={1.5} />
-                        <Area type="monotone" dataKey="ipca" stroke="#ef4444" fill="#ef4444" fillOpacity={0.06} strokeWidth={1.2} />
+                        <Legend />
+                        <Area type="monotone" dataKey="carteira_valor" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} strokeWidth={2} name="Carteira" />
+                        <Area type="monotone" dataKey="indice_valor" stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} strokeWidth={2} name={`${indiceRef.toUpperCase()} simulado`} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>

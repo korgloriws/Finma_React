@@ -351,6 +351,198 @@ def rename_asset_type(old: str, new: str):
     finally:
         conn.close()
 
+def _ensure_rf_catalog_schema():
+
+    usuario = get_usuario_atual()
+    if not usuario:
+        return
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('''
+                    CREATE TABLE IF NOT EXISTS rf_catalog (
+                        id SERIAL PRIMARY KEY,
+                        nome TEXT NOT NULL,
+                        emissor TEXT,
+                        tipo TEXT,
+                        indexador TEXT,
+                        taxa_percentual NUMERIC,
+                        data_inicio TEXT,
+                        vencimento TEXT,
+                        liquidez_diaria BOOLEAN,
+                        isento_ir BOOLEAN,
+                        observacao TEXT,
+                        created_at TEXT,
+                        updated_at TEXT
+                    )
+                ''')
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS rf_catalog (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nome TEXT NOT NULL,
+                    emissor TEXT,
+                    tipo TEXT,
+                    indexador TEXT,
+                    taxa_percentual REAL,
+                    data_inicio TEXT,
+                    vencimento TEXT,
+                    liquidez_diaria INTEGER,
+                    isento_ir INTEGER,
+                    observacao TEXT,
+                    created_at TEXT,
+                    updated_at TEXT
+                )
+            ''')
+            conn.commit()
+        finally:
+            conn.close()
+
+def rf_catalog_list():
+
+    usuario = get_usuario_atual()
+    if not usuario:
+        return []
+    _ensure_rf_catalog_schema()
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
+                rows = c.fetchall()
+                return [
+                    {
+                        'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
+                        'taxa_percentual': float(r[5]) if r[5] is not None else None,
+                        'data_inicio': r[6], 'vencimento': r[7],
+                        'liquidez_diaria': bool(r[8]) if r[8] is not None else None,
+                        'isento_ir': bool(r[9]) if r[9] is not None else None,
+                        'observacao': r[10]
+                    } for r in rows
+                ]
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cur = conn.cursor()
+            cur.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
+            rows = cur.fetchall()
+            return [
+                {
+                    'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
+                    'taxa_percentual': float(r[5]) if r[5] is not None else None,
+                    'data_inicio': r[6], 'vencimento': r[7],
+                    'liquidez_diaria': bool(r[8]) if r[8] else False,
+                    'isento_ir': bool(r[9]) if r[9] else False,
+                    'observacao': r[10]
+                } for r in rows
+            ]
+        finally:
+            conn.close()
+
+def rf_catalog_create(item: dict):
+
+    usuario = get_usuario_atual()
+    if not usuario:
+        return { 'success': False, 'message': 'Não autenticado' }
+    _ensure_rf_catalog_schema()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    fields = (
+        item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'),
+        item.get('taxa_percentual'), item.get('data_inicio'), item.get('vencimento'),
+        1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, now
+    )
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('''
+                    INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id
+                ''', fields)
+                new_id = c.fetchone()[0]
+                conn.commit()
+                return { 'success': True, 'id': new_id }
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            ''', fields)
+            conn.commit()
+            return { 'success': True, 'id': cur.lastrowid }
+        finally:
+            conn.close()
+
+def rf_catalog_update(id_: int, item: dict):
+    usuario = get_usuario_atual()
+    if not usuario:
+        return { 'success': False, 'message': 'Não autenticado' }
+    _ensure_rf_catalog_schema()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('''
+                    UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
+                ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('data_inicio'), item.get('vencimento'), bool(item.get('liquidez_diaria')), bool(item.get('isento_ir')), item.get('observacao'), now, id_))
+                conn.commit()
+                return { 'success': True }
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                UPDATE rf_catalog SET nome=?, emissor=?, tipo=?, indexador=?, taxa_percentual=?, data_inicio=?, vencimento=?, liquidez_diaria=?, isento_ir=?, observacao=?, updated_at=? WHERE id=?
+            ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('data_inicio'), item.get('vencimento'), 1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, id_))
+            conn.commit()
+            return { 'success': True }
+        finally:
+            conn.close()
+
+def rf_catalog_delete(id_: int):
+    usuario = get_usuario_atual()
+    if not usuario:
+        return { 'success': False, 'message': 'Não autenticado' }
+    _ensure_rf_catalog_schema()
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('DELETE FROM rf_catalog WHERE id=%s', (id_,))
+                conn.commit()
+                return { 'success': True }
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cur = conn.cursor()
+            cur.execute('DELETE FROM rf_catalog WHERE id=?', (id_,))
+            conn.commit()
+            return { 'success': True }
+        finally:
+            conn.close()
 def delete_asset_type(nome: str):
     usuario = get_usuario_atual()
     if not usuario:
@@ -358,7 +550,7 @@ def delete_asset_type(nome: str):
     if not nome:
         return {"success": False, "message": "Nome inválido"}
     _ensure_asset_types_schema()
-    # Só permitir exclusão se não houver ativos na carteira com esse tipo
+   
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
@@ -2660,14 +2852,13 @@ def calcular_preco_com_indexador(preco_inicial, indexador, indexador_pct, data_a
 
         # Calcular fator de correção
         if indexador in ["SELIC", "CDI"]:
-            # Para SELIC e CDI: usar taxa anual composta diariamente por dia civil (365)
-            # Taxa diária (365) = (1 + taxa_anual)^(1/365) - 1
+
             taxa_anual_decimal = taxa_atual / 100
-            taxa_diaria = (1 + taxa_anual_decimal) ** (1/365) - 1
+            taxa_diaria = (1 + taxa_anual_decimal) ** (1/252) - 1
             taxa_diaria_indexada = taxa_diaria * fator_percentual
             fator_correcao = (1 + taxa_diaria_indexada) ** dias_desde_adicao
             print(
-                f"DEBUG: {indexador} anual={taxa_atual}% | diaria365={taxa_diaria:.8f} | diaria_indexada={taxa_diaria_indexada:.8f} | fator={fator_correcao:.6f}"
+                f"DEBUG: {indexador} anual={taxa_atual}% | diaria252={taxa_diaria:.8f} | diaria_indexada={taxa_diaria_indexada:.8f} | fator={fator_correcao:.6f}"
             )
         elif indexador == "IPCA":
             # Para IPCA: usar taxa mensal acumulada (série 433 é mensal)

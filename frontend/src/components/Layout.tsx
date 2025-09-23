@@ -75,7 +75,7 @@ export default function Layout({ children }: LayoutProps) {
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase()
+      const key = (e && typeof e.key === 'string' ? e.key : '').toLowerCase()
       if ((e.ctrlKey || e.metaKey) && key === 'k') {
         e.preventDefault()
         setSearchOpen((v) => !v)

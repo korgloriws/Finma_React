@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { carteiraService, ativoService, listasService } from '../../services/api'
+import { carteiraService, ativoService, listasService, rfCatalogService } from '../../services/api'
 import { normalizeTicker } from '../../utils/tickerUtils'
 import { X, ChevronLeft, ChevronRight, ShieldCheck, Calendar, Percent, DollarSign, Layers } from 'lucide-react'
 
@@ -42,13 +42,6 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
     enabled: open,
   })
 
-  const { data: sugestoes } = useQuery({
-    queryKey: ['ativos-sugestoes-modal'],
-    queryFn: ativoService.getSugestoes,
-    staleTime: 60_000,
-    enabled: open,
-  })
-
   const normalize = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   const tipoNorm = useMemo(() => normalize(tipo.trim()), [tipo])
   const isAcoes = useMemo(() => {
@@ -63,6 +56,22 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
   const isTesouro = useMemo(() => {
     return tipoNorm.includes('renda fixa') || tipoNorm.includes('tesouro') || tipoNorm.includes('publica')
   }, [tipoNorm])
+
+  const { data: rfCatalog, refetch: refetchRfCatalog } = useQuery({
+    queryKey: ['rf-catalog-modal'],
+    queryFn: rfCatalogService.list,
+    enabled: open && (tipoNorm.includes('renda fixa') || tipoNorm.includes('tesouro') || tipoNorm.includes('publica')),
+    staleTime: 60_000,
+  })
+
+  const { data: sugestoes } = useQuery({
+    queryKey: ['ativos-sugestoes-modal'],
+    queryFn: ativoService.getSugestoes,
+    staleTime: 60_000,
+    enabled: open,
+  })
+
+  
 
   const { data: acoesList } = useQuery({
     queryKey: ['listas-ativos', 'acoes'],
@@ -112,6 +121,7 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
 
   // Cache local de logos em lote
   const [logosCache, setLogosCache] = useState<Record<string, string | null>>({})
+  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string | null>(null)
   useEffect(() => {
     const loadBatch = async () => {
       let batch: string[] = []
@@ -125,6 +135,34 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
     }
     if (open) loadBatch()
   }, [open, isAcoes, isFiis, isBdrs, acoesList, fiisList, bdrsList])
+
+  // Logo do ativo selecionado (para Ações/FIIs/BDRs)
+  useEffect(() => {
+    let cancelled = false
+    const loadLogo = async () => {
+      if (!open) return
+      const t = (ticker || '').trim()
+      if (!t || !(isAcoes || isFiis || isBdrs)) {
+        setSelectedLogoUrl(null)
+        return
+      }
+      const key = normalizeTicker(t)
+      if (logosCache.hasOwnProperty(key)) {
+        setSelectedLogoUrl(logosCache[key] || null)
+        return
+      }
+      try {
+        const url = await ativoService.getLogoUrl(key)
+        if (!cancelled) setSelectedLogoUrl(url)
+      } catch {
+        if (!cancelled) setSelectedLogoUrl(null)
+      }
+    }
+    loadLogo()
+    return () => {
+      cancelled = true
+    }
+  }, [open, ticker, isAcoes, isFiis, isBdrs, logosCache])
 
   const LogoBadge = ({ ticker }: { ticker: string }) => {
     const key = normalizeTicker(ticker)
@@ -247,58 +285,125 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
 
             {step === 2 && (
               <div className="space-y-3">
-                <label className="block text-sm font-medium">Nome do ativo</label>
-                <input
-                  type="text"
-                  placeholder="Ex.: Petrobras PN"
-                  value={nome}
-                  onChange={(e)=>setNome(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded"
-                />
-                <label className="block text-sm font-medium">Ticker (opcional)</label>
-                <input
-                  type="text"
-                  placeholder="Ex.: PETR4, ITUB4, VISC11"
-                  value={ticker}
-                  onChange={(e)=>setTicker(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded"
-                />
-
-                {/* Filtro de lista */}
-                {(isTesouro || isAcoes || isFiis || isBdrs) && (
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-4 items-start">
                   <div>
-                    <label className="block text-xs text-muted-foreground mb-1">Filtrar lista</label>
+                    <label className="block text-sm font-medium">Nome do ativo</label>
                     <input
                       type="text"
-                      title="Filtrar lista de ativos"
-                      placeholder="Digite para filtrar..."
-                      value={filtroLista}
-                      onChange={(e)=>setFiltroLista(e.target.value)}
+                      placeholder="Ex.: Petrobras PN"
+                      value={nome}
+                      onChange={(e)=>setNome(e.target.value)}
                       className="w-full px-3 py-2 bg-background border border-border rounded"
                     />
+                    <label className="block text-sm font-medium mt-3">Ticker (opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex.: PETR4, ITUB4, VISC11"
+                      value={ticker}
+                      onChange={(e)=>setTicker(e.target.value)}
+                      className="w-full px-3 py-2 bg-background border border-border rounded"
+                    />
+
+                    {/* Filtro de lista */}
+                    {(isTesouro || isAcoes || isFiis || isBdrs) && (
+                      <div className="mt-3">
+                        <label className="block text-xs text-muted-foreground mb-1">Filtrar lista</label>
+                        <input
+                          type="text"
+                          title="Filtrar lista de ativos"
+                          placeholder="Digite para filtrar..."
+                          value={filtroLista}
+                          onChange={(e)=>setFiltroLista(e.target.value)}
+                          className="w-full px-3 py-2 bg-background border border-border rounded"
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
+                  <div className="hidden sm:block">
+                    <div className="border border-border rounded bg-muted/30 p-2">
+                      <div className="w-full aspect-square rounded bg-background border border-border flex items-center justify-center">
+                        {(() => {
+                          const key = normalizeTicker(ticker || '')
+                          const cacheUrl = logosCache[key]
+                          const url = cacheUrl ?? selectedLogoUrl
+                          if (url) {
+                            return <img src={url} alt={`Logo ${ticker || nome || ''}`} title={ticker || nome || ''} className="w-full h-full object-contain p-2" />
+                          }
+                          const letter = (ticker || nome || '?').trim().charAt(0).toUpperCase()
+                          return <div className="text-3xl font-semibold text-muted-foreground">{letter || '?'}</div>
+                        })()}
+                      </div>
+                      <div className="mt-2 text-center text-sm truncate" title={(ticker || nome || '').toString()}>
+                        {(ticker || nome || '').toString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Listas por tipo selecionado */}
-                {isTesouro && tesouroData?.titulos?.length ? (
+                {isTesouro ? (
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Tesouro Direto</div>
-                    <div className="max-h-48 overflow-auto border border-border rounded">
-                      {tesouroData.titulos.filter((t:any)=>{
-                        const q = (filtroLista || '').toLowerCase()
-                        if (!q) return true
-                        const label = `${t?.nome || ''} ${(t?.indexador_normalizado||t?.indexador||'')}`.toLowerCase()
-                        return label.includes(q)
-                      }).map((t:any, i:number)=> (
-                        <button key={i} onClick={()=>pickTesouro(t)} className="w-full text-left px-3 py-2 hover:bg-accent border-b border-border last:border-b-0">
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm">
-                              {(t.indexador_normalizado || t.indexador) || '—'} {t.vencimento ? `• ${String(t.vencimento).slice(0,10)}`:''}
+                    {(tesouroData as any)?.titulos?.length ? (
+                      <div className="max-h-48 overflow-auto border border-border rounded">
+                        {(tesouroData as any).titulos.filter((t:any)=>{
+                          const q = (filtroLista || '').toLowerCase()
+                          if (!q) return true
+                          const label = `${t?.nome || ''} ${(t?.indexador_normalizado||t?.indexador||'')}`.toLowerCase()
+                          return label.includes(q)
+                        }).map((t:any, i:number)=> (
+                          <button key={i} onClick={()=>pickTesouro(t)} className="w-full text-left px-3 py-2 hover:bg-accent border-b border-border last:border-b-0">
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm">
+                                {(t.indexador_normalizado || t.indexador) || '—'} {t.vencimento ? `• ${String(t.vencimento).slice(0,10)}`:''}
+                              </div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-1"><Percent size={14}/> {t.taxa_compra_aa ?? t.taxaCompra ?? '—'} a.a</div>
                             </div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-1"><Percent size={14}/> {t.taxa_compra_aa ?? t.taxaCompra ?? '—'} a.a</div>
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">Nenhum título do Tesouro disponível agora.</div>
+                    )}
+
+                    {/* Catálogo local de RF */}
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-xs text-muted-foreground">Renda Fixa (Catálogo Local)</div>
+                        <button onClick={()=>{
+                          const nomeNovo = prompt('Nome do produto (ex.: CDB Banco X)')
+                          if (!nomeNovo) return
+                          rfCatalogService.create({ nome: nomeNovo, tipo: 'CDB', indexador: 'CDI', taxa_percentual: 100, liquidez_diaria: true }).then(()=> refetchRfCatalog())
+                        }} className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground">+ Novo</button>
+                      </div>
+                      {(rfCatalog as any)?.items?.length ? (
+                        <div className="max-h-64 overflow-auto border border-border rounded">
+                          {(rfCatalog as any).items.filter((it:any)=>{
+                            const q = (filtroLista||'').toLowerCase()
+                            if (!q) return true
+                            const label = `${it?.nome||''} ${it?.emissor||''} ${it?.tipo||''} ${it?.indexador||''}`.toLowerCase()
+                            return label.includes(q)
+                          }).map((it:any)=> (
+                            <button key={it.id} onClick={()=>{
+                              setTipo('Renda Fixa')
+                              setNome(it.nome)
+                              setTicker(it.nome.toUpperCase())
+                              setIndexador((it.indexador || '') as any)
+                              setIndexadorPct(it.taxa_percentual != null ? String(it.taxa_percentual) : '')
+                              setVencimento(it.vencimento || '')
+                              setLiquidezDiaria(!!it.liquidez_diaria)
+                              setIsentoIr(!!it.isento_ir)
+                            }} className="w-full text-left px-3 py-2 hover:bg-accent border-b border-border last:border-b-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm truncate">{it.nome}</div>
+                                <div className="text-xs text-muted-foreground">{it.indexador} {it.taxa_percentual ? `• ${it.taxa_percentual}%` : ''}</div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">Nenhum produto cadastrado ainda.</div>
+                      )}
                     </div>
                   </div>
                 ) : isAcoes && (acoesList as any)?.tickers?.length ? (

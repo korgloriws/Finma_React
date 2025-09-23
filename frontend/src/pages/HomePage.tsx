@@ -87,6 +87,7 @@ export default function HomePage() {
 
 
   const [filtroPeriodo, setFiltroPeriodo] = useState<'mensal' | 'semanal' | 'trimestral' | 'semestral' | 'anual'>('mensal')
+  const [gastosPeriodo, setGastosPeriodo] = useState<'1m' | '3m' | '6m'>('1m')
 
 
 
@@ -134,7 +135,7 @@ export default function HomePage() {
   const totalCartoes = resumoHome?.cartoes?.total || cartoes?.reduce((total: number, cartao: any) => total + (cartao?.valor || 0), 0) || 0
   const totalOutros = resumoHome?.outros?.total || outros?.reduce((total: number, outro: any) => total + (outro?.valor || 0), 0) || 0
 
-  const totalMarmitas = resumoHome?.marmitas?.total || marmitas?.reduce((total: number, marmita: any) => total + (marmita?.valor || 0), 0) || 0
+  
   
 
   const totalDespesas = totalCartoes + totalOutros
@@ -162,11 +163,43 @@ export default function HomePage() {
   // Evolução financeira diária (não usada no gráfico principal; mantida para futuras seções)
   // removido: dadosEvolucao não é usado neste card
 
-  const dadosGastos = [
-    { name: 'Cartões', valor: totalCartoes, cor: '#ef4444' },
-    { name: 'Outros', valor: totalOutros, cor: '#f97316' },
-    { name: 'Marmitas', valor: totalMarmitas, cor: '#eab308' }
-  ].filter(item => item.valor > 0)
+  // Gastos dinâmicos por categoria (reflete categorias livres do Controle)
+  const filtraPorPeriodo = (dataStr?: string) => {
+    if (!dataStr) return true
+    try {
+      const data = new Date(dataStr)
+      const agora = new Date()
+      const deltaDias = (agora.getTime() - data.getTime()) / (1000 * 60 * 60 * 24)
+      if (gastosPeriodo === '1m') return deltaDias <= 31
+      if (gastosPeriodo === '3m') return deltaDias <= 93
+      if (gastosPeriodo === '6m') return deltaDias <= 186
+      return true
+    } catch { return true }
+  }
+  const gastosPorCategoria: Record<string, number> = {}
+  ;(cartoes as any[]).forEach((c: any) => {
+    if (!filtraPorPeriodo(c?.data)) return
+    const categoria = (c?.categoria && String(c.categoria).trim()) ? String(c.categoria) : 'Cartões'
+    const valor = Number(c?.valor || 0)
+    gastosPorCategoria[categoria] = (gastosPorCategoria[categoria] || 0) + valor
+  })
+  ;(outros as any[]).forEach((o: any) => {
+    if (!filtraPorPeriodo(o?.data)) return
+    const categoria = (o?.categoria && String(o.categoria).trim()) ? String(o.categoria) : 'Outros'
+    const valor = Number(o?.valor || 0)
+    gastosPorCategoria[categoria] = (gastosPorCategoria[categoria] || 0) + valor
+  })
+  if ((marmitas as any[])?.length) {
+    marmitas.forEach((m: any) => {
+      if (!filtraPorPeriodo(m?.data)) return
+      const valor = Number(m?.valor || 0)
+      gastosPorCategoria['Marmitas'] = (gastosPorCategoria['Marmitas'] || 0) + valor
+    })
+  }
+  const dadosGastos = Object.entries(gastosPorCategoria)
+    .map(([name, valor]) => ({ name, valor, cor: getRandomColor(name) }))
+    .filter((item) => item.valor > 0)
+    .sort((a, b) => b.valor - a.valor)
 
 
   function getRandomColor(seed: string) {
@@ -1805,12 +1838,24 @@ export default function HomePage() {
             transition={{ duration: 0.6, delay: 0.8 }}
             className="bg-card border border-border rounded-2xl p-6 shadow-xl"
           >
-                          <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <BarChartIcon className="w-6 h-6 text-primary" />
-                </div>
-                <h2 className="text-xl font-semibold text-foreground">Gastos por Categoria</h2>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <BarChartIcon className="w-6 h-6 text-primary" />
               </div>
+              <h2 className="text-xl font-semibold text-foreground">Gastos por Categoria</h2>
+              <div className="ml-auto">
+                <select
+                  value={gastosPeriodo}
+                  onChange={(e)=> setGastosPeriodo(e.target.value as any)}
+                  className="px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
+                  aria-label="Período do gráfico de gastos"
+                >
+                  <option value="1m">Último mês</option>
+                  <option value="3m">Últimos 3 meses</option>
+                  <option value="6m">Últimos 6 meses</option>
+                </select>
+              </div>
+            </div>
             {loadingResumo ? (
               <div className="animate-pulse h-64 bg-muted rounded-lg"></div>
             ) : dadosGastos.length > 0 ? (
@@ -1828,7 +1873,11 @@ export default function HomePage() {
                     }}
                     formatter={(value: any) => [formatCurrency(value), 'Valor']}
                   />
-                  <Bar dataKey="valor" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
+                    {dadosGastos.map((entry, index) => (
+                      <Cell key={`cell-cat-${index}`} fill={entry.cor} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
