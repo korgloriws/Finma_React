@@ -45,6 +45,10 @@ from models import (
     rf_catalog_create,
     rf_catalog_update,
     rf_catalog_delete,
+    _ensure_goals_schema,
+    get_goals,
+    save_goals,
+    compute_goals_projection,
 )
 from models import cache
 import requests
@@ -1064,6 +1068,42 @@ def api_carteira_insights():
             except Exception:
                 pass
         return jsonify(payload)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@server.route('/api/goals', methods=['GET', 'POST'])
+def api_goals():
+    try:
+        usuario_atual = get_usuario_atual()
+        if not usuario_atual:
+            return jsonify({"error": "Não autenticado"}), 401
+        _ensure_goals_schema()
+        if request.method == 'GET':
+            g = get_goals() or {}
+            return jsonify(g)
+        data = request.get_json() or {}
+        res = save_goals(data)
+        try:
+            if cache:
+                cache.delete(f"goals:{usuario_atual}")
+        except Exception:
+            pass
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@server.route('/api/goals/projecao', methods=['POST'])
+def api_goals_projecao():
+    try:
+        usuario_atual = get_usuario_atual()
+        if not usuario_atual:
+            return jsonify({"error": "Não autenticado"}), 401
+        payload = request.get_json() or {}
+        goal = payload or (get_goals() or {})
+        proj = compute_goals_projection(goal or {})
+        return jsonify(proj)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

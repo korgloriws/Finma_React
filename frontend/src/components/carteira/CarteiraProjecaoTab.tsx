@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Loader2 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { carteiraService } from '../../services/api'
 import { 
   Calculator, 
@@ -42,6 +42,9 @@ export default function CarteiraProjecaoTab({
   const [valorInicial, setValorInicial] = useState('')
   const [considerarAportes, setConsiderarAportes] = useState(false)
   const [aporteMensal, setAporteMensal] = useState('')
+  const [goalTipo, setGoalTipo] = useState<'renda'|'patrimonio'>('renda')
+  const [goalAlvo, setGoalAlvo] = useState('')
+  const [goalHorizonteMeses, setGoalHorizonteMeses] = useState('')
 
 
   const valorAtualCarteira = useMemo(() => {
@@ -54,6 +57,32 @@ export default function CarteiraProjecaoTab({
     queryKey: ['carteira-historico-mensal-projecao'],
     queryFn: () => carteiraService.getHistorico('mensal'),
     staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  })
+
+  const queryClient = useQueryClient()
+  const { data: goal } = useQuery({
+    queryKey: ['goals'],
+    queryFn: carteiraService.getGoals,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  })
+  const saveGoalsMutation = useMutation({
+    mutationFn: carteiraService.saveGoals,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] })
+    }
+  })
+  const projectGoalsQuery = useQuery({
+    queryKey: ['goals-projecao', goalTipo, goalAlvo, goalHorizonteMeses],
+    queryFn: async () => {
+      const payload: any = { tipo: goalTipo }
+      if (goalAlvo) payload.alvo = parseFloat(goalAlvo)
+      if (goalHorizonteMeses) payload.horizonte_meses = parseInt(goalHorizonteMeses)
+      return carteiraService.projectGoals(payload)
+    },
+    enabled: !!goalTipo && (!!goalAlvo || !!goal),
+    staleTime: 30_000,
     refetchOnWindowFocus: false,
   })
 
@@ -312,6 +341,48 @@ export default function CarteiraProjecaoTab({
            </motion.div>
          )}
       </div>
+
+      {/* Metas e Projeções (Novo Painel) */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-card border border-border rounded-lg p-6"
+      >
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <Target className="w-5 h-5 text-emerald-600" /> Metas e Projeções
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Tipo da Meta</label>
+            <select title="Tipo da Meta" aria-label="Tipo da Meta" value={goalTipo} onChange={(e)=>setGoalTipo(e.target.value as any)} className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground">
+              <option value="renda">Renda mensal alvo</option>
+              <option value="patrimonio">Patrimônio alvo</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Alvo ({goalTipo==='renda' ? 'R$/mês' : 'R$'})</label>
+            <input type="number" value={goalAlvo} onChange={(e)=>setGoalAlvo(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground" placeholder={goalTipo==='renda' ? 'Ex.: 5000' : 'Ex.: 1000000'} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Horizonte (meses)</label>
+            <input type="number" value={goalHorizonteMeses} onChange={(e)=>setGoalHorizonteMeses(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground" placeholder="Ex.: 120" />
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-2">
+          <button
+            onClick={()=> saveGoalsMutation.mutate({ tipo: goalTipo, alvo: parseFloat(goalAlvo||'0'), horizonte_meses: goalHorizonteMeses ? parseInt(goalHorizonteMeses) : undefined })}
+            className="px-3 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90"
+            disabled={saveGoalsMutation.isPending}
+          >
+            {saveGoalsMutation.isPending ? 'Salvando...' : 'Salvar Meta'}
+          </button>
+          {projectGoalsQuery.data && (
+            <div className="text-sm text-muted-foreground">
+              Capital alvo: <span className="font-semibold">{formatCurrency(projectGoalsQuery.data.capital_alvo)}</span> • Aporte sugerido: <span className="font-semibold">{formatCurrency(projectGoalsQuery.data.aporte_sugerido)}</span> / mês
+            </div>
+          )}
+        </div>
+      </motion.div>
 
       {/* Configurações */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

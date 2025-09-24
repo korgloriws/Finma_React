@@ -248,7 +248,21 @@ export const carteiraService = {
     return response.data
   },
 
-  // Relatórios (download)
+  // Goals (Metas)
+  getGoals: async (): Promise<any> => {
+    const response = await api.get('/goals')
+    return response.data || null
+  },
+  saveGoals: async (payload: { tipo: 'renda'|'patrimonio'; alvo: number; horizonte_meses?: number; aporte_mensal?: number; premissas?: any }): Promise<any> => {
+    const response = await api.post('/goals', payload)
+    return response.data
+  },
+  projectGoals: async (payload?: { tipo?: 'renda'|'patrimonio'; alvo?: number; horizonte_meses?: number; aporte_mensal?: number; premissas?: any }): Promise<{ capital_alvo: number; aporte_sugerido: number; horizonte_meses: number; saldo_inicial: number; taxa_mensal: number; roadmap: Array<{ mes: number; saldo: number; aporte: number }> }> => {
+    const response = await api.post('/goals/projecao', payload || {})
+    return response.data
+  },
+
+
   downloadMovimentacoesCSV: async (params: { mes?: string; ano?: string; inicio?: string; fim?: string }) => {
     const p = new URLSearchParams()
     if (params.mes) p.append('mes', params.mes)

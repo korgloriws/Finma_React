@@ -3069,38 +3069,42 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                         (info["ticker"],)
                     )
                     ativo_existente = cursor.fetchone()
-                    
-                    # Registrar movimentação
+
+
                     cursor.execute(
                         'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
                         (data_adicao, info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], "compra")
                     )
-                    
-                if ativo_existente:
-                    # Ativo já existe - somar quantidades (PM ponderado)
-                    id_existente, quantidade_existente = ativo_existente
-                    # Obter preço_medio atual se existir
-                    try:
-                        cursor.execute('SELECT preco_medio FROM carteira WHERE id = %s', (id_existente,))
-                        pm_row = cursor.fetchone()
-                        preco_medio_atual = float(pm_row[0]) if pm_row and pm_row[0] is not None else float(info["preco_atual"] or 0)
-                    except Exception:
-                        preco_medio_atual = float(info["preco_atual"] or 0)
-                    nova_quantidade = quantidade_existente + quantidade
-                    preco_medio_novo = ((preco_medio_atual * quantidade_existente) + (float(info["preco_atual"] or 0) * quantidade)) / (nova_quantidade or 1)
-                    novo_valor_total = float(info["preco_atual"] or 0) * nova_quantidade
-                    cursor.execute(
-                        'UPDATE carteira SET quantidade = %s, valor_total = %s, preco_atual = %s, dy = %s, pl = %s, pvp = %s, roe = %s, preco_medio = %s WHERE id = %s',
-                        (nova_quantidade, novo_valor_total, info["preco_atual"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), preco_medio_novo, id_existente)
-                    )
-                    mensagem = f"Quantidade do ativo {info['ticker']} atualizada: {quantidade_existente} + {quantidade} = {nova_quantidade}"
-                else:
-                    # Ativo não existe - criar novo registro
-                    cursor.execute(
-                        'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-                        (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, bool(isento_ir) if isento_ir is not None else None, bool(liquidez_diaria) if liquidez_diaria is not None else None) 
-                    )
-                    mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
+
+                    if ativo_existente:
+   
+                        id_existente, quantidade_existente = ativo_existente
+
+                        try:
+                            cursor.execute('SELECT preco_medio FROM carteira WHERE id = %s', (id_existente,))
+                            pm_row = cursor.fetchone()
+                            preco_medio_atual = float(pm_row[0]) if pm_row and pm_row[0] is not None else float(info["preco_atual"] or 0)
+                        except Exception:
+                            preco_medio_atual = float(info["preco_atual"] or 0)
+                        nova_quantidade = quantidade_existente + quantidade
+                        preco_medio_novo = ((preco_medio_atual * quantidade_existente) + (float(info["preco_atual"] or 0) * quantidade)) / (nova_quantidade or 1)
+                        novo_valor_total = float(info["preco_atual"] or 0) * nova_quantidade
+                        cursor.execute(
+                            'UPDATE carteira SET quantidade = %s, valor_total = %s, preco_atual = %s, dy = %s, pl = %s, pvp = %s, roe = %s, preco_medio = %s WHERE id = %s',
+                            (nova_quantidade, novo_valor_total, info["preco_atual"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), preco_medio_novo, id_existente)
+                        )
+                        mensagem = f"Quantidade do ativo {info['ticker']} atualizada: {quantidade_existente} + {quantidade} = {nova_quantidade}"
+                    else:
+                        # Ativo não existe - criar novo registro
+                        cursor.execute(
+                            'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                            (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, bool(isento_ir) if isento_ir is not None else None, bool(liquidez_diaria) if liquidez_diaria is not None else None) 
+                        )
+                        mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
+                try:
+                    conn.commit()
+                except Exception:
+                    pass
             finally:
                 conn.close()
         else:
@@ -3293,6 +3297,173 @@ def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None):
     except Exception as e:
         return {"success": False, "message": f"Erro ao atualizar ativo: {str(e)}"}
 
+def _ensure_goals_schema():
+    usuario = get_usuario_atual()
+    if not usuario:
+        return
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('''
+                    CREATE TABLE IF NOT EXISTS goals (
+                        id SERIAL PRIMARY KEY,
+                        tipo TEXT NOT NULL,         -- 'renda' | 'patrimonio'
+                        alvo NUMERIC NOT NULL,      -- valor alvo (renda mensal ou patrimonio)
+                        horizonte_meses INTEGER,    -- opcional
+                        aporte_mensal NUMERIC,      -- opcional
+                        premissas JSONB,            -- objeto com parametros (dy_por_classe etc.)
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                ''')
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cur = conn.cursor()
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS goals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tipo TEXT NOT NULL,
+                    alvo REAL NOT NULL,
+                    horizonte_meses INTEGER,
+                    aporte_mensal REAL,
+                    premissas TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            ''')
+            conn.commit()
+        finally:
+            conn.close()
+
+def get_goals():
+    usuario = get_usuario_atual()
+    if not usuario:
+        return []
+    _ensure_goals_schema()
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('SELECT id, tipo, alvo, horizonte_meses, aporte_mensal, premissas, created_at, updated_at FROM goals ORDER BY id DESC LIMIT 1')
+                row = c.fetchone()
+                if not row:
+                    return None
+                return {
+                    'id': row[0], 'tipo': row[1], 'alvo': float(row[2]), 'horizonte_meses': row[3],
+                    'aporte_mensal': (float(row[4]) if row[4] is not None else None), 'premissas': row[5],
+                    'created_at': row[6], 'updated_at': row[7]
+                }
+        finally:
+            conn.close()
+    db_path = get_db_path(usuario, "carteira")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT id, tipo, alvo, horizonte_meses, aporte_mensal, premissas, created_at, updated_at FROM goals ORDER BY id DESC LIMIT 1')
+        row = cur.fetchone()
+        if not row:
+            return None
+        import json
+        premissas = None
+        try:
+            premissas = json.loads(row[5]) if row[5] else None
+        except Exception:
+            premissas = None
+        return {
+            'id': row[0], 'tipo': row[1], 'alvo': float(row[2]), 'horizonte_meses': row[3],
+            'aporte_mensal': (float(row[4]) if row[4] is not None else None), 'premissas': premissas,
+            'created_at': row[6], 'updated_at': row[7]
+        }
+    finally:
+        conn.close()
+
+def save_goals(payload: dict):
+    usuario = get_usuario_atual()
+    if not usuario:
+        return { 'success': False, 'message': 'Não autenticado' }
+    _ensure_goals_schema()
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    tipo = (payload.get('tipo') or 'renda')
+    alvo = float(payload.get('alvo') or 0)
+    horizonte_meses = payload.get('horizonte_meses')
+    aporte_mensal = payload.get('aporte_mensal')
+    premissas = payload.get('premissas')
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as c:
+                c.execute('DELETE FROM goals')
+                c.execute('INSERT INTO goals (tipo, alvo, horizonte_meses, aporte_mensal, premissas, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s)', (tipo, alvo, horizonte_meses, aporte_mensal, json.dumps(premissas) if premissas is not None else None, now, now))
+                conn.commit()
+                return { 'success': True }
+        finally:
+            conn.close()
+    db_path = get_db_path(usuario, "carteira")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        cur = conn.cursor()
+        cur.execute('DELETE FROM goals')
+        cur.execute('INSERT INTO goals (tipo, alvo, horizonte_meses, aporte_mensal, premissas, created_at, updated_at) VALUES (?,?,?,?,?,?,?)', (tipo, alvo, horizonte_meses, aporte_mensal, json.dumps(premissas) if premissas is not None else None, now, now))
+        conn.commit()
+        return { 'success': True }
+    finally:
+        conn.close()
+
+def compute_goals_projection(goal: dict):
+    # Retorna roadmap simples com base em premissas e carteira atual
+    itens = obter_carteira() or []
+    total_atual = float(sum((it.get('valor_total') or 0.0) for it in itens)) if itens else 0.0
+    tipo = (goal.get('tipo') or 'renda')
+    alvo = float(goal.get('alvo') or 0)
+    horizonte_meses = int(goal.get('horizonte_meses') or 0) if goal.get('horizonte_meses') is not None else 0
+    aporte_mensal = float(goal.get('aporte_mensal') or 0)
+    premissas = goal.get('premissas') or {}
+
+    # Yield/retorno médios
+    dy_por_classe = (premissas.get('dy_por_classe') or {}) if isinstance(premissas, dict) else {}
+    retorno_anual = float(premissas.get('retorno_anual', 0.06)) if isinstance(premissas, dict) else 0.06
+    taxa_mensal = (1 + retorno_anual) ** (1/12) - 1
+
+    # Meta de capital se objetivo é renda
+    if tipo == 'renda':
+        # Considera dy médio alvo global (se fornecido) ou aproxima por retorno_anual
+        dy_mensal = float(premissas.get('dy_mensal_global', retorno_anual/12)) if isinstance(premissas, dict) else (retorno_anual/12)
+        capital_alvo = alvo / max(1e-9, dy_mensal)
+    else:
+        capital_alvo = alvo
+
+    # Se aporte não informado mas horizonte informado, calcular aporte necessário
+    aporte_sugerido = aporte_mensal
+    if aporte_sugerido <= 0 and horizonte_meses > 0:
+        # FV = P*( (1+i)^n - 1)/i, onde FV = capital_alvo - total_atual*(1+i)^n
+        from math import isfinite
+        fv_residual = max(0.0, capital_alvo - (total_atual * ((1 + taxa_mensal) ** horizonte_meses)))
+        if taxa_mensal > 0 and horizonte_meses > 0 and isfinite(fv_residual):
+            aporte_sugerido = fv_residual * taxa_mensal / (((1 + taxa_mensal) ** horizonte_meses) - 1)
+        else:
+            aporte_sugerido = fv_residual / max(1, horizonte_meses)
+
+    # Roadmap simples: meses 1..N com aporte_sugerido, acumulando com taxa
+    n = horizonte_meses if horizonte_meses and horizonte_meses > 0 else 120
+    saldo = total_atual
+    roadmap = []
+    for m in range(1, n + 1):
+        saldo = saldo * (1 + taxa_mensal) + (aporte_sugerido or 0)
+        roadmap.append({ 'mes': m, 'saldo': round(saldo, 2), 'aporte': round(aporte_sugerido or 0, 2) })
+
+    return {
+        'capital_alvo': round(capital_alvo, 2),
+        'aporte_sugerido': round(aporte_sugerido or 0, 2),
+        'horizonte_meses': n,
+        'saldo_inicial': round(total_atual, 2),
+        'taxa_mensal': taxa_mensal,
+        'roadmap': roadmap,
+    }
 def obter_carteira():
 
     try:
