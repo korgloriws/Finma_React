@@ -3070,16 +3070,16 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                     )
                     ativo_existente = cursor.fetchone()
 
-
+                    # Registrar movimentação
                     cursor.execute(
                         'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
                         (data_adicao, info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], "compra")
                     )
 
                     if ativo_existente:
-   
+                        # Ativo já existe - somar quantidades (PM ponderado)
                         id_existente, quantidade_existente = ativo_existente
-
+                        # Obter preço_medio atual se existir
                         try:
                             cursor.execute('SELECT preco_medio FROM carteira WHERE id = %s', (id_existente,))
                             pm_row = cursor.fetchone()
