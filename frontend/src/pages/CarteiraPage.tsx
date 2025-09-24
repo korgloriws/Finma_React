@@ -119,22 +119,21 @@ export default function CarteiraPage() {
     }
   }, [rbConfig, idealPreview])
 
-  // Atalho: Ctrl+I para abrir a modal de adição
+  // Atalho: Ctrl+I para abrir a modal de adição (somente na aba Ativos)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
         e.preventDefault()
-        setAddModalOpen(true)
+        if (activeTab === 'ativos') setAddModalOpen(true)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [activeTab])
   const idealTargets = useMemo(() => {
     return idealPreview?.targets ?? (rbConfig as any)?.targets ?? {}
   }, [idealPreview, rbConfig])
   const [ocultarValor, setOcultarValor] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [addModalOpen, setAddModalOpen] = useState(false)
  
   const [expandedTipos, setExpandedTipos] = useState<Record<string, boolean>>({
@@ -200,6 +199,38 @@ export default function CarteiraPage() {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   })
+
+  // Atualizações em background ao entrar na tela (não bloqueia UI)
+  useEffect(() => {
+    let cancelled = false
+    const runBackgroundUpdates = async () => {
+      try {
+        // Dispara as duas atualizações em paralelo e silenciosas
+        const [resIdx, resPrecos] = await Promise.allSettled([
+          carteiraService.refreshIndexadores(),
+          carteiraService.refreshCarteira(),
+        ])
+        if (cancelled) return
+        // Invalidar dados após conclusão
+        queryClient.invalidateQueries({ queryKey: ['carteira', user] })
+        queryClient.invalidateQueries({ queryKey: ['carteira-insights', user] })
+        // Notificações leves
+        if (resIdx.status === 'fulfilled') {
+          const n = (resIdx.value && typeof resIdx.value.updated === 'number') ? resIdx.value.updated : undefined
+          toast.success(n != null ? `Indexadores atualizados (${n})` : 'Indexadores atualizados')
+        }
+        if (resPrecos.status === 'fulfilled') {
+          const n = (resPrecos.value && typeof resPrecos.value.updated === 'number') ? resPrecos.value.updated : undefined
+          toast.success(n != null ? `Preços atualizados (${n})` : 'Preços atualizados')
+        }
+      } catch {
+        // Erros já tratados abaixo; evitamos bloquear a UI
+      }
+    }
+    runBackgroundUpdates()
+    return () => { cancelled = true }
+  // Executa ao entrar, e também quando usuário/logged-in mudar
+  }, [user, queryClient])
 
   // Tesouro Direto - lista de títulos para autocompletar
   const { data: tesouroData } = useQuery({
@@ -283,6 +314,9 @@ export default function CarteiraPage() {
       queryClient.invalidateQueries({ queryKey: ['historico-carteira', user] })
       queryClient.invalidateQueries({ queryKey: ['proventos', user] })
       queryClient.invalidateQueries({ queryKey: ['proventos-recebidos', user] })
+      
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes', user] })
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes-all', user] })
       setEditingId(null)
       setEditQuantidade('')
       setEditPreco('')
@@ -498,49 +532,6 @@ export default function CarteiraPage() {
           >
             {ocultarValor ? '👁 Mostrar Valor' : '🔒 Ocultar Valor'}
           </button>
-          <button
-            onClick={async () => {
-              if (isRefreshing) return
-              setIsRefreshing(true)
-              try {
-                const res = await carteiraService.refreshCarteira()
-                const n = (res && typeof res.updated === 'number') ? res.updated : undefined
-                toast.success(n != null ? `Preços atualizados (${n})` : 'Preços atualizados')
-              } catch (e: any) {
-                if (e?.response?.status === 401) toast.error('Sessão expirada. Faça login novamente.')
-                else toast.error('Falha ao atualizar preços')
-              } finally {
-                setIsRefreshing(false)
-                queryClient.invalidateQueries({ queryKey: ['carteira', user] })
-                queryClient.invalidateQueries({ queryKey: ['carteira-insights', user] })
-              }
-            }}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${isRefreshing ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'}`}
-            title="Atualizar preços agora"
-            aria-label="Atualizar preços agora"
-          >
-            <Activity className="w-4 h-4" /> {isRefreshing ? 'Atualizando...' : 'Atualizar preços'}
-          </button>
-
-          <button
-            onClick={async () => {
-              try {
-                const res = await carteiraService.refreshIndexadores()
-                const n = (res && typeof res.updated === 'number') ? res.updated : 0
-                toast.success(n != null ? `Indexadores atualizados (${n})` : 'Indexadores atualizados')
-                queryClient.invalidateQueries({ queryKey: ['carteira', user] })
-                queryClient.invalidateQueries({ queryKey: ['carteira-insights', user] })
-              } catch (e: any) {
-                if (e?.response?.status === 401) toast.error('Sessão expirada. Faça login novamente.')
-                else toast.error('Falha ao atualizar indexadores')
-              }
-            }}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-            title="Atualizar indexadores (CDI, IPCA, SELIC)"
-            aria-label="Atualizar indexadores"
-          >
-            <TrendingUp className="w-4 h-4" /> Atualizar Indexadores
-          </button>
         </div>
       </div>
 
@@ -588,20 +579,22 @@ export default function CarteiraPage() {
 
       {/* Conteúdo das Abas */}
       <div className="bg-card border border-border rounded-lg p-6 shadow-lg">
-        {/* CTA destacado para adicionar ativo */}
-        <div className="mb-4 rounded-xl border border-border bg-gradient-to-r from-primary/10 to-primary/5 p-4 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-xs text-muted-foreground">Adicionar novo ativo</div>
-            <div className="text-base sm:text-lg font-semibold text-foreground truncate">Ações, FIIs, BDRs e Renda Fixa</div>
-            <div className="text-xs text-muted-foreground">Dica: pressione Ctrl+I para abrir rapidamente</div>
+        {/* CTA destacado para adicionar ativo (somente na aba Ativos) */}
+        {activeTab === 'ativos' && (
+          <div className="mb-4 rounded-xl border border-border bg-gradient-to-r from-primary/10 to-primary/5 p-4 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs text-muted-foreground">Adicionar novo ativo</div>
+              <div className="text-base sm:text-lg font-semibold text-foreground truncate">Ações, FIIs, BDRs e Renda Fixa</div>
+              <div className="text-xs text-muted-foreground">Dica: pressione Ctrl+I para abrir rapidamente</div>
+            </div>
+            <button
+              onClick={()=>setAddModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow"
+            >
+              <PlusCircle size={18} /> Adicionar Ativo
+            </button>
           </div>
-          <button
-            onClick={()=>setAddModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow"
-          >
-            <PlusCircle size={18} /> Adicionar Ativo
-          </button>
-        </div>
+        )}
         {/* Modal de gerenciamento de tipo */}
         {manageTipoOpen.open && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -783,18 +776,20 @@ export default function CarteiraPage() {
           />
         )}
       </div>
-      {/* FAB mobile para adicionar ativo rapidamente */}
-      <div className="md:hidden fixed bottom-6 right-6 z-20">
-        <button
-          onClick={() => setAddModalOpen(true)}
-          className="rounded-full p-4 bg-primary text-primary-foreground shadow-lg"
-          aria-label="Adicionar ativo"
-          title="Adicionar ativo"
-        >
-          <PlusCircle size={20} />
-        </button>
-      </div>
-      {addModalOpen && (
+      {/* FAB mobile para adicionar ativo rapidamente (somente na aba Ativos) */}
+      {activeTab === 'ativos' && (
+        <div className="md:hidden fixed bottom-6 right-6 z-20">
+          <button
+            onClick={() => setAddModalOpen(true)}
+            className="rounded-full p-4 bg-primary text-primary-foreground shadow-lg"
+            aria-label="Adicionar ativo"
+            title="Adicionar ativo"
+          >
+            <PlusCircle size={20} />
+          </button>
+        </div>
+      )}
+      {activeTab === 'ativos' && addModalOpen && (
         <AddAtivoModal open={addModalOpen} onClose={()=>setAddModalOpen(false)} />
       )}
     </div>

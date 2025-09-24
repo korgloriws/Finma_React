@@ -3230,6 +3230,18 @@ def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None):
                         cursor.execute('UPDATE carteira SET quantidade = %s, preco_atual = %s, valor_total = %s, indexador_base_preco = %s, indexador_base_data = %s WHERE id = %s', (new_qty, new_price, valor_total, new_price, base_data, id))
                     else:
                         cursor.execute('UPDATE carteira SET quantidade = %s, preco_atual = %s, valor_total = %s WHERE id = %s', (new_qty, new_price, valor_total, id))
+
+                    # Registrar movimentação se houve alteração de quantidade
+                    qty_diff = new_qty - current_qty
+                    if abs(qty_diff) > 0:
+                        tipo_mov = 'compra' if qty_diff > 0 else 'venda'
+                        data_mov = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        preco_mov = float(preco_atual) if preco_atual is not None else (float(new_price) if new_price is not None else current_price)
+                        try:
+                            registrar_movimentacao(data_mov, str(ativo[0] or ''), str(ativo[1] or ''), abs(qty_diff), preco_mov, tipo_mov)
+                        except Exception as _:
+                            pass
+                conn.commit()
                 return {"success": True, "message": "Ativo atualizado com sucesso"}
             finally:
                 conn.close()
@@ -3262,6 +3274,17 @@ def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None):
                 SET quantidade = ?, preco_atual = ?, valor_total = ?
                 WHERE id = ?
             ''', (new_qty, new_price, valor_total, id))
+
+        
+        qty_diff = new_qty - current_qty
+        if abs(qty_diff) > 0:
+            tipo_mov = 'compra' if qty_diff > 0 else 'venda'
+            data_mov = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            preco_mov = float(preco_atual) if preco_atual is not None else (float(new_price) if new_price is not None else current_price)
+            try:
+                registrar_movimentacao(data_mov, str(ativo[0] or ''), str(ativo[1] or ''), abs(qty_diff), preco_mov, tipo_mov, conn)
+            except Exception as _:
+                pass
         
         conn.commit()
         conn.close()
@@ -3583,9 +3606,10 @@ def registrar_movimentacao(data, ticker, nome_completo, quantidade, preco, tipo,
         if not usuario:
             return {"success": False, "message": "Usuário não autenticado"}
 
-
+        should_close = False
+        local_conn = None
         if _is_postgres():
-            # Ignorar conexão SQLite passada; abre pg por usuário
+           
             pg_conn = _pg_conn_for_user(usuario)
             try:
                 with pg_conn.cursor() as cursor:
@@ -3609,11 +3633,11 @@ def registrar_movimentacao(data, ticker, nome_completo, quantidade, preco, tipo,
         else:
             if conn is None:
                 db_path = get_db_path(usuario, "carteira")
-                conn = sqlite3.connect(db_path, check_same_thread=False)
+                local_conn = sqlite3.connect(db_path, check_same_thread=False)
                 should_close = True
             else:
                 should_close = False
-            cursor = conn.cursor()
+            cursor = (conn or local_conn).cursor()
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS movimentacoes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3629,14 +3653,17 @@ def registrar_movimentacao(data, ticker, nome_completo, quantidade, preco, tipo,
                 INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo)
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', (data, ticker, nome_completo, quantidade, preco, tipo))
-            if should_close:
-                conn.commit()
-                conn.close()
+            if should_close and local_conn:
+                local_conn.commit()
+                local_conn.close()
         
         return {"success": True, "message": "Movimentação registrada com sucesso"}
     except Exception as e:
-        if should_close and conn:
-            conn.close()
+        try:
+            if should_close and local_conn:
+                local_conn.close()
+        except Exception:
+            pass
         return {"success": False, "message": f"Erro ao registrar movimentação: {str(e)}"}
 
 def obter_movimentacoes(mes=None, ano=None):
@@ -4960,7 +4987,7 @@ def calcular_saldo_mes_ano(mes, ano, pessoa=None):
     else:
         db_path = get_db_path(usuario, "controle")
         conn = sqlite3.connect(db_path, check_same_thread=False)
-        # Intervalos para usar índice
+        
         df_receitas = pd.read_sql_query(
             'SELECT SUM(valor) as total FROM receitas WHERE data >= ? AND data < ?',
             conn,
