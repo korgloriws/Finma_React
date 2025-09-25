@@ -246,6 +246,10 @@ def _ensure_indexador_schema():
                     c.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS isento_ir BOOLEAN')
                 except Exception:
                     pass
+                try:
+                    c.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS liquidez_diaria BOOLEAN')
+                except Exception:
+                    pass
         finally:
             conn.close()
     else:
@@ -3050,13 +3054,49 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
             
         if tipo:
             info["tipo"] = tipo
-            
-        valor_total = float(info["preco_atual"] or 0) * float(quantidade or 0)
+
+        # Sanitize optional fields for Postgres compatibility
+        def _to_float_or_none(v):
+            try:
+                if v is None:
+                    return None
+                if isinstance(v, str) and v.strip() == "":
+                    return None
+                return float(v)
+            except Exception:
+                return None
+
+        def _to_bool_or_none(v):
+            if v is None:
+                return None
+            if isinstance(v, str) and v.strip() == "":
+                return None
+            if isinstance(v, bool):
+                return v
+            if isinstance(v, (int, float)):
+                return bool(v)
+            s = str(v).strip().lower()
+            if s in ("true", "1", "sim", "yes", "y"):
+                return True
+            if s in ("false", "0", "nao", "não", "no", "n"):
+                return False
+            return None
+
+        indexador_pct = _to_float_or_none(indexador_pct)
+        isento_ir = _to_bool_or_none(isento_ir)
+        liquidez_diaria = _to_bool_or_none(liquidez_diaria)
+        data_aplicacao = data_aplicacao if (data_aplicacao and str(data_aplicacao).strip() != "") else None
+        vencimento = vencimento if (vencimento and str(vencimento).strip() != "") else None
+
+        quantidade_val = float(quantidade or 0)
+        valor_total = float(info["preco_atual"] or 0) * quantidade_val
         data_adicao = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         usuario = get_usuario_atual()
         if not usuario:
             return {"success": False, "message": "Usuário não autenticado"}
+        # Ensure schema and tables exist in the user schema
+        init_carteira_db(usuario)
         _ensure_indexador_schema()
         
         if _is_postgres():
@@ -3073,12 +3113,16 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                     # Registrar movimentação
                     cursor.execute(
                         'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
-                        (data_adicao, info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], "compra")
+                        (data_adicao, info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], "compra")
                     )
 
                     if ativo_existente:
                         # Ativo já existe - somar quantidades (PM ponderado)
                         id_existente, quantidade_existente = ativo_existente
+                        try:
+                            quantidade_existente = float(quantidade_existente)
+                        except Exception:
+                            quantidade_existente = float(quantidade_existente or 0)
                         # Obter preço_medio atual se existir
                         try:
                             cursor.execute('SELECT preco_medio FROM carteira WHERE id = %s', (id_existente,))
@@ -3086,8 +3130,8 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                             preco_medio_atual = float(pm_row[0]) if pm_row and pm_row[0] is not None else float(info["preco_atual"] or 0)
                         except Exception:
                             preco_medio_atual = float(info["preco_atual"] or 0)
-                        nova_quantidade = quantidade_existente + quantidade
-                        preco_medio_novo = ((preco_medio_atual * quantidade_existente) + (float(info["preco_atual"] or 0) * quantidade)) / (nova_quantidade or 1)
+                        nova_quantidade = quantidade_existente + quantidade_val
+                        preco_medio_novo = ((preco_medio_atual * quantidade_existente) + (float(info["preco_atual"] or 0) * quantidade_val)) / (nova_quantidade or 1)
                         novo_valor_total = float(info["preco_atual"] or 0) * nova_quantidade
                         cursor.execute(
                             'UPDATE carteira SET quantidade = %s, valor_total = %s, preco_atual = %s, dy = %s, pl = %s, pvp = %s, roe = %s, preco_medio = %s WHERE id = %s',
@@ -3098,7 +3142,7 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                         # Ativo não existe - criar novo registro
                         cursor.execute(
                             'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-                            (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, bool(isento_ir) if isento_ir is not None else None, bool(liquidez_diaria) if liquidez_diaria is not None else None) 
+                        (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, bool(isento_ir) if isento_ir is not None else None, bool(liquidez_diaria) if liquidez_diaria is not None else None) 
                         )
                         mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
                 try:
@@ -3118,7 +3162,7 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
             
             # Registrar movimentação
             resultado_movimentacao = registrar_movimentacao(data_adicao, info["ticker"], info["nome_completo"], 
-                                 quantidade, info["preco_atual"], "compra", conn)
+                                 quantidade_val, info["preco_atual"], "compra", conn)
             if not resultado_movimentacao["success"]:
                 conn.close()
                 return resultado_movimentacao
@@ -3127,13 +3171,17 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                 # Ativo já existe - somar quantidades (PM ponderado)
                 id_existente, quantidade_existente = ativo_existente
                 try:
+                    quantidade_existente = float(quantidade_existente)
+                except Exception:
+                    quantidade_existente = float(quantidade_existente or 0)
+                try:
                     cursor.execute('SELECT preco_medio FROM carteira WHERE id = ?', (id_existente,))
                     pm_row = cursor.fetchone()
                     preco_medio_atual = float(pm_row[0]) if pm_row and pm_row[0] is not None else float(info["preco_atual"] or 0)
                 except Exception:
                     preco_medio_atual = float(info["preco_atual"] or 0)
-                nova_quantidade = quantidade_existente + quantidade
-                preco_medio_novo = ((preco_medio_atual * quantidade_existente) + (float(info["preco_atual"] or 0) * quantidade)) / (nova_quantidade or 1)
+                nova_quantidade = quantidade_existente + quantidade_val
+                preco_medio_novo = ((preco_medio_atual * quantidade_existente) + (float(info["preco_atual"] or 0) * quantidade_val)) / (nova_quantidade or 1)
                 novo_valor_total = float(info["preco_atual"] or 0) * nova_quantidade
                 cursor.execute('''
                     UPDATE carteira SET quantidade = ?, valor_total = ?, preco_atual = ?, dy = ?, pl = ?, pvp = ?, roe = ?, preco_medio = ?
@@ -3146,7 +3194,7 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                     INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, 
                                         data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (info["ticker"], info["nome_completo"], quantidade, info["preco_atual"], 
+                ''', (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], 
                       valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), 
                       info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, (1 if isento_ir else 0) if isento_ir is not None else None, (1 if liquidez_diaria else 0) if liquidez_diaria is not None else None))
                 mensagem = f"Ativo {info['ticker']} adicionado com sucesso"

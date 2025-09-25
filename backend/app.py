@@ -67,6 +67,13 @@ server = Flask(
 
 
 try:
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    server.wsgi_app = ProxyFix(server.wsgi_app, x_proto=1, x_host=1)
+except Exception:
+    pass
+
+
+try:
     from flask_compress import Compress
     Compress(server)
 except Exception:
@@ -191,9 +198,30 @@ def api_login():
             }), 200)
 
            
+
             is_production = bool(os.getenv('FLY_APP_NAME')) or os.getenv('ENVIRONMENT') == 'production'
-            cookie_samesite = 'None' if is_production else 'Lax'
-            cookie_secure = True if is_production else False
+            try:
+                forwarded_proto = (request.headers.get('X-Forwarded-Proto') or '').split(',')[0].strip().lower()
+            except Exception:
+                forwarded_proto = ''
+            is_secure_req = False
+            try:
+                is_secure_req = bool(request.is_secure) or (forwarded_proto == 'https')
+            except Exception:
+                is_secure_req = (forwarded_proto == 'https')
+            cookie_secure = True if is_secure_req else False
+            
+            try:
+                req_origin = (request.headers.get('Origin') or '').strip().lower()
+                host_url = (request.host_url or '').strip().lower()
+            except Exception:
+                req_origin = ''
+                host_url = ''
+            is_cross_site = bool(req_origin and (req_origin not in host_url))
+            cookie_samesite = 'None' if (is_production and is_cross_site) else 'Lax'
+
+            if cookie_samesite == 'None' and not cookie_secure:
+                cookie_secure = True
 
             
             response.set_cookie(
@@ -652,7 +680,7 @@ def api_get_ativo_details(ticker):
                 if not segmento and fii_tipo == 'Papel':
                     segmento = 'Recebíveis/CRI'
 
-                # Estimativa de VP por cota (se P/VP disponível)
+   
                 pvp = info.get('priceToBook')
                 vp_por_cota = (float(current_price) / float(pvp)) if current_price and pvp not in (None, 0) else None
 
