@@ -3472,9 +3472,16 @@ def compute_goals_projection(goal: dict):
     aporte_mensal = float(goal.get('aporte_mensal') or 0)
     premissas = goal.get('premissas') or {}
 
-    # Yield/retorno médios
+    # Yield/retorno médios - usar taxa manual se fornecida
     dy_por_classe = (premissas.get('dy_por_classe') or {}) if isinstance(premissas, dict) else {}
-    retorno_anual = float(premissas.get('retorno_anual', 0.06)) if isinstance(premissas, dict) else 0.06
+    
+    # Verificar se foi fornecida uma taxa de crescimento manual
+    taxa_crescimento = goal.get('taxa_crescimento')
+    if taxa_crescimento is not None:
+        retorno_anual = float(taxa_crescimento)
+    else:
+        retorno_anual = float(premissas.get('retorno_anual', 0.10)) if isinstance(premissas, dict) else 0.10
+    
     taxa_mensal = (1 + retorno_anual) ** (1/12) - 1
 
     # Meta de capital se objetivo é renda
@@ -3510,6 +3517,8 @@ def compute_goals_projection(goal: dict):
         'horizonte_meses': n,
         'saldo_inicial': round(total_atual, 2),
         'taxa_mensal': taxa_mensal,
+        'taxa_anual_usada': retorno_anual,
+        'taxa_manual': taxa_crescimento is not None,
         'roadmap': roadmap,
     }
 def obter_carteira():
@@ -5092,6 +5101,56 @@ def adicionar_marmita(data, valor, comprou):
                   (data, valor, comprou))
     conn.commit()
     conn.close()
+
+def atualizar_marmita(id_registro, data=None, valor=None, comprou=None):
+    """Atualizar marmita"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                # Primeiro, buscar os dados atuais
+                cursor.execute('SELECT data, valor, comprou FROM marmitas WHERE id = %s', (id_registro,))
+                row = cursor.fetchone()
+                if not row:
+                    return {"success": False, "message": "Marmita não encontrada"}
+                
+                # Usar valores atuais se não fornecidos
+                nova_data = data if data is not None else row[0]
+                novo_valor = valor if valor is not None else row[1]
+                novo_comprou = comprou if comprou is not None else bool(row[2])
+                
+                cursor.execute('UPDATE marmitas SET data = %s, valor = %s, comprou = %s WHERE id = %s', 
+                             (nova_data, novo_valor, novo_comprou, id_registro))
+                conn.commit()
+                return {"success": True}
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "marmitas")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        cursor = conn.cursor()
+        try:
+            # Primeiro, buscar os dados atuais
+            cursor.execute('SELECT data, valor, comprou FROM marmitas WHERE id = ?', (id_registro,))
+            row = cursor.fetchone()
+            if not row:
+                return {"success": False, "message": "Marmita não encontrada"}
+            
+            # Usar valores atuais se não fornecidos
+            nova_data = data if data is not None else row[0]
+            novo_valor = valor if valor is not None else row[1]
+            novo_comprou = comprou if comprou is not None else bool(row[2])
+            
+            cursor.execute('UPDATE marmitas SET data = ?, valor = ?, comprou = ? WHERE id = ?', 
+                         (nova_data, novo_valor, novo_comprou, id_registro))
+            conn.commit()
+            return {"success": True}
+        finally:
+            conn.close()
 
 def remover_marmita(id_registro):
     """Remover marmita"""

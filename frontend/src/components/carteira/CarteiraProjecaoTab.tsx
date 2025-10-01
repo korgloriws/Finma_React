@@ -45,6 +45,8 @@ export default function CarteiraProjecaoTab({
   const [goalTipo, setGoalTipo] = useState<'renda'|'patrimonio'>('renda')
   const [goalAlvo, setGoalAlvo] = useState('')
   const [goalHorizonteMeses, setGoalHorizonteMeses] = useState('')
+  const [usarCrescimentoManual, setUsarCrescimentoManual] = useState(false)
+  const [crescimentoManual, setCrescimentoManual] = useState('')
 
 
   const valorAtualCarteira = useMemo(() => {
@@ -74,11 +76,17 @@ export default function CarteiraProjecaoTab({
     }
   })
   const projectGoalsQuery = useQuery({
-    queryKey: ['goals-projecao', goalTipo, goalAlvo, goalHorizonteMeses],
+    queryKey: ['goals-projecao', goalTipo, goalAlvo, goalHorizonteMeses, usarCrescimentoManual, crescimentoManual],
     queryFn: async () => {
       const payload: any = { tipo: goalTipo }
       if (goalAlvo) payload.alvo = parseFloat(goalAlvo)
       if (goalHorizonteMeses) payload.horizonte_meses = parseInt(goalHorizonteMeses)
+      
+      // Incluir taxa de crescimento se definida manualmente
+      if (usarCrescimentoManual && crescimentoManual) {
+        payload.taxa_crescimento = parseFloat(crescimentoManual) / 100
+      }
+      
       return carteiraService.projectGoals(payload)
     },
     enabled: !!goalTipo && (!!goalAlvo || !!goal),
@@ -191,7 +199,12 @@ export default function CarteiraProjecaoTab({
   const projecao = useMemo(() => {
     const valorInicialNumRaw = parseFloat(valorInicial)
     const valorInicialNum = Number.isFinite(valorInicialNumRaw) && valorInicialNumRaw > 0 ? valorInicialNumRaw : valorAtualCarteira
-    const taxaMensalRaw = crescimentoMedioAnual / 12
+    
+    // Usar crescimento manual se ativado, senão usar o automático
+    const crescimentoAnualUsado = usarCrescimentoManual && crescimentoManual 
+      ? parseFloat(crescimentoManual) / 100 
+      : crescimentoMedioAnual
+    const taxaMensalRaw = crescimentoAnualUsado / 12
     const taxaMensal = Number.isFinite(taxaMensalRaw) ? taxaMensalRaw : 0
     const dividendosMensais = dividendosMediosMensais
     const anosInt = Math.max(1, parseInt(String(anosProjecao)) || 1)
@@ -236,7 +249,7 @@ export default function CarteiraProjecaoTab({
     }
 
     return dados
-  }, [valorInicial, valorAtualCarteira, crescimentoMedioAnual, dividendosMediosMensais, anosProjecao, considerarDividendos, considerarAportes, aporteMensal])
+  }, [valorInicial, valorAtualCarteira, crescimentoMedioAnual, dividendosMediosMensais, anosProjecao, considerarDividendos, considerarAportes, aporteMensal, usarCrescimentoManual, crescimentoManual])
 
   const anosIntOut = Math.max(1, parseInt(String(anosProjecao)) || 1)
   const valorFinal = projecao[projecao.length - 1]?.valor || 0
@@ -346,40 +359,98 @@ export default function CarteiraProjecaoTab({
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-card border border-border rounded-lg p-6"
+        className="bg-gradient-to-br from-primary/5 to-secondary/5 border-2 border-primary/20 rounded-xl p-6 shadow-lg"
       >
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Target className="w-5 h-5 text-emerald-600" /> Metas e Projeções
+        <h3 className="text-xl font-bold mb-6 flex items-center gap-3">
+          <motion.div
+            animate={{ rotate: [0, 10, -10, 0] }}
+            transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+          >
+            <Target className="w-6 h-6 text-primary" />
+          </motion.div>
+          <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            Metas e Projeções
+          </span>
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div>
             <label className="block text-sm font-medium mb-2">Tipo da Meta</label>
-            <select title="Tipo da Meta" aria-label="Tipo da Meta" value={goalTipo} onChange={(e)=>setGoalTipo(e.target.value as any)} className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground">
+            <select title="Tipo da Meta" aria-label="Tipo da Meta" value={goalTipo} onChange={(e)=>setGoalTipo(e.target.value as any)} className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:ring-2 focus:ring-primary">
               <option value="renda">Renda mensal alvo</option>
               <option value="patrimonio">Patrimônio alvo</option>
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium mb-2">Alvo ({goalTipo==='renda' ? 'R$/mês' : 'R$'})</label>
-            <input type="number" value={goalAlvo} onChange={(e)=>setGoalAlvo(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground" placeholder={goalTipo==='renda' ? 'Ex.: 5000' : 'Ex.: 1000000'} />
+            <input type="number" value={goalAlvo} onChange={(e)=>setGoalAlvo(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:ring-2 focus:ring-primary" placeholder={goalTipo==='renda' ? 'Ex.: 5000' : 'Ex.: 1000000'} />
           </div>
           <div>
             <label className="block text-sm font-medium mb-2">Horizonte (meses)</label>
-            <input type="number" value={goalHorizonteMeses} onChange={(e)=>setGoalHorizonteMeses(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground" placeholder="Ex.: 120" />
+            <input type="number" value={goalHorizonteMeses} onChange={(e)=>setGoalHorizonteMeses(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:ring-2 focus:ring-primary" placeholder="Ex.: 120" />
           </div>
         </div>
-        <div className="mt-4 flex items-center gap-2">
+        
+        <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <button
             onClick={()=> saveGoalsMutation.mutate({ tipo: goalTipo, alvo: parseFloat(goalAlvo||'0'), horizonte_meses: goalHorizonteMeses ? parseInt(goalHorizonteMeses) : undefined })}
-            className="px-3 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90"
+            className="px-6 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transform hover:scale-105 transition-all duration-200 shadow-lg"
             disabled={saveGoalsMutation.isPending}
           >
             {saveGoalsMutation.isPending ? 'Salvando...' : 'Salvar Meta'}
           </button>
+          
           {projectGoalsQuery.data && (
-            <div className="text-sm text-muted-foreground">
-              Capital alvo: <span className="font-semibold">{formatCurrency(projectGoalsQuery.data.capital_alvo)}</span> • Aporte sugerido: <span className="font-semibold">{formatCurrency(projectGoalsQuery.data.aporte_sugerido)}</span> / mês
-            </div>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-muted/50 border border-primary/20 rounded-lg p-4 flex-1"
+            >
+              <div className="text-sm text-muted-foreground mb-2">
+                <span className="font-medium">Resultado da Projeção:</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-primary" />
+                  <span className="text-sm">Capital alvo:</span>
+                  <span className="font-bold text-primary">{formatCurrency(projectGoalsQuery.data.capital_alvo)}</span>
+                </div>
+                <motion.div 
+                  className="flex items-center gap-2"
+                  animate={{ 
+                    scale: [1, 1.05, 1],
+                    boxShadow: [
+                      "0 0 0 0 hsl(var(--primary) / 0.4)",
+                      "0 0 0 8px hsl(var(--primary) / 0.1)",
+                      "0 0 0 0 hsl(var(--primary) / 0.4)"
+                    ]
+                  }}
+                  transition={{ 
+                    scale: { duration: 2, repeat: Infinity, repeatDelay: 4 },
+                    boxShadow: { duration: 2, repeat: Infinity, repeatDelay: 4 }
+                  }}
+                >
+                  <TrendingUp className="w-4 h-4 text-secondary" />
+                  <span className="text-sm font-medium">Aporte sugerido:</span>
+                  <span className="font-bold text-lg text-primary bg-primary/10 px-2 py-1 rounded">
+                    {formatCurrency(projectGoalsQuery.data.aporte_sugerido)} / mês
+                  </span>
+                </motion.div>
+              </div>
+              {(projectGoalsQuery.data as any).taxa_anual_usada && (
+                <div className="mt-3 pt-3 border-t border-primary/20">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Taxa de crescimento usada:</span>
+                    <span className={`font-medium ${(projectGoalsQuery.data as any).taxa_manual ? 'text-primary' : 'text-green-600'}`}>
+                      {formatPercentage((projectGoalsQuery.data as any).taxa_anual_usada * 100)}
+                      {(projectGoalsQuery.data as any).taxa_manual && (
+                        <span className="ml-1">(manual)</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </motion.div>
           )}
         </div>
       </motion.div>
@@ -426,6 +497,38 @@ export default function CarteiraProjecaoTab({
                 className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 title="Período de projeção em anos"
               />
+            </div>
+
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <input
+                  type="checkbox"
+                  id="usarCrescimentoManual"
+                  checked={usarCrescimentoManual}
+                  onChange={(e) => setUsarCrescimentoManual(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <label htmlFor="usarCrescimentoManual" className="text-sm font-medium">
+                  Definir crescimento manual
+                </label>
+              </div>
+              {usarCrescimentoManual && (
+                <div className="space-y-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={crescimentoManual}
+                    onChange={(e) => setCrescimentoManual(e.target.value)}
+                    placeholder={`Ex.: ${(crescimentoMedioAnual * 100).toFixed(1)}`}
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    title="Taxa de crescimento anual em porcentagem"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Taxa automática: {formatPercentage(crescimentoMedioAnual * 100)} • 
+                    Digite a taxa desejada (ex: 12.5 para 12,5% ao ano)
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
@@ -485,6 +588,18 @@ export default function CarteiraProjecaoTab({
               <span className="text-muted-foreground">Crescimento médio anual:</span>
               <span className="font-medium text-green-600">
                 {formatPercentage(crescimentoMedioAnual * 100)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Taxa usada na projeção:</span>
+              <span className={`font-medium ${usarCrescimentoManual ? 'text-primary' : 'text-green-600'}`}>
+                {usarCrescimentoManual && crescimentoManual 
+                  ? formatPercentage(parseFloat(crescimentoManual) || 0)
+                  : formatPercentage(crescimentoMedioAnual * 100)
+                }
+                {usarCrescimentoManual && crescimentoManual && (
+                  <span className="text-xs text-muted-foreground ml-1">(manual)</span>
+                )}
               </span>
             </div>
             <div className="flex justify-between">

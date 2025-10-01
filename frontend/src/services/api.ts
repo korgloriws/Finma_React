@@ -382,6 +382,15 @@ export const marmitasService = {
     return response.data
   },
 
+  atualizarMarmita: async (id: number, data: string, valor: number, comprou: boolean): Promise<any> => {
+    const response = await api.put(`/marmitas/${id}`, {
+      data,
+      valor,
+      comprou
+    })
+    return response.data
+  },
+
   removerMarmita: async (id: number): Promise<any> => {
     const response = await api.delete(`/marmitas/${id}`)
     return response.data
@@ -521,11 +530,12 @@ export const controleService = {
   },
 
 
-  getEvolucaoFinanceira: async (mes?: string, ano?: string, pessoa?: string): Promise<EvolucaoFinanceira[]> => {
+  getEvolucaoFinanceira: async (mes?: string, ano?: string, pessoa?: string, periodo?: string): Promise<{evolucao: EvolucaoFinanceira[], comparacao: any}> => {
     const params = new URLSearchParams()
     if (mes) params.append('mes', mes)
     if (ano) params.append('ano', ano)
     if (pessoa) params.append('pessoa', pessoa)
+    if (periodo) params.append('periodo', periodo)
     
     const response = await api.get(`/controle/evolucao-financeira?${params.toString()}`)
     return response.data

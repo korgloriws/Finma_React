@@ -17,7 +17,7 @@ from models import (
     adicionar_outro_gasto, carregar_outros_mes_ano, atualizar_outro_gasto, remover_outro_gasto, 
     calcular_saldo_mes_ano,
 
-    consultar_marmitas, adicionar_marmita, remover_marmita, gastos_mensais,
+    consultar_marmitas, adicionar_marmita, atualizar_marmita, remover_marmita, gastos_mensais,
 
     criar_tabela_usuarios, cadastrar_usuario, buscar_usuario_por_username, verificar_senha,
     set_usuario_atual, get_usuario_atual, inicializar_bancos_usuario, criar_sessao, invalidar_sessao,
@@ -2091,9 +2091,31 @@ def api_adicionar_marmita():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@server.route("/api/marmitas/<int:id>", methods=["PUT"])
+def api_atualizar_marmita(id):
+    
+    try:
+        data = request.get_json()
+        data_marmita = data.get('data')
+        valor = data.get('valor')
+        comprou = data.get('comprou')
+        
+        resultado = atualizar_marmita(id, data_marmita, valor, comprou)
+        if resultado.get('success'):
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
+            return jsonify({"success": True, "message": "Marmita atualizada com sucesso"}), 200
+        else:
+            return jsonify({"error": resultado.get('message', 'Erro ao atualizar marmita')}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @server.route("/api/marmitas/<int:id>", methods=["DELETE"])
 def api_remover_marmita(id):
-
+    
     try:
         remover_marmita(id)
         try:
@@ -2151,7 +2173,7 @@ def api_receitas():
                     _upgrade_controle_schema()
                 except Exception:
                     pass
-                salvar_receita(
+                res = salvar_receita(
                     nome, valor,
                     data=data.get('data'),
                     categoria=data.get('categoria'),
@@ -2162,6 +2184,8 @@ def api_receitas():
                     grupo_parcela=data.get('grupo_parcela'),
                     observacao=data.get('observacao')
                 )
+                if isinstance(res, dict) and not res.get('success', True):
+                    return jsonify(res), 401
                 try:
                     if cache:
                         cache.clear()
@@ -2236,7 +2260,7 @@ def api_cartoes():
                 _upgrade_controle_schema()
             except Exception:
                 pass
-            adicionar_cartao(
+            res = adicionar_cartao(
                 data.get('nome'),
                 data.get('valor'),
                 data.get('pago'),
@@ -2249,6 +2273,8 @@ def api_cartoes():
                 grupo_parcela=data.get('grupo_parcela'),
                 observacao=data.get('observacao')
             )
+            if isinstance(res, dict) and not res.get('success', True):
+                return jsonify(res), 401
             try:
                 if cache:
                     cache.clear()
@@ -2322,7 +2348,7 @@ def api_outros():
                 _upgrade_controle_schema()
             except Exception:
                 pass
-            adicionar_outro_gasto(
+            res = adicionar_outro_gasto(
                 data.get('nome'), data.get('valor'),
                 data=data.get('data'),
                 categoria=data.get('categoria'),
@@ -2333,6 +2359,8 @@ def api_outros():
                 grupo_parcela=data.get('grupo_parcela'),
                 observacao=data.get('observacao')
             )
+            if isinstance(res, dict) and not res.get('success', True):
+                return jsonify(res), 401
             try:
                 if cache:
                     cache.clear()
@@ -2433,20 +2461,56 @@ def api_evolucao_financeira():
     try:
         mes = request.args.get('mes', type=str)
         ano = request.args.get('ano', type=str)
+        periodo = request.args.get('periodo', 'mensal')  # mensal, trimestral, semestral, anual
         
+        # Calcular período baseado no filtro
+        if periodo == 'mensal':
+            data_inicio = f"{ano}-{mes.zfill(2)}-01"
+            data_fim = pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
+            dias = pd.date_range(start=data_inicio, end=data_fim)
+            agrupamento = 'D'  # Diário
+        elif periodo == 'trimestral':
+            # Últimos 3 meses
+            data_fim = pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
+            data_inicio = data_fim - pd.DateOffset(months=2)
+            dias = pd.date_range(start=data_inicio, end=data_fim, freq='MS')  # Primeiro dia de cada mês
+            agrupamento = 'MS'  # Mensal
+        elif periodo == 'semestral':
+            # Últimos 6 meses
+            data_fim = pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
+            data_inicio = data_fim - pd.DateOffset(months=5)
+            dias = pd.date_range(start=data_inicio, end=data_fim, freq='MS')
+            agrupamento = 'MS'
+        elif periodo == 'anual':
+            # Últimos 12 meses
+            data_fim = pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
+            data_inicio = data_fim - pd.DateOffset(months=11)
+            dias = pd.date_range(start=data_inicio, end=data_fim, freq='MS')
+            agrupamento = 'MS'
+        else:
+            # Default para mensal
+            data_inicio = f"{ano}-{mes.zfill(2)}-01"
+            data_fim = pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
+            dias = pd.date_range(start=data_inicio, end=data_fim)
+            agrupamento = 'D'
         
+        # Buscar dados de receitas e despesas para o período
         df_receita = carregar_receitas_mes_ano(mes, ano)
         df_cartao = pd.DataFrame(carregar_cartoes_mes_ano(mes, ano))
         df_outros = pd.DataFrame(carregar_outros_mes_ano(mes, ano))
         
-    
+        # Processar receitas
         if not df_receita.empty:
             df_receita["data"] = pd.to_datetime(df_receita["data"])
-            df_receita_grouped = df_receita.groupby("data")["valor"].sum().reset_index(name="receitas")
+            if agrupamento == 'D':
+                df_receita_grouped = df_receita.groupby("data")["valor"].sum().reset_index(name="receitas")
+            else:
+                df_receita_grouped = df_receita.groupby(df_receita["data"].dt.to_period(agrupamento))["valor"].sum().reset_index()
+                df_receita_grouped["data"] = df_receita_grouped["data"].dt.start_time
         else:
             df_receita_grouped = pd.DataFrame(columns=["data", "receitas"])
         
-      
+        # Processar despesas
         df_cartao["data"] = pd.to_datetime(df_cartao["data"]) if not df_cartao.empty else pd.Series(dtype='datetime64[ns]')
         df_outros["data"] = pd.to_datetime(df_outros["data"]) if not df_outros.empty else pd.Series(dtype='datetime64[ns]')
         df_cartao_ = df_cartao[["data", "valor"]] if not df_cartao.empty else pd.DataFrame(columns=["data", "valor"])
@@ -2456,23 +2520,63 @@ def api_evolucao_financeira():
         if df_despesas.empty:
             df_despesas_grouped = pd.DataFrame({"data": [], "despesas": []})
         else:
-            df_despesas_grouped = df_despesas.groupby("data")["valor"].sum().reset_index(name="despesas")
+            if agrupamento == 'D':
+                df_despesas_grouped = df_despesas.groupby("data")["valor"].sum().reset_index(name="despesas")
+            else:
+                df_despesas_grouped = df_despesas.groupby(df_despesas["data"].dt.to_period(agrupamento))["valor"].sum().reset_index()
+                df_despesas_grouped["data"] = df_despesas_grouped["data"].dt.start_time
         
-
-        dias = pd.date_range(
-            start=f"{ano}-{mes.zfill(2)}-01", 
-            end=pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
-        )
+        # Criar DataFrame base com todos os dias/períodos
         df_base = pd.DataFrame({"data": dias})
         
- 
+        # Merge com receitas e despesas
         df_merged = pd.merge(df_base, df_receita_grouped, on="data", how="left").merge(df_despesas_grouped, on="data", how="left")
         df_merged["receitas"] = df_merged["receitas"].fillna(0)
         df_merged["despesas"] = df_merged["despesas"].fillna(0)
         df_merged["saldo_dia"] = df_merged["receitas"] - df_merged["despesas"]
         df_merged["saldo_acumulado"] = df_merged["saldo_dia"].cumsum()
         
+        # Calcular comparações
+        if len(df_merged) > 1:
+            # Comparação com período anterior
+            receitas_atual = df_merged["receitas"].sum()
+            despesas_atual = df_merged["despesas"].sum()
+            saldo_atual = receitas_atual - despesas_atual
+            
+            # Para períodos mensais, comparar com mês anterior
+            if periodo == 'mensal':
+                mes_anterior = int(mes) - 1
+                ano_anterior = int(ano)
+                if mes_anterior <= 0:
+                    mes_anterior = 12
+                    ano_anterior -= 1
+                
+                df_receita_ant = carregar_receitas_mes_ano(str(mes_anterior).zfill(2), str(ano_anterior))
+                df_cartao_ant = pd.DataFrame(carregar_cartoes_mes_ano(str(mes_anterior).zfill(2), str(ano_anterior)))
+                df_outros_ant = pd.DataFrame(carregar_outros_mes_ano(str(mes_anterior).zfill(2), str(ano_anterior)))
+                
+                receitas_anterior = df_receita_ant["valor"].sum() if not df_receita_ant.empty else 0
+                despesas_anterior = (df_cartao_ant["valor"].sum() if not df_cartao_ant.empty else 0) + (df_outros_ant["valor"].sum() if not df_outros_ant.empty else 0)
+                saldo_anterior = receitas_anterior - despesas_anterior
+            else:
+                # Para outros períodos, usar primeira metade vs segunda metade
+                meio = len(df_merged) // 2
+                receitas_anterior = df_merged.iloc[:meio]["receitas"].sum()
+                despesas_anterior = df_merged.iloc[:meio]["despesas"].sum()
+                saldo_anterior = receitas_anterior - despesas_anterior
+                
+                receitas_atual = df_merged.iloc[meio:]["receitas"].sum()
+                despesas_atual = df_merged.iloc[meio:]["despesas"].sum()
+                saldo_atual = receitas_atual - despesas_atual
+            
+            # Calcular percentuais de variação
+            variacao_receitas = ((receitas_atual - receitas_anterior) / receitas_anterior * 100) if receitas_anterior > 0 else 0
+            variacao_despesas = ((despesas_atual - despesas_anterior) / despesas_anterior * 100) if despesas_anterior > 0 else 0
+            variacao_saldo = ((saldo_atual - saldo_anterior) / abs(saldo_anterior) * 100) if saldo_anterior != 0 else 0
+        else:
+            variacao_receitas = variacao_despesas = variacao_saldo = 0
 
+        # Preparar dados de resposta
         evolucao = []
         for _, row in df_merged.iterrows():
             evolucao.append({
@@ -2483,7 +2587,21 @@ def api_evolucao_financeira():
                 'saldo_acumulado': float(row['saldo_acumulado'])
             })
         
-        return jsonify(evolucao)
+        # Adicionar métricas de comparação
+        comparacao = {
+            'variacao_receitas': round(variacao_receitas, 2),
+            'variacao_despesas': round(variacao_despesas, 2),
+            'variacao_saldo': round(variacao_saldo, 2),
+            'receitas_atual': float(receitas_atual),
+            'despesas_atual': float(despesas_atual),
+            'saldo_atual': float(saldo_atual),
+            'periodo': periodo
+        }
+        
+        return jsonify({
+            'evolucao': evolucao,
+            'comparacao': comparacao
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

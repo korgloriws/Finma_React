@@ -25,7 +25,7 @@ export default function JurosCompostosPage() {
     let saldoCom = vi
 
     for (let ano = 1; ano <= n; ano++) {
-      // depósitos ao longo do ano
+     
       saldoSem += am * 12
 
 

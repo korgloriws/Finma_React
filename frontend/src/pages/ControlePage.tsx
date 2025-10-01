@@ -37,6 +37,13 @@ export default function ControlePage() {
   const [inputValor, setInputValor] = useState('')
   const [inputComprou, setInputComprou] = useState(true)
   const [periodoGrafico, setPeriodoGrafico] = useState('6m')
+  const [periodoEvolucao, setPeriodoEvolucao] = useState<'mensal' | 'trimestral' | 'semestral' | 'anual'>('mensal')
+
+  // Estados para edição de marmitas
+  const [editingMarmitaId, setEditingMarmitaId] = useState<number | null>(null)
+  const [editMarmitaData, setEditMarmitaData] = useState('')
+  const [editMarmitaValor, setEditMarmitaValor] = useState('')
+  const [editMarmitaComprou, setEditMarmitaComprou] = useState(true)
 
   useEffect(() => {
     const handleError = () => {
@@ -66,6 +73,7 @@ export default function ControlePage() {
   const [lanGerarParcelas, setLanGerarParcelas] = useState(false)
   const [lanJurosMensal, setLanJurosMensal] = useState('')
   const [lanObservacao, setLanObservacao] = useState('')
+  const [lanPrimeiraParcelaMesOffset, setLanPrimeiraParcelaMesOffset] = useState('0')
   const [lanForma, setLanForma] = useState<'outro' | 'cartao'>('outro')
   const [lanPago, setLanPago] = useState('Não')
   const CATEGORIAS_PRESETS = [
@@ -167,9 +175,9 @@ export default function ControlePage() {
     refetchOnWindowFocus: false,
   })
 
-  const { data: evolucaoFinanceira } = useQuery<EvolucaoFinanceira[]>({
-    queryKey: ['evolucao-financeira', filtroMes, filtroAno],
-    queryFn: () => controleService.getEvolucaoFinanceira(filtroMes, filtroAno),
+  const { data: evolucaoFinanceiraData } = useQuery<{evolucao: EvolucaoFinanceira[], comparacao: any}>({
+    queryKey: ['evolucao-financeira', filtroMes, filtroAno, periodoEvolucao],
+    queryFn: () => controleService.getEvolucaoFinanceira(filtroMes, filtroAno, undefined, periodoEvolucao),
     retry: 1,
     refetchOnWindowFocus: false,
   })
@@ -314,6 +322,15 @@ export default function ControlePage() {
     },
   })
 
+  const atualizarMarmitaMutation = useMutation({
+    mutationFn: ({ id, data, valor, comprou }: { id: number; data: string; valor: number; comprou: boolean }) =>
+      marmitasService.atualizarMarmita(id, data, valor, comprou),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marmitas'] })
+      queryClient.invalidateQueries({ queryKey: ['gastos-mensais'] })
+    },
+  })
+
   const removerMarmitaMutation = useMutation({
     mutationFn: marmitasService.removerMarmita,
     onSuccess: () => {
@@ -324,6 +341,12 @@ export default function ControlePage() {
 
   // Handlers
   const handleAdicionarLancamento = useCallback(() => {
+    const formatDateLocal = (date: Date) => {
+      const y = date.getFullYear()
+      const m = String(date.getMonth() + 1).padStart(2, '0')
+      const d = String(date.getDate()).padStart(2, '0')
+      return `${y}-${m}-${d}`
+    }
     if (!lanNome || !lanValor) return
     const valor = parseFloat(lanValor.replace(',', '.'))
     if (!isFinite(valor) || valor <= 0) return
@@ -344,13 +367,14 @@ export default function ControlePage() {
       if (lanParcelado && lanGerarParcelas && parcelas > 1) {
         const grupo = Math.random().toString(36).slice(2, 10)
         const baseDate = lanData ? new Date(lanData) : new Date()
+        const inicioOffset = parseInt(lanPrimeiraParcelaMesOffset || '0')
         for (let i = 1; i <= parcelas; i++) {
           const d = new Date(baseDate)
-          d.setMonth(d.getMonth() + (i - 1))
+          d.setMonth(d.getMonth() + inicioOffset + (i - 1))
     adicionarReceitaMutation.mutate({
             nome: lanNome,
             valor: parcelaValor,
-            opts: { ...optsBase, data: d.toISOString().slice(0, 10), parcelas_total: parcelas, parcela_atual: i, grupo_parcela: grupo }
+            opts: { ...optsBase, data: formatDateLocal(d), parcelas_total: parcelas, parcela_atual: i, grupo_parcela: grupo }
           })
         }
       } else {
@@ -364,14 +388,15 @@ export default function ControlePage() {
       if (lanParcelado && lanGerarParcelas && parcelas > 1) {
         const grupo = Math.random().toString(36).slice(2, 10)
         const baseDate = lanData ? new Date(lanData) : new Date()
+        const inicioOffset = parseInt(lanPrimeiraParcelaMesOffset || '0')
         for (let i = 1; i <= parcelas; i++) {
           const d = new Date(baseDate)
-          d.setMonth(d.getMonth() + (i - 1))
+          d.setMonth(d.getMonth() + inicioOffset + (i - 1))
           adicionarCartaoMutation.mutate({
             nome: lanNome,
             valor: parcelaValor,
             pago: lanPago,
-            opts: { ...optsBase, data: d.toISOString().slice(0, 10), parcelas_total: parcelas, parcela_atual: i, grupo_parcela: grupo }
+            opts: { ...optsBase, data: formatDateLocal(d), parcelas_total: parcelas, parcela_atual: i, grupo_parcela: grupo }
           })
         }
       } else {
@@ -381,42 +406,42 @@ export default function ControlePage() {
       if (lanParcelado && lanGerarParcelas && parcelas > 1) {
         const grupo = Math.random().toString(36).slice(2, 10)
         const baseDate = lanData ? new Date(lanData) : new Date()
+        const inicioOffset = parseInt(lanPrimeiraParcelaMesOffset || '0')
         for (let i = 1; i <= parcelas; i++) {
           const d = new Date(baseDate)
-          d.setMonth(d.getMonth() + (i - 1))
+          d.setMonth(d.getMonth() + inicioOffset + (i - 1))
           adicionarOutroMutation.mutate({
             nome: lanNome,
             valor: parcelaValor,
-            opts: { ...optsBase, data: d.toISOString().slice(0, 10), parcelas_total: parcelas, parcela_atual: i, grupo_parcela: grupo }
+            opts: { ...optsBase, data: formatDateLocal(d), parcelas_total: parcelas, parcela_atual: i, grupo_parcela: grupo }
           })
         }
       } else {
         adicionarOutroMutation.mutate({ nome: lanNome, valor: parcelaValor, opts: { ...optsBase, parcelas_total: lanParcelado ? parcelas : undefined, parcela_atual: lanParcelado ? 1 : undefined } })
       }
     }
-  }, [lanNome, lanValor, lanTipo, lanData, lanCategoria, lanNatureza, lanRecorrencia, lanObservacao, lanParcelado, lanParcelas, lanGerarParcelas, lanForma, lanPago, lanJurosMensal, adicionarReceitaMutation, adicionarCartaoMutation, adicionarOutroMutation])
+  }, [lanNome, lanValor, lanTipo, lanData, lanCategoria, lanNatureza, lanRecorrencia, lanObservacao, lanParcelado, lanParcelas, lanGerarParcelas, lanForma, lanPago, lanJurosMensal, lanPrimeiraParcelaMesOffset, adicionarReceitaMutation, adicionarCartaoMutation, adicionarOutroMutation])
 
 
   const handleRemoverReceita = useCallback((id: number) => {
     removerReceitaMutation.mutate(id)
   }, [removerReceitaMutation])
 
-  // REMOVIDO: handleAdicionarCartao (usar handleAdicionarLancamento)
+
 
 
   const handleRemoverCartao = useCallback((id: number) => {
       removerCartaoMutation.mutate(id)
   }, [removerCartaoMutation])
 
-  // REMOVIDO: handleAdicionarOutro (usar handleAdicionarLancamento)
+
 
 
   const handleRemoverOutro = useCallback((id: number) => {
       removerOutroMutation.mutate(id)
   }, [removerOutroMutation])
 
-  // Handlers para atualização
-  // removidos handlers diretos; edição usa salvarEdicao* com opts
+
 
 
   const iniciarEdicaoReceita = useCallback((receita: Receita) => {
@@ -587,16 +612,50 @@ export default function ControlePage() {
     }
   }, [removerMarmitaMutation])
 
+  const handleIniciarEdicaoMarmita = useCallback((marmita: Marmita) => {
+    setEditingMarmitaId(marmita.id)
+    setEditMarmitaData(marmita.data)
+    setEditMarmitaValor(marmita.valor.toString())
+    setEditMarmitaComprou(marmita.comprou)
+  }, [])
+
+  const handleCancelarEdicaoMarmita = useCallback(() => {
+    setEditingMarmitaId(null)
+    setEditMarmitaData('')
+    setEditMarmitaValor('')
+    setEditMarmitaComprou(true)
+  }, [])
+
+  const handleSalvarEdicaoMarmita = useCallback(() => {
+    if (!editingMarmitaId || !editMarmitaData || !editMarmitaValor) return
+    
+    const valor = parseFloat(editMarmitaValor.replace(',', '.'))
+    if (!isFinite(valor) || valor <= 0) return
+
+    atualizarMarmitaMutation.mutate({
+      id: editingMarmitaId,
+      data: editMarmitaData,
+      valor,
+      comprou: editMarmitaComprou
+    })
+    
+    handleCancelarEdicaoMarmita()
+  }, [editingMarmitaId, editMarmitaData, editMarmitaValor, editMarmitaComprou, atualizarMarmitaMutation])
+
 
   const dadosGraficoEvolucao = useMemo(() => {
-    if (!evolucaoFinanceira) return []
-    return evolucaoFinanceira.map(item => ({
+    if (!evolucaoFinanceiraData?.evolucao) return []
+    return evolucaoFinanceiraData.evolucao.map(item => ({
       data: new Date(item.data).toLocaleDateString('pt-BR'),
       receitas: item.receitas,
       despesas: item.despesas,
       saldo: item.saldo_dia
     }))
-  }, [evolucaoFinanceira])
+  }, [evolucaoFinanceiraData])
+
+  const comparacaoEvolucao = useMemo(() => {
+    return evolucaoFinanceiraData?.comparacao || null
+  }, [evolucaoFinanceiraData])
 
   const dadosGraficoReceitasDespesas = useMemo(() => {
     if (!receitasDespesas) return []
@@ -608,8 +667,9 @@ export default function ControlePage() {
 
   // Despesas unificadas (cartões + outros) com metadados
   const despesasUnificadas = useMemo(() => {
-    const parse = (arr: any[] | undefined, fonte: 'cartao' | 'outro') =>
-      (arr || []).map((item: any) => ({
+    const toArray = (v: any): any[] => (Array.isArray(v) ? v : [])
+    const parse = (arr: any, fonte: 'cartao' | 'outro') =>
+      toArray(arr).map((item: any) => ({
         id: item.id,
         nome: item.nome,
         valor: Number(item.valor) || 0,
@@ -982,7 +1042,97 @@ export default function ControlePage() {
           animate={{ opacity: 1, x: 0 }}
           className="bg-card border border-border rounded-xl p-6"
         >
-          <h3 className="text-lg font-semibold text-foreground mb-4">Evolução Financeira</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+            <h3 className="text-lg font-semibold text-foreground">Evolução Financeira</h3>
+            
+            {/* Filtros de Período */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-muted-foreground">Período:</label>
+              <select
+                value={periodoEvolucao}
+                onChange={(e) => setPeriodoEvolucao(e.target.value as any)}
+                className="px-3 py-1 text-sm bg-background border border-border rounded-lg"
+                aria-label="Selecionar período de evolução financeira"
+              >
+                <option value="mensal">Mensal</option>
+                <option value="trimestral">Trimestral</option>
+                <option value="semestral">Semestral</option>
+                <option value="anual">Anual</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Indicadores de Comparação */}
+          {comparacaoEvolucao && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div className="bg-muted/30 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Receitas</span>
+                  <div className="flex items-center gap-1">
+                    {comparacaoEvolucao.variacao_receitas > 0 ? (
+                      <ArrowUpRight className="w-4 h-4 text-green-500" />
+                    ) : comparacaoEvolucao.variacao_receitas < 0 ? (
+                      <ArrowDownRight className="w-4 h-4 text-red-500" />
+                    ) : null}
+                    <span className={`text-sm font-medium ${
+                      comparacaoEvolucao.variacao_receitas > 0 ? 'text-green-500' : 
+                      comparacaoEvolucao.variacao_receitas < 0 ? 'text-red-500' : 'text-muted-foreground'
+                    }`}>
+                      {comparacaoEvolucao.variacao_receitas > 0 ? '+' : ''}{comparacaoEvolucao.variacao_receitas}%
+                    </span>
+                  </div>
+                </div>
+                <div className="text-lg font-semibold">
+                  {ocultarValores ? '***' : formatCurrency(comparacaoEvolucao.receitas_atual)}
+                </div>
+              </div>
+
+              <div className="bg-muted/30 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Despesas</span>
+                  <div className="flex items-center gap-1">
+                    {comparacaoEvolucao.variacao_despesas > 0 ? (
+                      <ArrowUpRight className="w-4 h-4 text-red-500" />
+                    ) : comparacaoEvolucao.variacao_despesas < 0 ? (
+                      <ArrowDownRight className="w-4 h-4 text-green-500" />
+                    ) : null}
+                    <span className={`text-sm font-medium ${
+                      comparacaoEvolucao.variacao_despesas > 0 ? 'text-red-500' : 
+                      comparacaoEvolucao.variacao_despesas < 0 ? 'text-green-500' : 'text-muted-foreground'
+                    }`}>
+                      {comparacaoEvolucao.variacao_despesas > 0 ? '+' : ''}{comparacaoEvolucao.variacao_despesas}%
+                    </span>
+                  </div>
+                </div>
+                <div className="text-lg font-semibold">
+                  {ocultarValores ? '***' : formatCurrency(comparacaoEvolucao.despesas_atual)}
+                </div>
+              </div>
+
+              <div className="bg-muted/30 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Saldo</span>
+                  <div className="flex items-center gap-1">
+                    {comparacaoEvolucao.variacao_saldo > 0 ? (
+                      <ArrowUpRight className="w-4 h-4 text-green-500" />
+                    ) : comparacaoEvolucao.variacao_saldo < 0 ? (
+                      <ArrowDownRight className="w-4 h-4 text-red-500" />
+                    ) : null}
+                    <span className={`text-sm font-medium ${
+                      comparacaoEvolucao.variacao_saldo > 0 ? 'text-green-500' : 
+                      comparacaoEvolucao.variacao_saldo < 0 ? 'text-red-500' : 'text-muted-foreground'
+                    }`}>
+                      {comparacaoEvolucao.variacao_saldo > 0 ? '+' : ''}{comparacaoEvolucao.variacao_saldo}%
+                    </span>
+                  </div>
+                </div>
+                <div className="text-lg font-semibold">
+                  {ocultarValores ? '***' : formatCurrency(comparacaoEvolucao.saldo_atual)}
+                </div>
+              </div>
+            </div>
+          )}
+
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={dadosGraficoEvolucao}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -1144,6 +1294,15 @@ export default function ControlePage() {
                 <div>
                   <label className="block text-sm font-medium mb-1">Parcelas</label>
                   <input type="number" min="1" value={lanParcelas} onChange={(e) => setLanParcelas(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg" aria-label="Quantidade de parcelas" title="Quantidade de parcelas" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Primeira parcela</label>
+                  <select value={lanPrimeiraParcelaMesOffset} onChange={(e) => setLanPrimeiraParcelaMesOffset(e.target.value)} className="w-full px-3 py-2 bg-background border border-border rounded-lg" aria-label="Mês da primeira parcela" title="Mês da primeira parcela">
+                    <option value="0">Mês atual</option>
+                    <option value="1">Próximo mês</option>
+                    <option value="2">Daqui a 2 meses</option>
+                    <option value="3">Daqui a 3 meses</option>
+                  </select>
                 </div>
                 {lanTipo === 'despesa' && (
                   <div>
@@ -1805,28 +1964,94 @@ export default function ControlePage() {
                       {marmitas.map((marmita) => (
                         <tr key={marmita.id} className="hover:bg-muted/40 transition-colors">
                     <td className="px-4 py-3">
-                            {marmita.data}
+                            {editingMarmitaId === marmita.id ? (
+                              <input
+                                type="date"
+                                value={editMarmitaData}
+                                onChange={(e) => setEditMarmitaData(e.target.value)}
+                                className="px-2 py-1 text-sm border border-border rounded bg-background"
+                                aria-label="Data da marmita"
+                              />
+                            ) : (
+                              marmita.data
+                            )}
                     </td>
                           <td className="px-4 py-3 font-semibold">
-                            {formatCurrency(marmita.valor)}
+                            {editingMarmitaId === marmita.id ? (
+                              <input
+                                type="number"
+                                value={editMarmitaValor}
+                                onChange={(e) => setEditMarmitaValor(e.target.value.replace(',', '.'))}
+                                className="px-2 py-1 text-sm border border-border rounded bg-background w-24"
+                                step="0.01"
+                                min="0"
+                                aria-label="Valor da marmita"
+                                placeholder="0.00"
+                              />
+                            ) : (
+                              formatCurrency(marmita.valor)
+                            )}
                     </td>
                     <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              marmita.comprou 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {marmita.comprou ? 'Sim' : 'Não'}
-                            </span>
+                            {editingMarmitaId === marmita.id ? (
+                              <select
+                                value={editMarmitaComprou ? '1' : '0'}
+                                onChange={(e) => setEditMarmitaComprou(e.target.value === '1')}
+                                className="px-2 py-1 text-sm border border-border rounded bg-background"
+                                aria-label="Comprou a marmita"
+                              >
+                                <option value="1">Sim</option>
+                                <option value="0">Não</option>
+                              </select>
+                            ) : (
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                marmita.comprou 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {marmita.comprou ? 'Sim' : 'Não'}
+                              </span>
+                            )}
                     </td>
                     <td className="px-4 py-3">
-                      <button
+                      <div className="flex items-center gap-1">
+                        {editingMarmitaId === marmita.id ? (
+                          <>
+                            <button
+                              onClick={handleSalvarEdicaoMarmita}
+                              className="p-1 text-green-600 hover:text-green-700"
+                              title="Salvar"
+                              disabled={atualizarMarmitaMutation.isPending}
+                            >
+                              <Save size={16} />
+                            </button>
+                            <button
+                              onClick={handleCancelarEdicaoMarmita}
+                              className="p-1 text-gray-600 hover:text-gray-700"
+                              title="Cancelar"
+                            >
+                              <X size={16} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleIniciarEdicaoMarmita(marmita)}
+                              className="p-1 text-blue-600 hover:text-blue-700"
+                              title="Editar"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
                               onClick={() => handleRemoverMarmita(marmita.id)}
-                        className="p-1 text-red-600 hover:text-red-700"
-                        title="Remover"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                              className="p-1 text-red-600 hover:text-red-700"
+                              title="Remover"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
