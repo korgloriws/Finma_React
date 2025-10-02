@@ -267,7 +267,7 @@ export default function CarteiraPage() {
 
   
   const adicionarMutation = useMutation({
-    mutationFn: ({ ticker, quantidade, tipo, preco_inicial, nome_personalizado, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir }: { ticker: string; quantidade: number; tipo: string; preco_inicial?: number; nome_personalizado?: string; indexador?: 'CDI'|'IPCA'|'SELIC'|'PREFIXADO'; indexador_pct?: number; data_aplicacao?: string; vencimento?: string; isento_ir?: boolean }) =>
+    mutationFn: ({ ticker, quantidade, tipo, preco_inicial, nome_personalizado, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir }: { ticker: string; quantidade: number; tipo: string; preco_inicial?: number; nome_personalizado?: string; indexador?: 'CDI'|'IPCA'|'SELIC'|'PREFIXADO'|'CDI+'|'IPCA+'; indexador_pct?: number; data_aplicacao?: string; vencimento?: string; isento_ir?: boolean }) =>
       carteiraService.adicionarAtivo(ticker, quantidade, tipo, preco_inicial, nome_personalizado, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['carteira', user] })
@@ -276,7 +276,7 @@ export default function CarteiraPage() {
       queryClient.invalidateQueries({ queryKey: ['proventos', user] })
       queryClient.invalidateQueries({ queryKey: ['proventos-recebidos', user] })
       
-      // Limpar formulário após sucesso
+ 
       setInputTicker('')
       setInputQuantidade('')
       setInputTipo('')

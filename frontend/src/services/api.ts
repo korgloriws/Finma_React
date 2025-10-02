@@ -163,7 +163,7 @@ export const carteiraService = {
     tipo?: string,
     preco_inicial?: number,
     nome_personalizado?: string,
-    indexador?: 'CDI' | 'IPCA' | 'SELIC' | 'PREFIXADO',
+    indexador?: 'CDI' | 'IPCA' | 'SELIC' | 'PREFIXADO' | 'CDI+' | 'IPCA+',
     indexador_pct?: number,
     data_aplicacao?: string,
     vencimento?: string,

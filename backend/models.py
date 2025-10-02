@@ -372,6 +372,7 @@ def _ensure_rf_catalog_schema():
                         tipo TEXT,
                         indexador TEXT,
                         taxa_percentual NUMERIC,
+                        taxa_fixa NUMERIC,
                         data_inicio TEXT,
                         vencimento TEXT,
                         liquidez_diaria BOOLEAN,
@@ -396,6 +397,7 @@ def _ensure_rf_catalog_schema():
                     tipo TEXT,
                     indexador TEXT,
                     taxa_percentual REAL,
+                    taxa_fixa REAL,
                     data_inicio TEXT,
                     vencimento TEXT,
                     liquidez_diaria INTEGER,
@@ -419,16 +421,17 @@ def rf_catalog_list():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
-                c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
+                c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
                 rows = c.fetchall()
                 return [
                     {
                         'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
                         'taxa_percentual': float(r[5]) if r[5] is not None else None,
-                        'data_inicio': r[6], 'vencimento': r[7],
-                        'liquidez_diaria': bool(r[8]) if r[8] is not None else None,
-                        'isento_ir': bool(r[9]) if r[9] is not None else None,
-                        'observacao': r[10]
+                        'taxa_fixa': float(r[6]) if r[6] is not None else None,
+                        'data_inicio': r[7], 'vencimento': r[8],
+                        'liquidez_diaria': bool(r[9]) if r[9] is not None else None,
+                        'isento_ir': bool(r[10]) if r[10] is not None else None,
+                        'observacao': r[11]
                     } for r in rows
                 ]
         finally:
@@ -438,16 +441,17 @@ def rf_catalog_list():
         conn = sqlite3.connect(db_path, check_same_thread=False)
         try:
             cur = conn.cursor()
-            cur.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
+            cur.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
             rows = cur.fetchall()
             return [
                 {
                     'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
                     'taxa_percentual': float(r[5]) if r[5] is not None else None,
-                    'data_inicio': r[6], 'vencimento': r[7],
-                    'liquidez_diaria': bool(r[8]) if r[8] else False,
-                    'isento_ir': bool(r[9]) if r[9] else False,
-                    'observacao': r[10]
+                    'taxa_fixa': float(r[6]) if r[6] is not None else None,
+                    'data_inicio': r[7], 'vencimento': r[8],
+                    'liquidez_diaria': bool(r[9]) if r[9] else False,
+                    'isento_ir': bool(r[10]) if r[10] else False,
+                    'observacao': r[11]
                 } for r in rows
             ]
         finally:
@@ -462,7 +466,7 @@ def rf_catalog_create(item: dict):
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     fields = (
         item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'),
-        item.get('taxa_percentual'), item.get('data_inicio'), item.get('vencimento'),
+        item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('data_inicio'), item.get('vencimento'),
         1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, now
     )
     if _is_postgres():
@@ -470,8 +474,8 @@ def rf_catalog_create(item: dict):
         try:
             with conn.cursor() as c:
                 c.execute('''
-                    INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     RETURNING id
                 ''', fields)
                 new_id = c.fetchone()[0]
@@ -485,8 +489,8 @@ def rf_catalog_create(item: dict):
         try:
             cur = conn.cursor()
             cur.execute('''
-                INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             ''', fields)
             conn.commit()
             return { 'success': True, 'id': cur.lastrowid }
@@ -504,8 +508,8 @@ def rf_catalog_update(id_: int, item: dict):
         try:
             with conn.cursor() as c:
                 c.execute('''
-                    UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
-                ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('data_inicio'), item.get('vencimento'), bool(item.get('liquidez_diaria')), bool(item.get('isento_ir')), item.get('observacao'), now, id_))
+                    UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
+                ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('data_inicio'), item.get('vencimento'), bool(item.get('liquidez_diaria')), bool(item.get('isento_ir')), item.get('observacao'), now, id_))
                 conn.commit()
                 return { 'success': True }
         finally:
@@ -516,8 +520,8 @@ def rf_catalog_update(id_: int, item: dict):
         try:
             cur = conn.cursor()
             cur.execute('''
-                UPDATE rf_catalog SET nome=?, emissor=?, tipo=?, indexador=?, taxa_percentual=?, data_inicio=?, vencimento=?, liquidez_diaria=?, isento_ir=?, observacao=?, updated_at=? WHERE id=?
-            ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('data_inicio'), item.get('vencimento'), 1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, id_))
+                UPDATE rf_catalog SET nome=?, emissor=?, tipo=?, indexador=?, taxa_percentual=?, taxa_fixa=?, data_inicio=?, vencimento=?, liquidez_diaria=?, isento_ir=?, observacao=?, updated_at=? WHERE id=?
+            ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('data_inicio'), item.get('vencimento'), 1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, id_))
             conn.commit()
             return { 'success': True }
         finally:
@@ -2856,13 +2860,23 @@ def calcular_preco_com_indexador(preco_inicial, indexador, indexador_pct, data_a
 
         # Calcular fator de correção
         if indexador in ["SELIC", "CDI"]:
-
+            # CDI ou SELIC: taxa anual aplicada diariamente
             taxa_anual_decimal = taxa_atual / 100
             taxa_diaria = (1 + taxa_anual_decimal) ** (1/252) - 1
             taxa_diaria_indexada = taxa_diaria * fator_percentual
             fator_correcao = (1 + taxa_diaria_indexada) ** dias_desde_adicao
             print(
                 f"DEBUG: {indexador} anual={taxa_atual}% | diaria252={taxa_diaria:.8f} | diaria_indexada={taxa_diaria_indexada:.8f} | fator={fator_correcao:.6f}"
+            )
+        elif indexador == "CDI+":
+            # CDI+: CDI + taxa fixa prefixada
+            taxa_anual_decimal = taxa_atual / 100
+            taxa_fixa_decimal = (indexador_pct or 0) / 100.0
+            taxa_anual_total = taxa_anual_decimal + taxa_fixa_decimal
+            taxa_diaria = (1 + taxa_anual_total) ** (1/252) - 1
+            fator_correcao = (1 + taxa_diaria) ** dias_desde_adicao
+            print(
+                f"DEBUG: CDI+ CDI={taxa_atual}% + fixa={indexador_pct}% = {taxa_anual_total*100:.4f}% | diaria={taxa_diaria:.8f} | fator={fator_correcao:.6f}"
             )
         elif indexador == "IPCA":
             # Para IPCA: usar taxa mensal acumulada (série 433 é mensal)
@@ -2871,6 +2885,16 @@ def calcular_preco_com_indexador(preco_inicial, indexador, indexador_pct, data_a
             fator_correcao = (1 + taxa_mensal_decimal) ** meses_desde_adicao
             print(
                 f"DEBUG: IPCA mensal={taxa_atual}% | mensal_indexada={taxa_mensal_decimal*100:.4f}% | meses={meses_desde_adicao:.2f} | fator={fator_correcao:.6f}"
+            )
+        elif indexador == "IPCA+":
+            # IPCA+: IPCA + taxa fixa prefixada
+            meses_desde_adicao = dias_desde_adicao / 30.44  # média de dias por mês
+            taxa_mensal_decimal = taxa_atual / 100
+            taxa_fixa_mensal_decimal = (indexador_pct or 0) / 100.0 / 12  # converter taxa anual para mensal
+            taxa_mensal_total = taxa_mensal_decimal + taxa_fixa_mensal_decimal
+            fator_correcao = (1 + taxa_mensal_total) ** meses_desde_adicao
+            print(
+                f"DEBUG: IPCA+ IPCA={taxa_atual}% + fixa={indexador_pct}%a.a. = {taxa_mensal_total*100:.4f}%a.m. | meses={meses_desde_adicao:.2f} | fator={fator_correcao:.6f}"
             )
         elif indexador == "PREFIXADO":
             # Para PREFIXADO: usar taxa anual fixa (% a.a.) informada em indexador_pct
@@ -3110,11 +3134,11 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                     )
                     ativo_existente = cursor.fetchone()
 
-                    # Registrar movimentação
-                    cursor.execute(
-                        'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
-                        (data_adicao, info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], "compra")
-                    )
+                    # Registrar movimentação usando a função dedicada
+                    resultado_movimentacao = registrar_movimentacao(data_adicao, info["ticker"], info["nome_completo"], 
+                                     quantidade_val, info["preco_atual"], "compra")
+                    if not resultado_movimentacao["success"]:
+                        return resultado_movimentacao
 
                     if ativo_existente:
                         # Ativo já existe - somar quantidades (PM ponderado)
@@ -3222,7 +3246,9 @@ def remover_ativo_carteira(id):
                     if not ativo:
                         return {"success": False, "message": "Ativo não encontrado"}
                     data = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    cursor.execute('INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)', (data, ativo[0], ativo[1], ativo[2], ativo[3], "venda"))
+                    resultado_movimentacao = registrar_movimentacao(data, ativo[0], ativo[1], ativo[2], ativo[3], "venda")
+                    if not resultado_movimentacao["success"]:
+                        return resultado_movimentacao
                     cursor.execute('DELETE FROM carteira WHERE id = %s', (id,))
                 return {"success": True, "message": "Ativo removido com sucesso"}
             finally:

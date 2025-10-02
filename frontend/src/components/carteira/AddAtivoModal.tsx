@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { carteiraService, ativoService, listasService, rfCatalogService } from '../../services/api'
 import { normalizeTicker } from '../../utils/tickerUtils'
-import { X, ChevronLeft, ChevronRight, ShieldCheck, Calendar, Percent, DollarSign, Layers } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, ShieldCheck, Calendar, Percent, DollarSign, Layers, Edit, Plus, Building2 } from 'lucide-react'
+import RendaFixaFormModal from './RendaFixaFormModal'
 
 interface AddAtivoModalProps {
   open: boolean
@@ -16,13 +17,15 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
   const [tipo, setTipo] = useState('')
   const [quantidade, setQuantidade] = useState('')
   const [preco, setPreco] = useState('')
-  const [indexador, setIndexador] = useState<'' | 'CDI' | 'IPCA' | 'SELIC' | 'PREFIXADO'>('')
+  const [indexador, setIndexador] = useState<'' | 'CDI' | 'IPCA' | 'SELIC' | 'PREFIXADO' | 'CDI+' | 'IPCA+'>('')
   const [indexadorPct, setIndexadorPct] = useState('')
   const [dataAplicacao, setDataAplicacao] = useState('')
   const [vencimento, setVencimento] = useState('')
   const [isentoIr, setIsentoIr] = useState(false)
   const [liquidezDiaria, setLiquidezDiaria] = useState(false)
   const [filtroLista, setFiltroLista] = useState('')
+  const [rfFormOpen, setRfFormOpen] = useState(false)
+  const [editingRfItem, setEditingRfItem] = useState<any>(null)
 
   const queryClient = useQueryClient()
 
@@ -368,41 +371,76 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
 
                     {/* Catálogo local de RF */}
                     <div className="mt-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="text-xs text-muted-foreground">Renda Fixa (Catálogo Local)</div>
-                        <button onClick={()=>{
-                          const nomeNovo = prompt('Nome do produto (ex.: CDB Banco X)')
-                          if (!nomeNovo) return
-                          rfCatalogService.create({ nome: nomeNovo, tipo: 'CDB', indexador: 'CDI', taxa_percentual: 100, liquidez_diaria: true }).then(()=> refetchRfCatalog())
-                        }} className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground">+ Novo</button>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-sm font-medium text-foreground">Renda Fixa (Catálogo Local)</div>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => {
+                              setEditingRfItem(null)
+                              setRfFormOpen(true)
+                            }}
+                            className="flex items-center gap-1 text-xs px-3 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                            Novo
+                          </button>
+                        </div>
                       </div>
                       {(rfCatalog as any)?.items?.length ? (
-                        <div className="max-h-64 overflow-auto border border-border rounded">
+                        <div className="max-h-64 overflow-auto border border-border rounded-xl">
                           {(rfCatalog as any).items.filter((it:any)=>{
                             const q = (filtroLista||'').toLowerCase()
                             if (!q) return true
                             const label = `${it?.nome||''} ${it?.emissor||''} ${it?.tipo||''} ${it?.indexador||''}`.toLowerCase()
                             return label.includes(q)
                           }).map((it:any)=> (
-                            <button key={it.id} onClick={()=>{
-                              setTipo('Renda Fixa')
-                              setNome(it.nome)
-                              setTicker(it.nome.toUpperCase())
-                              setIndexador((it.indexador || '') as any)
-                              setIndexadorPct(it.taxa_percentual != null ? String(it.taxa_percentual) : '')
-                              setVencimento(it.vencimento || '')
-                              setLiquidezDiaria(!!it.liquidez_diaria)
-                              setIsentoIr(!!it.isento_ir)
-                            }} className="w-full text-left px-3 py-2 hover:bg-accent border-b border-border last:border-b-0">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="text-sm truncate">{it.nome}</div>
-                                <div className="text-xs text-muted-foreground">{it.indexador} {it.taxa_percentual ? `• ${it.taxa_percentual}%` : ''}</div>
+                            <div key={it.id} className="group border-b border-border last:border-b-0">
+                              <div className="flex items-center justify-between p-3">
+                                <button 
+                                  onClick={()=>{
+                                    setTipo('Renda Fixa')
+                                    setNome(it.nome)
+                                    setTicker(it.nome.toUpperCase())
+                                    setIndexador((it.indexador || '') as any)
+                                    setIndexadorPct(it.taxa_percentual != null ? String(it.taxa_percentual) : '')
+                                    setVencimento(it.vencimento || '')
+                                    setLiquidezDiaria(!!it.liquidez_diaria)
+                                    setIsentoIr(!!it.isento_ir)
+                                  }} 
+                                  className="flex-1 text-left hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div>
+                                      <div className="text-sm font-medium text-foreground">{it.nome}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {it.emissor} • {it.tipo} • {it.indexador}
+                                        {it.taxa_percentual ? ` • ${it.taxa_percentual}%` : ''}
+                                        {it.taxa_fixa ? ` + ${it.taxa_fixa}% a.a.` : ''}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setEditingRfItem(it)
+                                    setRfFormOpen(true)
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 p-2 hover:bg-muted rounded-lg transition-all"
+                                  title="Editar produto"
+                                >
+                                  <Edit className="w-4 h-4 text-muted-foreground" />
+                                </button>
                               </div>
-                            </button>
+                            </div>
                           ))}
                         </div>
                       ) : (
-                        <div className="text-xs text-muted-foreground">Nenhum produto cadastrado ainda.</div>
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <div className="text-sm">Nenhum produto cadastrado ainda</div>
+                          <div className="text-xs">Clique em "Novo" para adicionar o primeiro</div>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -508,7 +546,9 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
                   <select title="Selecionar indexador" value={indexador} onChange={(e)=>setIndexador(e.target.value as any)} className="px-3 py-2 bg-background border border-border rounded">
                     <option value="">Sem indexador</option>
                     <option value="CDI">CDI</option>
+                    <option value="CDI+">CDI+ (CDI + taxa fixa)</option>
                     <option value="IPCA">IPCA</option>
+                    <option value="IPCA+">IPCA+ (IPCA + taxa fixa)</option>
                     <option value="SELIC">SELIC</option>
                     <option value="PREFIXADO">PREFIXADO</option>
                   </select>
@@ -516,7 +556,11 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
                     type="text"
                     inputMode="decimal"
                     title="Valor do indexador"
-                    placeholder={indexador === 'PREFIXADO' ? 'Taxa a.a. (%)' : 'Percentual (ex.: 110)'}
+                    placeholder={
+                      indexador === 'PREFIXADO' ? 'Taxa a.a. (%)' : 
+                      indexador === 'CDI+' || indexador === 'IPCA+' ? 'Taxa fixa a.a. (%)' :
+                      'Percentual (ex.: 110)'
+                    }
                     value={indexadorPct}
                     onChange={(e)=>setIndexadorPct(e.target.value)}
                     className="px-3 py-2 bg-background border border-border rounded"
@@ -561,6 +605,19 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
           </div>
         </div>
       </div>
+
+      {/* Modal de Formulário de Renda Fixa */}
+      <RendaFixaFormModal
+        open={rfFormOpen}
+        onClose={() => {
+          setRfFormOpen(false)
+          setEditingRfItem(null)
+        }}
+        onSuccess={() => {
+          refetchRfCatalog()
+        }}
+        editingItem={editingRfItem}
+      />
     </div>
   )
 }
