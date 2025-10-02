@@ -1,0 +1,792 @@
+import { useState, useCallback, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  CreditCard, Plus, Edit, Trash2, Eye, EyeOff, 
+  DollarSign, ShoppingCart, X, ChevronDown
+} from 'lucide-react'
+import { cartaoService } from '../../services/api'
+import { formatCurrency } from '../../utils/formatters'
+import { CartaoCadastrado, CompraCartao, BandeiraCartao, CategoriaCompra } from '../../types'
+
+interface ControleCartaoTabProps {
+  filtroMes: string
+  filtroAno: string
+  ocultarValores: boolean
+  setOcultarValores: (ocultar: boolean) => void
+}
+
+const BANDEIRAS_CARTAO: BandeiraCartao[] = [
+  { value: 'visa', label: 'Visa', cor: '#1A1F71', icone: '💳' },
+  { value: 'mastercard', label: 'Mastercard', cor: '#EB001B', icone: '💳' },
+  { value: 'american-express', label: 'American Express', cor: '#006FCF', icone: '💳' },
+  { value: 'elo', label: 'Elo', cor: '#FFD700', icone: '💳' },
+  { value: 'hipercard', label: 'Hipercard', cor: '#FF6B35', icone: '💳' },
+  { value: 'diners', label: 'Diners Club', cor: '#004B87', icone: '💳' },
+  { value: 'discover', label: 'Discover', cor: '#FF6000', icone: '💳' },
+  { value: 'jcb', label: 'JCB', cor: '#000000', icone: '💳' },
+  { value: 'outro', label: 'Outro', cor: '#6B7280', icone: '💳' }
+]
+
+const CATEGORIAS_COMPRA: CategoriaCompra[] = [
+  { value: 'alimentacao', label: 'Alimentação', cor: '#F59E0B', icone: '🍽️' },
+  { value: 'transporte', label: 'Transporte', cor: '#3B82F6', icone: '🚗' },
+  { value: 'lazer', label: 'Lazer', cor: '#8B5CF6', icone: '🎮' },
+  { value: 'saude', label: 'Saúde', cor: '#EF4444', icone: '❤️' },
+  { value: 'educacao', label: 'Educação', cor: '#10B981', icone: '📚' },
+  { value: 'vestuario', label: 'Vestuário', cor: '#F97316', icone: '👕' },
+  { value: 'casa', label: 'Casa', cor: '#84CC16', icone: '🏠' },
+  { value: 'servicos', label: 'Serviços', cor: '#06B6D4', icone: '🔧' },
+  { value: 'outros', label: 'Outros', cor: '#6B7280', icone: '📦' }
+]
+
+const CORES_CARTAO = [
+  '#1A1F71', '#EB001B', '#006FCF', '#FFD700', '#FF6B35', 
+  '#004B87', '#FF6000', '#000000', '#6B7280', '#8B5CF6'
+]
+
+export default function ControleCartaoTab({ 
+  filtroMes, 
+  filtroAno, 
+  ocultarValores, 
+  setOcultarValores 
+}: ControleCartaoTabProps) {
+  // Estados do formulário de cartão
+  const [inputNome, setInputNome] = useState('')
+  const [inputBandeira, setInputBandeira] = useState('')
+  const [inputLimite, setInputLimite] = useState('')
+  const [inputVencimento, setInputVencimento] = useState('')
+  const [inputCor, setInputCor] = useState('#1A1F71')
+
+  // Estados do formulário de compra
+  const [inputCompraNome, setInputCompraNome] = useState('')
+  const [inputCompraValor, setInputCompraValor] = useState('')
+  const [inputCompraData, setInputCompraData] = useState('')
+  const [inputCompraCategoria, setInputCompraCategoria] = useState('')
+  const [inputCompraObservacao, setInputCompraObservacao] = useState('')
+
+  // Estados de controle
+  const [cartaoSelecionado, setCartaoSelecionado] = useState<number | null>(null)
+  const [mostrarFormularioCartao, setMostrarFormularioCartao] = useState(false)
+  const [mostrarFormularioCompra, setMostrarFormularioCompra] = useState(false)
+  const [editingCartaoId, setEditingCartaoId] = useState<number | null>(null)
+  const [editandoCartao, setEditandoCartao] = useState(false)
+
+  const queryClient = useQueryClient()
+
+  // Queries
+  const { data: cartoes } = useQuery<CartaoCadastrado[]>({
+    queryKey: ['cartoes-cadastrados'],
+    queryFn: () => cartaoService.getCartoesCadastrados(),
+    retry: 1,
+    refetchOnWindowFocus: false,
+  })
+
+  const { data: compras } = useQuery<CompraCartao[]>({
+    queryKey: ['compras-cartao', cartaoSelecionado, filtroMes, filtroAno],
+    queryFn: () => cartaoService.getComprasCartao(cartaoSelecionado!, filtroMes, filtroAno),
+    enabled: !!cartaoSelecionado,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  })
+
+  const { data: totalCompras } = useQuery<number>({
+    queryKey: ['total-compras-cartao', cartaoSelecionado, filtroMes, filtroAno],
+    queryFn: () => cartaoService.getTotalComprasCartao(cartaoSelecionado!, filtroMes, filtroAno),
+    enabled: !!cartaoSelecionado,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  })
+
+  // Mutations
+  const adicionarCartaoMutation = useMutation({
+    mutationFn: cartaoService.adicionarCartaoCadastrado,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cartoes-cadastrados'] })
+      limparFormularioCartao()
+    },
+  })
+
+  const atualizarCartaoMutation = useMutation({
+    mutationFn: cartaoService.atualizarCartaoCadastrado,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cartoes-cadastrados'] })
+      setEditingCartaoId(null)
+      setEditandoCartao(false)
+      limparFormularioCartao()
+    },
+  })
+
+
+  const removerCartaoMutation = useMutation({
+    mutationFn: cartaoService.removerCartaoCadastrado,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cartoes-cadastrados'] })
+      if (cartaoSelecionado === editingCartaoId) {
+        setCartaoSelecionado(null)
+      }
+    },
+  })
+
+  const adicionarCompraMutation = useMutation({
+    mutationFn: cartaoService.adicionarCompraCartao,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compras-cartao'] })
+      queryClient.invalidateQueries({ queryKey: ['total-compras-cartao'] })
+      limparFormularioCompra()
+    },
+  })
+
+
+  const removerCompraMutation = useMutation({
+    mutationFn: cartaoService.removerCompraCartao,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compras-cartao'] })
+      queryClient.invalidateQueries({ queryKey: ['total-compras-cartao'] })
+    },
+  })
+
+  // Funções auxiliares
+  const limparFormularioCartao = useCallback(() => {
+    setInputNome('')
+    setInputBandeira('visa')
+    setInputLimite('')
+    setInputVencimento('')
+    setInputCor('#1A1F71')
+    setMostrarFormularioCartao(false)
+    setEditandoCartao(false)
+    setEditingCartaoId(null)
+  }, [])
+
+  const iniciarEdicaoCartao = useCallback((cartao: CartaoCadastrado) => {
+    setEditingCartaoId(cartao.id)
+    setEditandoCartao(true)
+    setInputNome(cartao.nome)
+    setInputBandeira(cartao.bandeira)
+    setInputLimite(cartao.limite.toString())
+    setInputVencimento(cartao.vencimento.toString())
+    setInputCor(cartao.cor)
+    setMostrarFormularioCartao(true)
+  }, [])
+
+  const cancelarEdicaoCartao = useCallback(() => {
+    setEditingCartaoId(null)
+    setEditandoCartao(false)
+    limparFormularioCartao()
+  }, [limparFormularioCartao])
+
+  const limparFormularioCompra = useCallback(() => {
+    setInputCompraNome('')
+    setInputCompraValor('')
+    setInputCompraData('')
+    setInputCompraCategoria('alimentacao')
+    setInputCompraObservacao('')
+    setMostrarFormularioCompra(false)
+  }, [])
+
+  // Handlers
+  const handleAdicionarCartao = useCallback(() => {
+    if (!inputNome || !inputLimite || !inputVencimento) return
+
+    const limite = parseFloat(inputLimite.replace(',', '.'))
+    const vencimento = parseInt(inputVencimento)
+    
+    if (!isFinite(limite) || limite <= 0 || !isFinite(vencimento) || vencimento < 1 || vencimento > 31) return
+
+    if (editandoCartao && editingCartaoId) {
+      atualizarCartaoMutation.mutate({
+        id: editingCartaoId,
+        nome: inputNome,
+        bandeira: inputBandeira,
+        limite,
+        vencimento,
+        cor: inputCor
+      })
+    } else {
+      adicionarCartaoMutation.mutate({
+        nome: inputNome,
+        bandeira: inputBandeira,
+        limite,
+        vencimento,
+        cor: inputCor
+      })
+    }
+  }, [inputNome, inputBandeira, inputLimite, inputVencimento, inputCor, editandoCartao, editingCartaoId, adicionarCartaoMutation, atualizarCartaoMutation])
+
+  const handleAdicionarCompra = useCallback(() => {
+    if (!inputCompraNome || !inputCompraValor || !cartaoSelecionado) return
+
+    const valor = parseFloat(inputCompraValor.replace(',', '.'))
+    if (!isFinite(valor) || valor <= 0) return
+
+    adicionarCompraMutation.mutate({
+      cartao_id: cartaoSelecionado,
+      nome: inputCompraNome,
+      valor,
+      data: inputCompraData || new Date().toISOString().split('T')[0],
+      categoria: inputCompraCategoria,
+      observacao: inputCompraObservacao || undefined
+    })
+  }, [inputCompraNome, inputCompraValor, inputCompraData, inputCompraCategoria, inputCompraObservacao, cartaoSelecionado, adicionarCompraMutation])
+
+  const handleRemoverCartao = useCallback((id: number) => {
+    if (confirm('Tem certeza que deseja remover este cartão?')) {
+      removerCartaoMutation.mutate(id)
+    }
+  }, [removerCartaoMutation])
+
+  const handleRemoverCompra = useCallback((id: number) => {
+    if (confirm('Tem certeza que deseja remover esta compra?')) {
+      removerCompraMutation.mutate(id)
+    }
+  }, [removerCompraMutation])
+
+  // Cálculos
+  const cartaoAtual = useMemo(() => {
+    if (!cartaoSelecionado || !cartoes) return null
+    return cartoes.find(c => c.id === cartaoSelecionado)
+  }, [cartaoSelecionado, cartoes])
+
+  const limiteRestante = useMemo(() => {
+    if (!cartaoAtual || !totalCompras) return 0
+    return cartaoAtual.limite - totalCompras
+  }, [cartaoAtual, totalCompras])
+
+  const percentualUso = useMemo(() => {
+    if (!cartaoAtual || !totalCompras) return 0
+    return (totalCompras / cartaoAtual.limite) * 100
+  }, [cartaoAtual, totalCompras])
+
+
+  return (
+    <div className="space-y-6">
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Cartões de Crédito</h2>
+          <p className="text-muted-foreground">Gerencie seus cartões e compras</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setOcultarValores(!ocultarValores)}
+            className="p-2 rounded-md bg-muted hover:bg-muted/80 transition-colors"
+            title={ocultarValores ? 'Mostrar valores' : 'Ocultar valores'}
+          >
+            {ocultarValores ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+          <button
+            onClick={() => setMostrarFormularioCartao(true)}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 flex items-center gap-2"
+          >
+            <Plus size={20} />
+            Novo Cartão
+          </button>
+        </div>
+      </div>
+
+      {/* Lista de Cartões */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {cartoes?.map((cartao) => {
+          const bandeira = BANDEIRAS_CARTAO.find(b => b.value === cartao.bandeira) || BANDEIRAS_CARTAO[0]
+          const isSelected = cartaoSelecionado === cartao.id
+          
+          return (
+            <motion.div
+              key={cartao.id}
+              className={`relative p-6 rounded-xl cursor-pointer transition-all duration-200 ${
+                isSelected 
+                  ? 'ring-2 ring-blue-500 shadow-lg scale-105' 
+                  : 'hover:shadow-md hover:scale-102'
+              } ${editingCartaoId === cartao.id ? 'ring-2 ring-yellow-500' : ''}`}
+              style={{ 
+                background: `linear-gradient(135deg, ${cartao.cor}20, ${cartao.cor}10)`,
+                border: `1px solid ${cartao.cor}30`
+              }}
+              onClick={() => {
+                if (cartaoSelecionado === cartao.id) {
+                  setCartaoSelecionado(null)
+                  setMostrarFormularioCompra(false)
+                } else {
+                  setCartaoSelecionado(cartao.id)
+                  setMostrarFormularioCompra(false)
+                }
+              }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {/* Bandeira */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{bandeira.icone}</span>
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {bandeira.label}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      iniciarEdicaoCartao(cartao)
+                    }}
+                    className={`p-1 ${editingCartaoId === cartao.id ? 'text-primary bg-primary/10' : 'text-primary hover:bg-primary/10'} rounded`}
+                    title={editingCartaoId === cartao.id ? 'Editando cartão' : 'Editar cartão'}
+                  >
+                    <Edit size={16} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRemoverCartao(cartao.id)
+                    }}
+                    className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                    title="Remover cartão"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Nome do Cartão */}
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                {cartao.nome}
+              </h3>
+
+              {/* Limite */}
+              <div className="mb-2">
+                <p className="text-sm text-muted-foreground">Limite</p>
+                <p className="text-xl font-bold text-foreground">
+                  {ocultarValores ? '••••••' : formatCurrency(cartao.limite)}
+                </p>
+              </div>
+
+              {/* Vencimento */}
+              <div className="mb-4">
+                <p className="text-sm text-muted-foreground">Vencimento</p>
+                <p className="text-lg font-semibold text-foreground">
+                  {cartao.vencimento}º
+                </p>
+              </div>
+
+              {/* Status */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  <div className={`w-2 h-2 rounded-full ${
+                    cartao.ativo ? 'bg-green-500' : 'bg-red-500'
+                  }`} />
+                  <span className="text-xs text-muted-foreground">
+                    {cartao.ativo ? 'Ativo' : 'Inativo'}
+                  </span>
+                </div>
+                {isSelected && (
+                  <ChevronDown size={16} className="text-blue-500" />
+                )}
+              </div>
+            </motion.div>
+          )
+        })}
+      </div>
+
+      {/* Detalhes do Cartão Selecionado */}
+      <AnimatePresence>
+        {cartaoSelecionado && cartaoAtual && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-card border border-border rounded-2xl p-6 shadow-xl"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-semibold text-foreground">
+                  {cartaoAtual.nome}
+                </h3>
+                <p className="text-muted-foreground">
+                  {BANDEIRAS_CARTAO.find(b => b.value === cartaoAtual.bandeira)?.label}
+                </p>
+              </div>
+              <button
+                onClick={() => setMostrarFormularioCompra(true)}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 flex items-center gap-2"
+              >
+                <Plus size={16} />
+                Nova Compra
+              </button>
+            </div>
+
+            {/* Estatísticas */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-card border border-border rounded-2xl p-4 shadow-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <DollarSign className="w-5 h-5 text-primary" />
+                  </div>
+                  <span className="text-sm font-medium text-muted-foreground">Limite</span>
+                </div>
+                <p className="text-2xl font-bold text-foreground">
+                  {ocultarValores ? '••••••' : formatCurrency(cartaoAtual.limite)}
+                </p>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-4 shadow-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <ShoppingCart className="w-5 h-5 text-destructive" />
+                  </div>
+                  <span className="text-sm font-medium text-muted-foreground">Gasto</span>
+                </div>
+                <p className="text-2xl font-bold text-foreground">
+                  {ocultarValores ? '••••••' : formatCurrency(totalCompras || 0)}
+                </p>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-4 shadow-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <CreditCard className="w-5 h-5 text-positive" />
+                  </div>
+                  <span className="text-sm font-medium text-muted-foreground">Disponível</span>
+                </div>
+                <p className="text-2xl font-bold text-foreground">
+                  {ocultarValores ? '••••••' : formatCurrency(limiteRestante)}
+                </p>
+              </div>
+            </div>
+
+            {/* Barra de Progresso */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-muted-foreground">Uso do Limite</span>
+                <span className="text-sm font-bold text-foreground">
+                  {percentualUso.toFixed(1)}%
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-3">
+                <div
+                  className={`h-3 rounded-full transition-all duration-300 ${
+                    percentualUso > 90 ? 'bg-red-500' :
+                    percentualUso > 70 ? 'bg-yellow-500' : 'bg-green-500'
+                  }`}
+                  style={{ width: `${Math.min(percentualUso, 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Lista de Compras */}
+            <div>
+              <h4 className="text-lg font-semibold text-foreground mb-4">
+                Compras do Mês
+              </h4>
+              {compras && compras.length > 0 ? (
+                <div className="space-y-2">
+                  {compras.map((compra) => {
+                    const categoria = CATEGORIAS_COMPRA.find(c => c.value === compra.categoria) || CATEGORIAS_COMPRA[CATEGORIAS_COMPRA.length - 1]
+                    
+                    return (
+                      <div
+                        key={compra.id}
+                        className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">{categoria.icone}</span>
+                          <div>
+                            <p className="font-medium text-foreground">{compra.nome}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {categoria.label} • {new Date(compra.data).toLocaleDateString('pt-BR')}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-foreground">
+                            {ocultarValores ? '••••' : formatCurrency(compra.valor)}
+                          </p>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleRemoverCompra(compra.id)}
+                              className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                              title="Remover compra"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <ShoppingCart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>Nenhuma compra registrada este mês</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Formulário de Cartão */}
+      <AnimatePresence>
+        {mostrarFormularioCartao && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setMostrarFormularioCartao(false)}
+          >
+            <motion.div
+              className="bg-card border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">
+                  {editandoCartao ? 'Editar Cartão' : 'Novo Cartão'}
+                </h3>
+                <button
+                  onClick={cancelarEdicaoCartao}
+                  className="p-1 text-muted-foreground hover:text-foreground"
+                  title="Fechar formulário"
+                  aria-label="Fechar formulário"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Nome do Cartão
+                  </label>
+                  <input
+                    type="text"
+                    value={inputNome}
+                    onChange={(e) => setInputNome(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="Ex: Cartão Nubank"
+                    aria-label="Nome do cartão"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Bandeira
+                  </label>
+                  <select
+                    value={inputBandeira}
+                    onChange={(e) => setInputBandeira(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    aria-label="Bandeira do cartão"
+                  >
+                    {BANDEIRAS_CARTAO.map((bandeira) => (
+                      <option key={bandeira.value} value={bandeira.value}>
+                        {bandeira.icone} {bandeira.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Limite
+                  </label>
+                  <input
+                    type="text"
+                    value={inputLimite}
+                    onChange={(e) => setInputLimite(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="0,00"
+                    aria-label="Limite do cartão"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Dia de Vencimento
+                  </label>
+                  <input
+                    type="number"
+                    value={inputVencimento}
+                    onChange={(e) => setInputVencimento(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="15"
+                    min="1"
+                    max="31"
+                    aria-label="Dia de vencimento"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Cor do Cartão
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    {CORES_CARTAO.map((cor) => (
+                      <button
+                        key={cor}
+                        onClick={() => setInputCor(cor)}
+                        className={`w-8 h-8 rounded-full border-2 ${
+                          inputCor === cor ? 'border-foreground' : 'border-muted'
+                        }`}
+                        style={{ backgroundColor: cor }}
+                        title={cor}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-6">
+                <button
+                  onClick={handleAdicionarCartao}
+                  disabled={adicionarCartaoMutation.isPending}
+                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {(adicionarCartaoMutation.isPending || atualizarCartaoMutation.isPending) ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  {editandoCartao ? 'Salvar Alterações' : 'Adicionar Cartão'}
+                </button>
+                <button
+                  onClick={cancelarEdicaoCartao}
+                  className="px-4 py-2 bg-muted text-muted-foreground rounded-md hover:bg-muted/80"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Formulário de Compra */}
+      <AnimatePresence>
+        {mostrarFormularioCompra && cartaoSelecionado && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setMostrarFormularioCompra(false)}
+          >
+            <motion.div
+              className="bg-card border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">
+                  Nova Compra
+                </h3>
+                <button
+                  onClick={() => setMostrarFormularioCompra(false)}
+                  className="p-1 text-muted-foreground hover:text-foreground"
+                  title="Fechar formulário de compra"
+                  aria-label="Fechar formulário de compra"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Descrição da Compra
+                  </label>
+                  <input
+                    type="text"
+                    value={inputCompraNome}
+                    onChange={(e) => setInputCompraNome(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="Ex: Supermercado"
+                    aria-label="Descrição da compra"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Valor
+                  </label>
+                  <input
+                    type="text"
+                    value={inputCompraValor}
+                    onChange={(e) => setInputCompraValor(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="0,00"
+                    aria-label="Valor da compra"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Data
+                  </label>
+                  <input
+                    type="date"
+                    value={inputCompraData}
+                    onChange={(e) => setInputCompraData(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    aria-label="Data da compra"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Categoria
+                  </label>
+                  <select
+                    value={inputCompraCategoria}
+                    onChange={(e) => setInputCompraCategoria(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    aria-label="Categoria da compra"
+                  >
+                    {CATEGORIAS_COMPRA.map((categoria) => (
+                      <option key={categoria.value} value={categoria.value}>
+                        {categoria.icone} {categoria.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Observação (opcional)
+                  </label>
+                  <textarea
+                    value={inputCompraObservacao}
+                    onChange={(e) => setInputCompraObservacao(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    placeholder="Observações adicionais..."
+                    rows={3}
+                    aria-label="Observação da compra"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-6">
+                <button
+                  onClick={handleAdicionarCompra}
+                  disabled={adicionarCompraMutation.isPending}
+                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {adicionarCompraMutation.isPending ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  Adicionar Compra
+                </button>
+                <button
+                  onClick={() => setMostrarFormularioCompra(false)}
+                  className="px-4 py-2 bg-muted text-muted-foreground rounded-md hover:bg-muted/80"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}

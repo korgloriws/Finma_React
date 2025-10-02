@@ -16,6 +16,9 @@ from models import (
     adicionar_cartao, carregar_cartoes_mes_ano, atualizar_cartao, remover_cartao, 
     adicionar_outro_gasto, carregar_outros_mes_ano, atualizar_outro_gasto, remover_outro_gasto, 
     calcular_saldo_mes_ano,
+    
+    adicionar_cartao_cadastrado, listar_cartoes_cadastrados, atualizar_cartao_cadastrado, remover_cartao_cadastrado,
+    adicionar_compra_cartao, listar_compras_cartao, atualizar_compra_cartao, remover_compra_cartao, calcular_total_compras_cartao,
 
     consultar_marmitas, adicionar_marmita, atualizar_marmita, remover_marmita, gastos_mensais,
 
@@ -2461,56 +2464,20 @@ def api_evolucao_financeira():
     try:
         mes = request.args.get('mes', type=str)
         ano = request.args.get('ano', type=str)
-        periodo = request.args.get('periodo', 'mensal')  # mensal, trimestral, semestral, anual
         
-        # Calcular período baseado no filtro
-        if periodo == 'mensal':
-            data_inicio = f"{ano}-{mes.zfill(2)}-01"
-            data_fim = pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
-            dias = pd.date_range(start=data_inicio, end=data_fim)
-            agrupamento = 'D'  # Diário
-        elif periodo == 'trimestral':
-            # Últimos 3 meses
-            data_fim = pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
-            data_inicio = data_fim - pd.DateOffset(months=2)
-            dias = pd.date_range(start=data_inicio, end=data_fim, freq='MS')  # Primeiro dia de cada mês
-            agrupamento = 'MS'  # Mensal
-        elif periodo == 'semestral':
-            # Últimos 6 meses
-            data_fim = pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
-            data_inicio = data_fim - pd.DateOffset(months=5)
-            dias = pd.date_range(start=data_inicio, end=data_fim, freq='MS')
-            agrupamento = 'MS'
-        elif periodo == 'anual':
-            # Últimos 12 meses
-            data_fim = pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
-            data_inicio = data_fim - pd.DateOffset(months=11)
-            dias = pd.date_range(start=data_inicio, end=data_fim, freq='MS')
-            agrupamento = 'MS'
-        else:
-            # Default para mensal
-            data_inicio = f"{ano}-{mes.zfill(2)}-01"
-            data_fim = pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
-            dias = pd.date_range(start=data_inicio, end=data_fim)
-            agrupamento = 'D'
         
-        # Buscar dados de receitas e despesas para o período
         df_receita = carregar_receitas_mes_ano(mes, ano)
         df_cartao = pd.DataFrame(carregar_cartoes_mes_ano(mes, ano))
         df_outros = pd.DataFrame(carregar_outros_mes_ano(mes, ano))
         
-        # Processar receitas
+    
         if not df_receita.empty:
             df_receita["data"] = pd.to_datetime(df_receita["data"])
-            if agrupamento == 'D':
-                df_receita_grouped = df_receita.groupby("data")["valor"].sum().reset_index(name="receitas")
-            else:
-                df_receita_grouped = df_receita.groupby(df_receita["data"].dt.to_period(agrupamento))["valor"].sum().reset_index()
-                df_receita_grouped["data"] = df_receita_grouped["data"].dt.start_time
+            df_receita_grouped = df_receita.groupby("data")["valor"].sum().reset_index(name="receitas")
         else:
             df_receita_grouped = pd.DataFrame(columns=["data", "receitas"])
         
-        # Processar despesas
+      
         df_cartao["data"] = pd.to_datetime(df_cartao["data"]) if not df_cartao.empty else pd.Series(dtype='datetime64[ns]')
         df_outros["data"] = pd.to_datetime(df_outros["data"]) if not df_outros.empty else pd.Series(dtype='datetime64[ns]')
         df_cartao_ = df_cartao[["data", "valor"]] if not df_cartao.empty else pd.DataFrame(columns=["data", "valor"])
@@ -2520,63 +2487,23 @@ def api_evolucao_financeira():
         if df_despesas.empty:
             df_despesas_grouped = pd.DataFrame({"data": [], "despesas": []})
         else:
-            if agrupamento == 'D':
-                df_despesas_grouped = df_despesas.groupby("data")["valor"].sum().reset_index(name="despesas")
-            else:
-                df_despesas_grouped = df_despesas.groupby(df_despesas["data"].dt.to_period(agrupamento))["valor"].sum().reset_index()
-                df_despesas_grouped["data"] = df_despesas_grouped["data"].dt.start_time
+            df_despesas_grouped = df_despesas.groupby("data")["valor"].sum().reset_index(name="despesas")
         
-        # Criar DataFrame base com todos os dias/períodos
+
+        dias = pd.date_range(
+            start=f"{ano}-{mes.zfill(2)}-01", 
+            end=pd.Timestamp(f"{ano}-{mes.zfill(2)}-01") + pd.offsets.MonthEnd(0)
+        )
         df_base = pd.DataFrame({"data": dias})
         
-        # Merge com receitas e despesas
+ 
         df_merged = pd.merge(df_base, df_receita_grouped, on="data", how="left").merge(df_despesas_grouped, on="data", how="left")
         df_merged["receitas"] = df_merged["receitas"].fillna(0)
         df_merged["despesas"] = df_merged["despesas"].fillna(0)
         df_merged["saldo_dia"] = df_merged["receitas"] - df_merged["despesas"]
         df_merged["saldo_acumulado"] = df_merged["saldo_dia"].cumsum()
         
-        # Calcular comparações
-        if len(df_merged) > 1:
-            # Comparação com período anterior
-            receitas_atual = df_merged["receitas"].sum()
-            despesas_atual = df_merged["despesas"].sum()
-            saldo_atual = receitas_atual - despesas_atual
-            
-            # Para períodos mensais, comparar com mês anterior
-            if periodo == 'mensal':
-                mes_anterior = int(mes) - 1
-                ano_anterior = int(ano)
-                if mes_anterior <= 0:
-                    mes_anterior = 12
-                    ano_anterior -= 1
-                
-                df_receita_ant = carregar_receitas_mes_ano(str(mes_anterior).zfill(2), str(ano_anterior))
-                df_cartao_ant = pd.DataFrame(carregar_cartoes_mes_ano(str(mes_anterior).zfill(2), str(ano_anterior)))
-                df_outros_ant = pd.DataFrame(carregar_outros_mes_ano(str(mes_anterior).zfill(2), str(ano_anterior)))
-                
-                receitas_anterior = df_receita_ant["valor"].sum() if not df_receita_ant.empty else 0
-                despesas_anterior = (df_cartao_ant["valor"].sum() if not df_cartao_ant.empty else 0) + (df_outros_ant["valor"].sum() if not df_outros_ant.empty else 0)
-                saldo_anterior = receitas_anterior - despesas_anterior
-            else:
-                # Para outros períodos, usar primeira metade vs segunda metade
-                meio = len(df_merged) // 2
-                receitas_anterior = df_merged.iloc[:meio]["receitas"].sum()
-                despesas_anterior = df_merged.iloc[:meio]["despesas"].sum()
-                saldo_anterior = receitas_anterior - despesas_anterior
-                
-                receitas_atual = df_merged.iloc[meio:]["receitas"].sum()
-                despesas_atual = df_merged.iloc[meio:]["despesas"].sum()
-                saldo_atual = receitas_atual - despesas_atual
-            
-            # Calcular percentuais de variação
-            variacao_receitas = ((receitas_atual - receitas_anterior) / receitas_anterior * 100) if receitas_anterior > 0 else 0
-            variacao_despesas = ((despesas_atual - despesas_anterior) / despesas_anterior * 100) if despesas_anterior > 0 else 0
-            variacao_saldo = ((saldo_atual - saldo_anterior) / abs(saldo_anterior) * 100) if saldo_anterior != 0 else 0
-        else:
-            variacao_receitas = variacao_despesas = variacao_saldo = 0
 
-        # Preparar dados de resposta
         evolucao = []
         for _, row in df_merged.iterrows():
             evolucao.append({
@@ -2587,21 +2514,51 @@ def api_evolucao_financeira():
                 'saldo_acumulado': float(row['saldo_acumulado'])
             })
         
-        # Adicionar métricas de comparação
-        comparacao = {
-            'variacao_receitas': round(variacao_receitas, 2),
-            'variacao_despesas': round(variacao_despesas, 2),
-            'variacao_saldo': round(variacao_saldo, 2),
-            'receitas_atual': float(receitas_atual),
-            'despesas_atual': float(despesas_atual),
-            'saldo_atual': float(saldo_atual),
-            'periodo': periodo
-        }
+        return jsonify(evolucao)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/controle/evolucao-receitas", methods=["GET"])
+def api_evolucao_receitas():
+    try:
+        periodo = request.args.get('periodo', '6m')
         
-        return jsonify({
-            'evolucao': evolucao,
-            'comparacao': comparacao
-        })
+        # Calcular período baseado no filtro
+        if periodo == '3m':
+            meses = 3
+        elif periodo == '6m':
+            meses = 6
+        elif periodo == '12m':
+            meses = 12
+        else:
+            meses = 6
+        
+        # Data atual
+        hoje = datetime.now()
+        evolucao = []
+        
+        for i in range(meses):
+            # Calcular mês e ano
+            data_mes = hoje - timedelta(days=30 * i)
+            mes = data_mes.month
+            ano = data_mes.year
+            
+            # Buscar receitas do mês
+            df_receitas = carregar_receitas_mes_ano(str(mes).zfill(2), str(ano))
+            total_receitas = df_receitas['valor'].sum() if not df_receitas.empty else 0
+            
+            # Nome do mês
+            nome_mes = data_mes.strftime('%b/%Y')
+            
+            evolucao.append({
+                "mes": nome_mes,
+                "receitas": float(total_receitas)
+            })
+        
+        # Inverter para mostrar do mais antigo para o mais recente
+        evolucao.reverse()
+        
+        return jsonify(evolucao)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -2836,6 +2793,174 @@ def api_get_exchange_rate(symbol):
             
     except Exception as e:
         print(f"Erro ao buscar taxa de câmbio para {symbol}: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# ==================== ENDPOINTS DE CARTÕES CADASTRADOS ====================
+
+@server.route("/api/controle/cartoes-cadastrados", methods=["GET", "POST", "PUT", "DELETE"])
+def api_cartoes_cadastrados():
+    try:
+        if request.method == "GET":
+            cartoes = listar_cartoes_cadastrados()
+            return jsonify(cartoes)
+        
+        elif request.method == "POST":
+            data = request.get_json()
+            try:
+                _upgrade_controle_schema()
+            except Exception:
+                pass
+            res = adicionar_cartao_cadastrado(
+                data.get('nome'),
+                data.get('bandeira'),
+                data.get('limite'),
+                data.get('vencimento'),
+                data.get('cor')
+            )
+            if isinstance(res, dict) and not res.get('success', True):
+                return jsonify(res), 401
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
+            return jsonify({"message": "Cartão cadastrado com sucesso"})
+        
+        elif request.method == "PUT":
+            data = request.get_json()
+            try:
+                _upgrade_controle_schema()
+            except Exception:
+                pass
+            res = atualizar_cartao_cadastrado(
+                data.get('id'),
+                nome=data.get('nome'),
+                bandeira=data.get('bandeira'),
+                limite=data.get('limite'),
+                vencimento=data.get('vencimento'),
+                cor=data.get('cor'),
+                ativo=data.get('ativo')
+            )
+            if isinstance(res, dict) and not res.get('success', True):
+                return jsonify(res), 401
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
+            return jsonify({"message": "Cartão atualizado com sucesso"})
+        
+        elif request.method == "DELETE":
+            cartao_id = request.args.get('id')
+            if not cartao_id:
+                return jsonify({"error": "ID do cartão é obrigatório"}), 400
+            try:
+                _upgrade_controle_schema()
+            except Exception:
+                pass
+            res = remover_cartao_cadastrado(int(cartao_id))
+            if isinstance(res, dict) and not res.get('success', True):
+                return jsonify(res), 401
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
+            return jsonify({"message": "Cartão removido com sucesso"})
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/controle/compras-cartao", methods=["GET", "POST", "PUT", "DELETE"])
+def api_compras_cartao():
+    try:
+        if request.method == "GET":
+            cartao_id = request.args.get('cartao_id')
+            mes = request.args.get('mes')
+            ano = request.args.get('ano')
+            if not cartao_id:
+                return jsonify({"error": "ID do cartão é obrigatório"}), 400
+            compras = listar_compras_cartao(int(cartao_id), mes, ano)
+            return jsonify(compras)
+        
+        elif request.method == "POST":
+            data = request.get_json()
+            try:
+                _upgrade_controle_schema()
+            except Exception:
+                pass
+            res = adicionar_compra_cartao(
+                data.get('cartao_id'),
+                data.get('nome'),
+                data.get('valor'),
+                data.get('data'),
+                categoria=data.get('categoria'),
+                observacao=data.get('observacao')
+            )
+            if isinstance(res, dict) and not res.get('success', True):
+                return jsonify(res), 401
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
+            return jsonify({"message": "Compra adicionada com sucesso"})
+        
+        elif request.method == "PUT":
+            data = request.get_json()
+            try:
+                _upgrade_controle_schema()
+            except Exception:
+                pass
+            res = atualizar_compra_cartao(
+                data.get('id'),
+                nome=data.get('nome'),
+                valor=data.get('valor'),
+                data=data.get('data'),
+                categoria=data.get('categoria'),
+                observacao=data.get('observacao')
+            )
+            if isinstance(res, dict) and not res.get('success', True):
+                return jsonify(res), 401
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
+            return jsonify({"message": "Compra atualizada com sucesso"})
+        
+        elif request.method == "DELETE":
+            compra_id = request.args.get('id')
+            if not compra_id:
+                return jsonify({"error": "ID da compra é obrigatório"}), 400
+            try:
+                _upgrade_controle_schema()
+            except Exception:
+                pass
+            res = remover_compra_cartao(int(compra_id))
+            if isinstance(res, dict) and not res.get('success', True):
+                return jsonify(res), 401
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
+            return jsonify({"message": "Compra removida com sucesso"})
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/controle/total-compras-cartao", methods=["GET"])
+def api_total_compras_cartao():
+    try:
+        cartao_id = request.args.get('cartao_id')
+        mes = request.args.get('mes')
+        ano = request.args.get('ano')
+        if not cartao_id:
+            return jsonify({"error": "ID do cartão é obrigatório"}), 400
+        total = calcular_total_compras_cartao(int(cartao_id), mes, ano)
+        return jsonify({"total": total})
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 

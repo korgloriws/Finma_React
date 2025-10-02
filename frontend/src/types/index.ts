@@ -204,6 +204,50 @@ export interface FiltrosAnalise {
   pl_max?: number
   pvp_max?: number
   liq_min?: number
-} 
+}
+
+// ==================== TIPOS DE CARTÕES ====================
+
+export interface CartaoCadastrado {
+  id: number
+  nome: string
+  bandeira: string
+  limite: number
+  vencimento: number
+  cor: string
+  ativo: boolean
+  data_criacao: string
+}
+
+export interface CompraCartao {
+  id: number
+  cartao_id: number
+  nome: string
+  valor: number
+  data: string
+  categoria?: string
+  observacao?: string
+}
+
+export interface CartaoComCompras extends CartaoCadastrado {
+  compras: CompraCartao[]
+  total_compras: number
+  limite_restante: number
+  percentual_uso: number
+}
+
+export interface BandeiraCartao {
+  value: string
+  label: string
+  cor: string
+  icone: string
+}
+
+export interface CategoriaCompra {
+  value: string
+  label: string
+  cor: string
+  icone: string
+}
 
  

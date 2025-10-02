@@ -4408,6 +4408,30 @@ def init_controle_db(usuario=None):
                     )
                 ''')
                 cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS cartoes_cadastrados (
+                        id SERIAL PRIMARY KEY,
+                        nome TEXT NOT NULL,
+                        bandeira TEXT NOT NULL,
+                        limite NUMERIC NOT NULL,
+                        vencimento INTEGER NOT NULL,
+                        cor TEXT NOT NULL,
+                        ativo BOOLEAN DEFAULT TRUE,
+                        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS compras_cartao (
+                        id SERIAL PRIMARY KEY,
+                        cartao_id INTEGER NOT NULL,
+                        nome TEXT NOT NULL,
+                        valor NUMERIC NOT NULL,
+                        data TEXT NOT NULL,
+                        categoria TEXT,
+                        observacao TEXT,
+                        FOREIGN KEY (cartao_id) REFERENCES cartoes_cadastrados(id) ON DELETE CASCADE
+                    )
+                ''')
+                cursor.execute('''
                     CREATE TABLE IF NOT EXISTS outros_gastos (
                         id SERIAL PRIMARY KEY,
                         nome TEXT NOT NULL,
@@ -4426,6 +4450,9 @@ def init_controle_db(usuario=None):
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_data ON cartoes(data)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_outros_gastos_data ON outros_gastos(data)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_pago ON cartoes(pago)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_cadastrados_ativo ON cartoes_cadastrados(ativo)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_cartao_id ON compras_cartao(cartao_id)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_data ON compras_cartao(data)")
         finally:
             conn.close()
         return
@@ -4468,6 +4495,32 @@ def init_controle_db(usuario=None):
         )
     ''')
     
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cartoes_cadastrados (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            bandeira TEXT NOT NULL,
+            limite REAL NOT NULL,
+            vencimento INTEGER NOT NULL,
+            cor TEXT NOT NULL,
+            ativo BOOLEAN DEFAULT 1,
+            data_criacao TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS compras_cartao (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cartao_id INTEGER NOT NULL,
+            nome TEXT NOT NULL,
+            valor REAL NOT NULL,
+            data TEXT NOT NULL,
+            categoria TEXT,
+            observacao TEXT,
+            FOREIGN KEY (cartao_id) REFERENCES cartoes_cadastrados(id) ON DELETE CASCADE
+        )
+    ''')
+    
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS outros_gastos (
@@ -4495,6 +4548,9 @@ def init_controle_db(usuario=None):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_data ON cartoes(data)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_outros_gastos_data ON outros_gastos(data)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_pago ON cartoes(pago)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_cadastrados_ativo ON cartoes_cadastrados(ativo)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_cartao_id ON compras_cartao(cartao_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_data ON compras_cartao(data)")
     
     conn.commit()
     conn.close()
@@ -4527,6 +4583,41 @@ def _upgrade_controle_schema(usuario=None):
             conn.commit()
         finally:
             conn.close()
+        
+        # Criar tabelas de cartões cadastrados se não existirem
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS cartoes_cadastrados (
+                        id SERIAL PRIMARY KEY,
+                        nome TEXT NOT NULL,
+                        bandeira TEXT NOT NULL,
+                        limite NUMERIC NOT NULL,
+                        vencimento INTEGER NOT NULL,
+                        cor TEXT NOT NULL,
+                        ativo BOOLEAN DEFAULT TRUE,
+                        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS compras_cartao (
+                        id SERIAL PRIMARY KEY,
+                        cartao_id INTEGER NOT NULL,
+                        nome TEXT NOT NULL,
+                        valor NUMERIC NOT NULL,
+                        data TEXT NOT NULL,
+                        categoria TEXT,
+                        observacao TEXT,
+                        FOREIGN KEY (cartao_id) REFERENCES cartoes_cadastrados(id) ON DELETE CASCADE
+                    )
+                ''')
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_cadastrados_ativo ON cartoes_cadastrados(ativo)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_cartao_id ON compras_cartao(cartao_id)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_data ON compras_cartao(data)")
+            conn.commit()
+        finally:
+            conn.close()
     else:
         db_path = get_db_path(usuario, "controle")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -4551,6 +4642,41 @@ def _upgrade_controle_schema(usuario=None):
                             cur.execute(f"ALTER TABLE {t} ADD COLUMN {col} {coltype}")
                         except Exception:
                             pass
+            conn.commit()
+        finally:
+            conn.close()
+        
+        # Criar tabelas de cartões cadastrados se não existirem
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS cartoes_cadastrados (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nome TEXT NOT NULL,
+                    bandeira TEXT NOT NULL,
+                    limite REAL NOT NULL,
+                    vencimento INTEGER NOT NULL,
+                    cor TEXT NOT NULL,
+                    ativo BOOLEAN DEFAULT 1,
+                    data_criacao TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS compras_cartao (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cartao_id INTEGER NOT NULL,
+                    nome TEXT NOT NULL,
+                    valor REAL NOT NULL,
+                    data TEXT NOT NULL,
+                    categoria TEXT,
+                    observacao TEXT,
+                    FOREIGN KEY (cartao_id) REFERENCES cartoes_cadastrados(id) ON DELETE CASCADE
+                )
+            ''')
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_cadastrados_ativo ON cartoes_cadastrados(ativo)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_cartao_id ON compras_cartao(cartao_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_data ON compras_cartao(data)")
             conn.commit()
         finally:
             conn.close()
@@ -5288,4 +5414,347 @@ def calcular_saldo_mes_ano(mes, ano, pessoa=None):
     total_outros = float(df_outros['valor'].sum()) if not df_outros.empty else 0.0
     total_despesas = total_cartoes + total_outros
     return total_receitas - total_despesas
+
+# ==================== FUNÇÕES DE CARTÕES CADASTRADOS ====================
+
+def adicionar_cartao_cadastrado(nome, bandeira, limite, vencimento, cor):
+    """Adiciona um novo cartão cadastrado"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    INSERT INTO cartoes_cadastrados (nome, bandeira, limite, vencimento, cor)
+                    VALUES (%s, %s, %s, %s, %s)
+                ''', (nome, bandeira, limite, vencimento, cor))
+        finally:
+            conn.close()
+        return
+    db_path = get_db_path(usuario, "controle")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO cartoes_cadastrados (nome, bandeira, limite, vencimento, cor)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (nome, bandeira, limite, vencimento, cor))
+    conn.commit()
+    conn.close()
+
+def listar_cartoes_cadastrados():
+    """Lista todos os cartões cadastrados"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    SELECT * FROM cartoes_cadastrados 
+                    WHERE ativo = TRUE 
+                    ORDER BY nome
+                ''')
+                columns = [desc[0] for desc in cursor.description]
+                results = cursor.fetchall()
+                return [dict(zip(columns, row)) for row in results]
+        finally:
+            conn.close()
+    
+    db_path = get_db_path(usuario, "controle")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM cartoes_cadastrados 
+        WHERE ativo = 1 
+        ORDER BY nome
+    ''')
+    columns = [desc[0] for desc in cursor.description]
+    results = cursor.fetchall()
+    conn.close()
+    return [dict(zip(columns, row)) for row in results]
+
+def atualizar_cartao_cadastrado(id_cartao, nome=None, bandeira=None, limite=None, vencimento=None, cor=None, ativo=None):
+    """Atualiza um cartão cadastrado"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    UPDATE cartoes_cadastrados SET 
+                        nome = COALESCE(%s, nome),
+                        bandeira = COALESCE(%s, bandeira),
+                        limite = COALESCE(%s, limite),
+                        vencimento = COALESCE(%s, vencimento),
+                        cor = COALESCE(%s, cor),
+                        ativo = COALESCE(%s, ativo)
+                    WHERE id = %s
+                ''', (nome, bandeira, limite, vencimento, cor, ativo, id_cartao))
+        finally:
+            conn.close()
+        return
+    
+    db_path = get_db_path(usuario, "controle")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE cartoes_cadastrados SET 
+            nome = COALESCE(?, nome),
+            bandeira = COALESCE(?, bandeira),
+            limite = COALESCE(?, limite),
+            vencimento = COALESCE(?, vencimento),
+            cor = COALESCE(?, cor),
+            ativo = COALESCE(?, ativo)
+        WHERE id = ?
+    ''', (nome, bandeira, limite, vencimento, cor, ativo, id_cartao))
+    conn.commit()
+    conn.close()
+
+def remover_cartao_cadastrado(id_cartao):
+    """Remove um cartão cadastrado (soft delete)"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    UPDATE cartoes_cadastrados SET ativo = FALSE WHERE id = %s
+                ''', (id_cartao,))
+        finally:
+            conn.close()
+        return
+    
+    db_path = get_db_path(usuario, "controle")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE cartoes_cadastrados SET ativo = 0 WHERE id = ?
+    ''', (id_cartao,))
+    conn.commit()
+    conn.close()
+
+# ==================== FUNÇÕES DE COMPRAS DO CARTÃO ====================
+
+def adicionar_compra_cartao(cartao_id, nome, valor, data, categoria=None, observacao=None):
+    """Adiciona uma compra ao cartão"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+
+    data_atual = data or datetime.now().strftime('%Y-%m-%d')
+    
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    INSERT INTO compras_cartao (cartao_id, nome, valor, data, categoria, observacao)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                ''', (cartao_id, nome, valor, data_atual, categoria, observacao))
+        finally:
+            conn.close()
+        return
+    
+    db_path = get_db_path(usuario, "controle")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO compras_cartao (cartao_id, nome, valor, data, categoria, observacao)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (cartao_id, nome, valor, data_atual, categoria, observacao))
+    conn.commit()
+    conn.close()
+
+def listar_compras_cartao(cartao_id, mes=None, ano=None):
+    """Lista compras de um cartão específico"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                if mes and ano:
+                    mes_int = int(mes)
+                    ano_int = int(ano)
+                    if mes_int == 12:
+                        prox_ano, prox_mes = ano_int + 1, 1
+                    else:
+                        prox_ano, prox_mes = ano_int, mes_int + 1
+                    inicio = f"{ano_int}-{mes_int:02d}-01"
+                    fim = f"{prox_ano}-{prox_mes:02d}-01"
+                    cursor.execute('''
+                        SELECT * FROM compras_cartao 
+                        WHERE cartao_id = %s AND data >= %s AND data < %s
+                        ORDER BY data DESC
+                    ''', (cartao_id, inicio, fim))
+                else:
+                    cursor.execute('''
+                        SELECT * FROM compras_cartao 
+                        WHERE cartao_id = %s
+                        ORDER BY data DESC
+                    ''', (cartao_id,))
+                columns = [desc[0] for desc in cursor.description]
+                results = cursor.fetchall()
+                return [dict(zip(columns, row)) for row in results]
+        finally:
+            conn.close()
+    
+    db_path = get_db_path(usuario, "controle")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    cursor = conn.cursor()
+    if mes and ano:
+        mes_int = int(mes)
+        ano_int = int(ano)
+        if mes_int == 12:
+            prox_ano, prox_mes = ano_int + 1, 1
+        else:
+            prox_ano, prox_mes = ano_int, mes_int + 1
+        inicio = f"{ano_int}-{mes_int:02d}-01"
+        fim = f"{prox_ano}-{prox_mes:02d}-01"
+        cursor.execute('''
+            SELECT * FROM compras_cartao 
+            WHERE cartao_id = ? AND data >= ? AND data < ?
+            ORDER BY data DESC
+        ''', (cartao_id, inicio, fim))
+    else:
+        cursor.execute('''
+            SELECT * FROM compras_cartao 
+            WHERE cartao_id = ?
+            ORDER BY data DESC
+        ''', (cartao_id,))
+    columns = [desc[0] for desc in cursor.description]
+    results = cursor.fetchall()
+    conn.close()
+    return [dict(zip(columns, row)) for row in results]
+
+def atualizar_compra_cartao(id_compra, nome=None, valor=None, data=None, categoria=None, observacao=None):
+    """Atualiza uma compra do cartão"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('''
+                    UPDATE compras_cartao SET 
+                        nome = COALESCE(%s, nome),
+                        valor = COALESCE(%s, valor),
+                        data = COALESCE(%s, data),
+                        categoria = COALESCE(%s, categoria),
+                        observacao = COALESCE(%s, observacao)
+                    WHERE id = %s
+                ''', (nome, valor, data, categoria, observacao, id_compra))
+        finally:
+            conn.close()
+        return
+    
+    db_path = get_db_path(usuario, "controle")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE compras_cartao SET 
+            nome = COALESCE(?, nome),
+            valor = COALESCE(?, valor),
+            data = COALESCE(?, data),
+            categoria = COALESCE(?, categoria),
+            observacao = COALESCE(?, observacao)
+        WHERE id = ?
+    ''', (nome, valor, data, categoria, observacao, id_compra))
+    conn.commit()
+    conn.close()
+
+def remover_compra_cartao(id_compra):
+    """Remove uma compra do cartão"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute('DELETE FROM compras_cartao WHERE id = %s', (id_compra,))
+        finally:
+            conn.close()
+        return
+    
+    db_path = get_db_path(usuario, "controle")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM compras_cartao WHERE id = ?', (id_compra,))
+    conn.commit()
+    conn.close()
+
+def calcular_total_compras_cartao(cartao_id, mes=None, ano=None):
+    """Calcula o total de compras de um cartão"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return {"success": False, "message": "Usuário não autenticado"}
+
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                if mes and ano:
+                    mes_int = int(mes)
+                    ano_int = int(ano)
+                    if mes_int == 12:
+                        prox_ano, prox_mes = ano_int + 1, 1
+                    else:
+                        prox_ano, prox_mes = ano_int, mes_int + 1
+                    inicio = f"{ano_int}-{mes_int:02d}-01"
+                    fim = f"{prox_ano}-{prox_mes:02d}-01"
+                    cursor.execute('''
+                        SELECT COALESCE(SUM(valor), 0) as total FROM compras_cartao 
+                        WHERE cartao_id = %s AND data >= %s AND data < %s
+                    ''', (cartao_id, inicio, fim))
+                else:
+                    cursor.execute('''
+                        SELECT COALESCE(SUM(valor), 0) as total FROM compras_cartao 
+                        WHERE cartao_id = %s
+                    ''', (cartao_id,))
+                result = cursor.fetchone()
+                return float(result[0]) if result else 0.0
+        finally:
+            conn.close()
+    
+    db_path = get_db_path(usuario, "controle")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    cursor = conn.cursor()
+    if mes and ano:
+        mes_int = int(mes)
+        ano_int = int(ano)
+        if mes_int == 12:
+            prox_ano, prox_mes = ano_int + 1, 1
+        else:
+            prox_ano, prox_mes = ano_int, mes_int + 1
+        inicio = f"{ano_int}-{mes_int:02d}-01"
+        fim = f"{prox_ano}-{prox_mes:02d}-01"
+        cursor.execute('''
+            SELECT COALESCE(SUM(valor), 0) as total FROM compras_cartao 
+            WHERE cartao_id = ? AND data >= ? AND data < ?
+        ''', (cartao_id, inicio, fim))
+    else:
+        cursor.execute('''
+            SELECT COALESCE(SUM(valor), 0) as total FROM compras_cartao 
+            WHERE cartao_id = ?
+        ''', (cartao_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return float(result[0]) if result else 0.0
 

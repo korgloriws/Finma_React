@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { AtivoInfo, AtivoDetalhes, TickerSugestao, AtivoCarteira, Movimentacao, Marmita, GastoMensal, Receita, Cartao, OutroGasto, EvolucaoFinanceira, TotalPorPessoa, ReceitasDespesas, AtivoAnalise, ResumoAnalise, FiltrosAnalise, } from '../types'
+import { AtivoInfo, AtivoDetalhes, TickerSugestao, AtivoCarteira, Movimentacao, Marmita, GastoMensal, Receita, Cartao, OutroGasto, EvolucaoFinanceira, TotalPorPessoa, ReceitasDespesas, AtivoAnalise, ResumoAnalise, FiltrosAnalise, CartaoCadastrado, CompraCartao } from '../types'
 import { normalizeTicker } from '../utils/tickerUtils'
 
 const API_BASE_URL = (typeof import.meta !== 'undefined' && (import.meta as ImportMeta & { env?: any })?.env?.VITE_API_BASE_URL)
@@ -530,14 +530,18 @@ export const controleService = {
   },
 
 
-  getEvolucaoFinanceira: async (mes?: string, ano?: string, pessoa?: string, periodo?: string): Promise<{evolucao: EvolucaoFinanceira[], comparacao: any}> => {
+  getEvolucaoFinanceira: async (mes?: string, ano?: string, pessoa?: string): Promise<EvolucaoFinanceira[]> => {
     const params = new URLSearchParams()
     if (mes) params.append('mes', mes)
     if (ano) params.append('ano', ano)
     if (pessoa) params.append('pessoa', pessoa)
-    if (periodo) params.append('periodo', periodo)
     
     const response = await api.get(`/controle/evolucao-financeira?${params.toString()}`)
+    return response.data
+  },
+
+  getEvolucaoReceitas: async (periodo: string): Promise<{mes: string, receitas: number}[]> => {
+    const response = await api.get(`/controle/evolucao-receitas?periodo=${periodo}`)
     return response.data
   },
 
@@ -599,6 +603,85 @@ export const homeService = {
   },
 }
 
+// ==================== SERVIÇOS DE CARTÕES ====================
 
+export const cartaoService = {
+  // Cartões Cadastrados
+  getCartoesCadastrados: async (): Promise<CartaoCadastrado[]> => {
+    const response = await api.get('/controle/cartoes-cadastrados')
+    return response.data
+  },
+
+  adicionarCartaoCadastrado: async (data: {
+    nome: string
+    bandeira: string
+    limite: number
+    vencimento: number
+    cor: string
+  }): Promise<void> => {
+    await api.post('/controle/cartoes-cadastrados', data)
+  },
+
+  atualizarCartaoCadastrado: async (data: {
+    id: number
+    nome?: string
+    bandeira?: string
+    limite?: number
+    vencimento?: number
+    cor?: string
+    ativo?: boolean
+  }): Promise<void> => {
+    await api.put('/controle/cartoes-cadastrados', data)
+  },
+
+  removerCartaoCadastrado: async (id: number): Promise<void> => {
+    await api.delete(`/controle/cartoes-cadastrados?id=${id}`)
+  },
+
+  // Compras do Cartão
+  getComprasCartao: async (cartaoId: number, mes?: string, ano?: string): Promise<CompraCartao[]> => {
+    const params = new URLSearchParams({ cartao_id: cartaoId.toString() })
+    if (mes) params.append('mes', mes)
+    if (ano) params.append('ano', ano)
+    
+    const response = await api.get(`/controle/compras-cartao?${params.toString()}`)
+    return response.data
+  },
+
+  adicionarCompraCartao: async (data: {
+    cartao_id: number
+    nome: string
+    valor: number
+    data: string
+    categoria?: string
+    observacao?: string
+  }): Promise<void> => {
+    await api.post('/controle/compras-cartao', data)
+  },
+
+  atualizarCompraCartao: async (data: {
+    id: number
+    nome?: string
+    valor?: number
+    data?: string
+    categoria?: string
+    observacao?: string
+  }): Promise<void> => {
+    await api.put('/controle/compras-cartao', data)
+  },
+
+  removerCompraCartao: async (id: number): Promise<void> => {
+    await api.delete(`/controle/compras-cartao?id=${id}`)
+  },
+
+  getTotalComprasCartao: async (cartaoId: number, mes?: string, ano?: string): Promise<number> => {
+    const params = new URLSearchParams({ cartao_id: cartaoId.toString() })
+    if (mes) params.append('mes', mes)
+    if (ano) params.append('ano', ano)
+    
+    const response = await api.get(`/controle/total-compras-cartao?${params.toString()}`)
+    return response.data.total
+  },
+}
 
 export default api 
