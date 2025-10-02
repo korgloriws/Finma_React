@@ -13,7 +13,7 @@ from models import (
     remover_ativo_carteira, atualizar_ativo_carteira, obter_movimentacoes, obter_historico_carteira,
 
     salvar_receita, carregar_receitas_mes_ano, atualizar_receita, remover_receita,
-    adicionar_cartao, carregar_cartoes_mes_ano, atualizar_cartao, remover_cartao, 
+    adicionar_cartao, atualizar_cartao, remover_cartao, 
     adicionar_outro_gasto, carregar_outros_mes_ano, atualizar_outro_gasto, remover_outro_gasto, 
     calcular_saldo_mes_ano,
     
@@ -2254,93 +2254,12 @@ def api_receitas():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ROTA REMOVIDA - Cartões antigos migrados para outros_gastos
 @server.route("/api/controle/cartoes", methods=["GET", "POST", "PUT", "DELETE"])
 def api_cartoes():
-
-    try:
-        if request.method == "POST":
-            data = request.get_json()
-            try:
-                _upgrade_controle_schema()
-            except Exception:
-                pass
-            res = adicionar_cartao(
-                data.get('nome'),
-                data.get('valor'),
-                data.get('pago'),
-                data=data.get('data'),
-                categoria=data.get('categoria'),
-                tipo=data.get('tipo'),
-                recorrencia=data.get('recorrencia'),
-                parcelas_total=data.get('parcelas_total'),
-                parcela_atual=data.get('parcela_atual'),
-                grupo_parcela=data.get('grupo_parcela'),
-                observacao=data.get('observacao')
-            )
-            if isinstance(res, dict) and not res.get('success', True):
-                return jsonify(res), 401
-            try:
-                if cache:
-                    cache.clear()
-            except Exception:
-                pass
-            return jsonify({"message": "Cartão adicionado com sucesso"})
-        elif request.method == "PUT":
-            data = request.get_json()
-            try:
-                _upgrade_controle_schema()
-            except Exception:
-                pass
-            atualizar_cartao(
-                data.get('id'),
-                nome=data.get('nome'),
-                valor=data.get('valor'),
-                pago=data.get('pago'),
-                data=data.get('data'),
-                categoria=data.get('categoria'),
-                tipo=data.get('tipo'),
-                recorrencia=data.get('recorrencia'),
-                parcelas_total=data.get('parcelas_total'),
-                parcela_atual=data.get('parcela_atual'),
-                grupo_parcela=data.get('grupo_parcela'),
-                observacao=data.get('observacao')
-            )
-            try:
-                if cache:
-                    cache.clear()
-            except Exception:
-                pass
-            return jsonify({"message": "Cartão atualizado com sucesso"})
-        elif request.method == "DELETE":
-            id_registro = request.args.get('id', type=int)
-            if id_registro:
-                remover_cartao(id_registro)
-                try:
-                    if cache:
-                        cache.clear()
-                except Exception:
-                    pass
-                return jsonify({"message": "Cartão removido com sucesso"})
-            return jsonify({"error": "ID é obrigatório"}), 400
-        else:
-            mes = request.args.get('mes', type=str)
-            ano = request.args.get('ano', type=str)
-            usuario = get_usuario_atual()
-            if cache and usuario:
-                key = f"cartoes:{usuario}:{mes or ''}:{ano or ''}"
-                cached = cache.get(key)
-                if cached is not None:
-                    return jsonify(cached)
-                cartoes = carregar_cartoes_mes_ano(mes, ano)
-                try:
-                    cache.set(key, cartoes, timeout=30)
-                except Exception:
-                    pass
-                return jsonify(cartoes)
-            cartoes = carregar_cartoes_mes_ano(mes, ano)
-            return jsonify(cartoes)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    # Esta rota foi removida pois os cartões antigos foram migrados para outros_gastos
+    # Use /api/controle/cartoes-cadastrados para o novo sistema de cartões
+    return jsonify({"error": "Rota removida - use /api/controle/cartoes-cadastrados"}), 410
 
 @server.route("/api/controle/outros", methods=["GET", "POST", "PUT", "DELETE"])
 def api_outros():
@@ -2468,7 +2387,6 @@ def api_evolucao_financeira():
         
         
         df_receita = carregar_receitas_mes_ano(mes, ano)
-        df_cartao = pd.DataFrame(carregar_cartoes_mes_ano(mes, ano))
         df_outros = pd.DataFrame(carregar_outros_mes_ano(mes, ano))
         
     
@@ -2479,11 +2397,9 @@ def api_evolucao_financeira():
             df_receita_grouped = pd.DataFrame(columns=["data", "receitas"])
         
       
-        df_cartao["data"] = pd.to_datetime(df_cartao["data"]) if not df_cartao.empty else pd.Series(dtype='datetime64[ns]')
         df_outros["data"] = pd.to_datetime(df_outros["data"]) if not df_outros.empty else pd.Series(dtype='datetime64[ns]')
-        df_cartao_ = df_cartao[["data", "valor"]] if not df_cartao.empty else pd.DataFrame(columns=["data", "valor"])
         df_outros_ = df_outros[["data", "valor"]] if not df_outros.empty else pd.DataFrame(columns=["data", "valor"])
-        df_despesas = pd.concat([df_cartao_, df_outros_]) if not df_cartao_.empty or not df_outros_.empty else pd.DataFrame(columns=["data", "valor"])
+        df_despesas = df_outros_ if not df_outros_.empty else pd.DataFrame(columns=["data", "valor"])
         
         if df_despesas.empty:
             df_despesas_grouped = pd.DataFrame({"data": [], "despesas": []})
@@ -2578,12 +2494,9 @@ def api_receitas_despesas():
             if cached is not None:
                 return jsonify(cached)
         df_receita = carregar_receitas_mes_ano(mes, ano)
-        df_cartao = pd.DataFrame(carregar_cartoes_mes_ano(mes, ano))
         df_outros = pd.DataFrame(carregar_outros_mes_ano(mes, ano))
         
         despesas = 0
-        if not df_cartao.empty:
-            despesas += df_cartao["valor"].sum()
         if not df_outros.empty:
             despesas += df_outros["valor"].sum()
         
@@ -2643,8 +2556,8 @@ def api_home_resumo():
         total_receitas = df_receitas['valor'].sum() if not df_receitas.empty else 0
         
   
-        cartoes = carregar_cartoes_mes_ano(mes, ano)
-        total_cartoes = sum(cartao.get('valor', 0) for cartao in cartoes)
+        # Cartões antigos migrados para outros_gastos
+        total_cartoes = 0
         
    
         outros = carregar_outros_mes_ano(mes, ano)
@@ -2669,7 +2582,6 @@ def api_home_resumo():
         
   
         df_receita = carregar_receitas_mes_ano(mes, ano)
-        df_cartao = pd.DataFrame(carregar_cartoes_mes_ano(mes, ano))
         df_outros = pd.DataFrame(carregar_outros_mes_ano(mes, ano))
         
        
@@ -2680,11 +2592,9 @@ def api_home_resumo():
             df_receita_grouped = pd.DataFrame(columns=["data", "receitas"])
         
    
-        df_cartao["data"] = pd.to_datetime(df_cartao["data"]) if not df_cartao.empty else pd.Series(dtype='datetime64[ns]')
         df_outros["data"] = pd.to_datetime(df_outros["data"]) if not df_outros.empty else pd.Series(dtype='datetime64[ns]')
-        df_cartao_ = df_cartao[["data", "valor"]] if not df_cartao.empty else pd.DataFrame(columns=["data", "valor"])
         df_outros_ = df_outros[["data", "valor"]] if not df_outros.empty else pd.DataFrame(columns=["data", "valor"])
-        df_despesas = pd.concat([df_cartao_, df_outros_]) if not df_cartao_.empty or not df_outros_.empty else pd.DataFrame(columns=["data", "valor"])
+        df_despesas = df_outros_ if not df_outros_.empty else pd.DataFrame(columns=["data", "valor"])
         
         if df_despesas.empty:
             df_despesas_grouped = pd.DataFrame({"data": [], "despesas": []})
@@ -2738,11 +2648,7 @@ def api_home_resumo():
                 'total': total_receitas,
                 'quantidade': len(receitas)
             },
-            'cartoes': {
-                'registros': cartoes,
-                'total': total_cartoes,
-                'quantidade': len(cartoes)
-            },
+            # Cartões antigos migrados para outros_gastos
             'outros': {
                 'registros': outros,
                 'total': total_outros,
@@ -2756,7 +2662,7 @@ def api_home_resumo():
             'saldo': saldo,
             'evolucao_financeira': evolucao,
             'gastos_mensais': gastos_mensais_data,
-            'total_despesas': total_cartoes + total_outros + total_marmitas
+            'total_despesas': total_outros + total_marmitas
         }
         
 
@@ -2978,6 +2884,12 @@ def api_marcar_cartao_pago():
         success = marcar_cartao_como_pago(cartao_id, mes_pagamento, ano_pagamento)
         
         if success:
+            # Invalidar cache para recalcular saldo
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
             return jsonify({"success": True, "message": "Cartão marcado como pago e convertido em despesa"})
         else:
             return jsonify({"error": "Erro ao marcar cartão como pago"}), 500
@@ -2996,6 +2908,12 @@ def api_desmarcar_cartao_pago():
         success = desmarcar_cartao_como_pago(cartao_id)
         
         if success:
+            # Invalidar cache para recalcular saldo
+            try:
+                if cache:
+                    cache.clear()
+            except Exception:
+                pass
             return jsonify({"success": True, "message": "Cartão desmarcado como pago e despesa removida"})
         else:
             return jsonify({"error": "Erro ao desmarcar cartão como pago"}), 500

@@ -5450,11 +5450,7 @@ def calcular_saldo_mes_ano(mes, ano, pessoa=None):
                 params=(inicio, fim)
             )
           
-            df_cartoes = pd.read_sql_query(
-                "SELECT valor, pago FROM cartoes WHERE data >= %s AND data < %s",
-                conn,
-                params=(inicio, fim)
-            )
+            # Cartões antigos migrados para outros_gastos
   
             df_outros = pd.read_sql_query(
                 'SELECT valor FROM outros_gastos WHERE data >= %s AND data < %s',
@@ -5472,11 +5468,7 @@ def calcular_saldo_mes_ano(mes, ano, pessoa=None):
             conn,
             params=(inicio, fim)
         )
-        df_cartoes = pd.read_sql_query(
-            'SELECT valor, pago FROM cartoes WHERE data >= ? AND data < ?',
-            conn,
-            params=(inicio, fim)
-        )
+        
         df_outros = pd.read_sql_query(
             'SELECT valor FROM outros_gastos WHERE data >= ? AND data < ?',
             conn,
@@ -5485,9 +5477,8 @@ def calcular_saldo_mes_ano(mes, ano, pessoa=None):
         conn.close()
 
     total_receitas = float(df_receitas['total'].iloc[0]) if not df_receitas.empty and df_receitas['total'].iloc[0] is not None else 0.0
-    total_cartoes = float(df_cartoes[df_cartoes['pago'] == 'Sim']['valor'].sum()) if not df_cartoes.empty else 0.0
     total_outros = float(df_outros['valor'].sum()) if not df_outros.empty else 0.0
-    total_despesas = total_cartoes + total_outros
+    total_despesas = total_outros
     return total_receitas - total_despesas
 
 # ==================== FUNÇÕES DE CARTÕES CADASTRADOS ====================

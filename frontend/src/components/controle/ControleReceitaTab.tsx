@@ -64,6 +64,7 @@ export default function ControleReceitaTab({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['receitas'] })
       queryClient.invalidateQueries({ queryKey: ['evolucao-receitas'] })
+      queryClient.invalidateQueries({ queryKey: ['saldo'] })
       setInputNome('')
       setInputValor('')
       setInputData('')
@@ -79,6 +80,7 @@ export default function ControleReceitaTab({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['receitas'] })
       queryClient.invalidateQueries({ queryKey: ['evolucao-receitas'] })
+      queryClient.invalidateQueries({ queryKey: ['saldo'] })
     },
   })
 
@@ -87,6 +89,7 @@ export default function ControleReceitaTab({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['receitas'] })
       queryClient.invalidateQueries({ queryKey: ['evolucao-receitas'] })
+      queryClient.invalidateQueries({ queryKey: ['saldo'] })
     },
   })
 

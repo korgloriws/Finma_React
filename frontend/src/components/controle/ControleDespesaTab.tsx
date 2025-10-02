@@ -74,6 +74,7 @@ export default function ControleDespesaTab({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['outros'] })
       queryClient.invalidateQueries({ queryKey: ['receitas-despesas'] })
+      queryClient.invalidateQueries({ queryKey: ['saldo'] })
       limparFormulario()
     },
   })
@@ -84,6 +85,7 @@ export default function ControleDespesaTab({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['outros'] })
       queryClient.invalidateQueries({ queryKey: ['receitas-despesas'] })
+      queryClient.invalidateQueries({ queryKey: ['saldo'] })
     },
   })
 
@@ -92,6 +94,7 @@ export default function ControleDespesaTab({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['outros'] })
       queryClient.invalidateQueries({ queryKey: ['receitas-despesas'] })
+      queryClient.invalidateQueries({ queryKey: ['saldo'] })
     },
   })
 

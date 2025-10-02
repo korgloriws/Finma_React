@@ -54,6 +54,7 @@ export default function ControleAlimentacaoTab({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marmitas'] })
       queryClient.invalidateQueries({ queryKey: ['gastos-mensais'] })
+      queryClient.invalidateQueries({ queryKey: ['saldo'] })
       setInputData('')
       setInputValor('')
       setInputComprou(true)
@@ -66,6 +67,7 @@ export default function ControleAlimentacaoTab({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marmitas'] })
       queryClient.invalidateQueries({ queryKey: ['gastos-mensais'] })
+      queryClient.invalidateQueries({ queryKey: ['saldo'] })
     },
   })
 
@@ -74,6 +76,7 @@ export default function ControleAlimentacaoTab({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marmitas'] })
       queryClient.invalidateQueries({ queryKey: ['gastos-mensais'] })
+      queryClient.invalidateQueries({ queryKey: ['saldo'] })
     },
   })
 
