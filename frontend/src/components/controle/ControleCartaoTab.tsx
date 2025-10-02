@@ -69,6 +69,7 @@ export default function ControleCartaoTab({
   const [cartaoSelecionado, setCartaoSelecionado] = useState<number | null>(null)
   const [mostrarFormularioCartao, setMostrarFormularioCartao] = useState(false)
   const [mostrarFormularioCompra, setMostrarFormularioCompra] = useState(false)
+  const [modoValorTotal, setModoValorTotal] = useState(false)
   const [editingCartaoId, setEditingCartaoId] = useState<number | null>(null)
   const [editandoCartao, setEditandoCartao] = useState(false)
   const [mostrarModalPagamento, setMostrarModalPagamento] = useState(false)
@@ -243,6 +244,16 @@ export default function ControleCartaoTab({
     setMostrarFormularioCompra(false)
   }, [])
 
+  const handleToggleModo = useCallback((novoModo: boolean) => {
+    setModoValorTotal(novoModo)
+    // Limpar formulário quando mudar de modo
+    setInputCompraNome('')
+    setInputCompraValor('')
+    setInputCompraData('')
+    setInputCompraCategoria('alimentacao')
+    setInputCompraObservacao('')
+  }, [])
+
   // Handlers
   const handleAdicionarCartao = useCallback(() => {
     if (!inputNome || !inputLimite || !inputVencimento) return
@@ -320,6 +331,26 @@ export default function ControleCartaoTab({
       desmarcarCartaoPagoMutation.mutate(cartaoId)
     }
   }, [desmarcarCartaoPagoMutation])
+
+  const handleDefinirValorTotal = useCallback(() => {
+    if (!cartaoSelecionado || !inputCompraValor) return
+    
+    const valor = parseFloat(inputCompraValor.replace(',', '.'))
+    if (isNaN(valor) || valor <= 0) {
+      alert('Por favor, insira um valor válido')
+      return
+    }
+
+    // Adicionar como uma compra única com o valor total
+    adicionarCompraMutation.mutate({
+      cartao_id: cartaoSelecionado,
+      nome: 'Valor Total da Fatura',
+      valor: valor,
+      data: inputCompraData || new Date().toISOString().split('T')[0],
+      categoria: 'outros',
+      observacao: 'Valor total definido pelo usuário'
+    })
+  }, [cartaoSelecionado, inputCompraValor, inputCompraData, adicionarCompraMutation])
 
   // Cálculos
   const cartaoAtual = useMemo(() => {
@@ -785,7 +816,7 @@ export default function ControleCartaoTab({
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-foreground">
-                  Nova Compra
+                  {modoValorTotal ? 'Definir Valor Total' : 'Nova Compra'}
                 </h3>
                 <button
                   onClick={() => setMostrarFormularioCompra(false)}
@@ -797,32 +828,58 @@ export default function ControleCartaoTab({
                 </button>
               </div>
 
+              {/* Toggle entre modo individual e valor total */}
+              <div className="flex items-center gap-2 mb-4 p-2 bg-muted/50 rounded-lg">
+                <button
+                  onClick={() => handleToggleModo(false)}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    !modoValorTotal
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Compras Individuais
+                </button>
+                <button
+                  onClick={() => handleToggleModo(true)}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    modoValorTotal
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Valor Total
+                </button>
+              </div>
+
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Descrição da Compra
-                  </label>
-                  <input
-                    type="text"
-                    value={inputCompraNome}
-                    onChange={(e) => setInputCompraNome(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="Ex: Supermercado"
-                    aria-label="Descrição da compra"
-                  />
-                </div>
+                {!modoValorTotal && (
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      Descrição da Compra
+                    </label>
+                    <input
+                      type="text"
+                      value={inputCompraNome}
+                      onChange={(e) => setInputCompraNome(e.target.value)}
+                      className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      placeholder="Ex: Supermercado"
+                      aria-label="Descrição da compra"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Valor
+                    {modoValorTotal ? 'Valor Total da Fatura' : 'Valor'}
                   </label>
                   <input
                     type="text"
                     value={inputCompraValor}
                     onChange={(e) => setInputCompraValor(e.target.value)}
                     className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="0,00"
-                    aria-label="Valor da compra"
+                    placeholder={modoValorTotal ? "Ex: 1.250,00" : "0,00"}
+                    aria-label={modoValorTotal ? "Valor total da fatura" : "Valor da compra"}
                   />
                 </div>
 
@@ -839,42 +896,55 @@ export default function ControleCartaoTab({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Categoria
-                  </label>
-                  <select
-                    value={inputCompraCategoria}
-                    onChange={(e) => setInputCompraCategoria(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    aria-label="Categoria da compra"
-                  >
-                    {CATEGORIAS_COMPRA.map((categoria) => (
-                      <option key={categoria.value} value={categoria.value}>
-                        {categoria.icone} {categoria.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {!modoValorTotal && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">
+                        Categoria
+                      </label>
+                      <select
+                        value={inputCompraCategoria}
+                        onChange={(e) => setInputCompraCategoria(e.target.value)}
+                        className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        aria-label="Categoria da compra"
+                      >
+                        {CATEGORIAS_COMPRA.map((categoria) => (
+                          <option key={categoria.value} value={categoria.value}>
+                            {categoria.icone} {categoria.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
-                    Observação (opcional)
-                  </label>
-                  <textarea
-                    value={inputCompraObservacao}
-                    onChange={(e) => setInputCompraObservacao(e.target.value)}
-                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    placeholder="Observações adicionais..."
-                    rows={3}
-                    aria-label="Observação da compra"
-                  />
-                </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1">
+                        Observação (opcional)
+                      </label>
+                      <textarea
+                        value={inputCompraObservacao}
+                        onChange={(e) => setInputCompraObservacao(e.target.value)}
+                        className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        placeholder="Observações adicionais..."
+                        rows={3}
+                        aria-label="Observação da compra"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {modoValorTotal && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      <strong>💡 Dica:</strong> Este valor será adicionado como uma compra única "Valor Total da Fatura". 
+                      Use este modo quando você já tem o valor total da fatura do cartão.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2 mt-6">
                 <button
-                  onClick={handleAdicionarCompra}
+                  onClick={modoValorTotal ? handleDefinirValorTotal : handleAdicionarCompra}
                   disabled={adicionarCompraMutation.isPending}
                   className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
@@ -883,7 +953,7 @@ export default function ControleCartaoTab({
                   ) : (
                     <Plus className="w-4 h-4" />
                   )}
-                  Adicionar Compra
+                  {modoValorTotal ? 'Definir Valor Total' : 'Adicionar Compra'}
                 </button>
                 <button
                   onClick={() => setMostrarFormularioCompra(false)}
