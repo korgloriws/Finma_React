@@ -30,7 +30,9 @@ const CATEGORIAS_DESPESAS = [
   { value: 'alimentacao', label: 'Alimentação', icon: Utensils, color: '#f97316' },
   { value: 'transporte', label: 'Transporte', icon: Receipt, color: '#06b6d4' },
   { value: 'lazer', label: 'Lazer', icon: Receipt, color: '#84cc16' },
-  { value: 'outros', label: 'Outros', icon: Receipt, color: '#6b7280' }
+  { value: 'outros', label: 'Outros', icon: Receipt, color: '#6b7280' },
+  { value: 'cartao', label: 'Cartão', icon: Receipt, color: '#6b7283' },
+  { value: 'investimentos', label: 'investimentos', icon: Receipt, color: '#6b7286' }
 ]
 
 export default function ControleDespesaTab({ 
@@ -42,15 +44,15 @@ export default function ControleDespesaTab({
   const [inputNome, setInputNome] = useState('')
   const [inputValor, setInputValor] = useState('')
   const [inputData, setInputData] = useState('')
-  const [inputCategoria, setInputCategoria] = useState('farmacia')
-  const [inputTipo, setInputTipo] = useState('variavel')
+  const [inputCategoria, setInputCategoria] = useState('')
+  const [inputTipo, setInputTipo] = useState('')
   const [inputObservacao, setInputObservacao] = useState('')
   const [editingDespesaId, setEditingDespesaId] = useState<number | null>(null)
   const [editDespesaNome, setEditDespesaNome] = useState('')
   const [editDespesaValor, setEditDespesaValor] = useState('')
   const [editDespesaData, setEditDespesaData] = useState('')
-  const [editDespesaCategoria, setEditDespesaCategoria] = useState('farmacia')
-  const [editDespesaTipo, setEditDespesaTipo] = useState('variavel')
+  const [editDespesaCategoria, setEditDespesaCategoria] = useState('')
+  const [editDespesaTipo, setEditDespesaTipo] = useState('')
   const [editDespesaObservacao, setEditDespesaObservacao] = useState('')
 
   const queryClient = useQueryClient()
@@ -98,8 +100,8 @@ export default function ControleDespesaTab({
     setInputNome('')
     setInputValor('')
     setInputData('')
-    setInputCategoria('farmacia')
-    setInputTipo('variavel')
+    setInputCategoria('')
+    setInputTipo('')
     setInputObservacao('')
   }, [])
 
@@ -132,7 +134,7 @@ export default function ControleDespesaTab({
     setEditDespesaNome(despesa.nome)
     setEditDespesaValor(despesa.valor.toString())
     setEditDespesaData(despesa.data)
-    setEditDespesaCategoria(despesa.categoria || 'farmacia')
+    setEditDespesaCategoria(despesa.categoria || '')
     setEditDespesaTipo(despesa.tipo || 'variavel')
     setEditDespesaObservacao(despesa.observacao || '')
   }, [])
@@ -142,8 +144,8 @@ export default function ControleDespesaTab({
     setEditDespesaNome('')
     setEditDespesaValor('')
     setEditDespesaData('')
-    setEditDespesaCategoria('farmacia')
-    setEditDespesaTipo('variavel')
+    setEditDespesaCategoria('')
+    setEditDespesaTipo('')
     setEditDespesaObservacao('')
   }, [])
 
