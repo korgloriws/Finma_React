@@ -19,6 +19,7 @@ from models import (
     
     adicionar_cartao_cadastrado, listar_cartoes_cadastrados, atualizar_cartao_cadastrado, remover_cartao_cadastrado,
     adicionar_compra_cartao, listar_compras_cartao, atualizar_compra_cartao, remover_compra_cartao, calcular_total_compras_cartao,
+    marcar_cartao_como_pago, desmarcar_cartao_como_pago,
 
     consultar_marmitas, adicionar_marmita, atualizar_marmita, remover_marmita, gastos_mensais,
 
@@ -2960,6 +2961,44 @@ def api_total_compras_cartao():
             return jsonify({"error": "ID do cartão é obrigatório"}), 400
         total = calcular_total_compras_cartao(int(cartao_id), mes, ano)
         return jsonify({"total": total})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/controle/marcar-cartao-pago", methods=["POST"])
+def api_marcar_cartao_pago():
+    try:
+        data = request.get_json()
+        cartao_id = data.get('cartao_id')
+        mes_pagamento = data.get('mes_pagamento')
+        ano_pagamento = data.get('ano_pagamento')
+        
+        if not all([cartao_id, mes_pagamento, ano_pagamento]):
+            return jsonify({"error": "cartao_id, mes_pagamento e ano_pagamento são obrigatórios"}), 400
+        
+        success = marcar_cartao_como_pago(cartao_id, mes_pagamento, ano_pagamento)
+        
+        if success:
+            return jsonify({"success": True, "message": "Cartão marcado como pago e convertido em despesa"})
+        else:
+            return jsonify({"error": "Erro ao marcar cartão como pago"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/controle/desmarcar-cartao-pago", methods=["POST"])
+def api_desmarcar_cartao_pago():
+    try:
+        data = request.get_json()
+        cartao_id = data.get('cartao_id')
+        
+        if not cartao_id:
+            return jsonify({"error": "cartao_id é obrigatório"}), 400
+        
+        success = desmarcar_cartao_como_pago(cartao_id)
+        
+        if success:
+            return jsonify({"success": True, "message": "Cartão desmarcado como pago e despesa removida"})
+        else:
+            return jsonify({"error": "Erro ao desmarcar cartão como pago"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

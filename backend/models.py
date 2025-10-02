@@ -4416,7 +4416,11 @@ def init_controle_db(usuario=None):
                         vencimento INTEGER NOT NULL,
                         cor TEXT NOT NULL,
                         ativo BOOLEAN DEFAULT TRUE,
-                        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        pago BOOLEAN DEFAULT FALSE,
+                        mes_pagamento INTEGER,
+                        ano_pagamento INTEGER,
+                        data_pagamento TIMESTAMP
                     )
                 ''')
                 cursor.execute('''
@@ -4450,7 +4454,26 @@ def init_controle_db(usuario=None):
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_data ON cartoes(data)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_outros_gastos_data ON outros_gastos(data)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_pago ON cartoes(pago)")
+                # Adicionar colunas de pagamento se não existirem
+                try:
+                    cursor.execute("ALTER TABLE cartoes_cadastrados ADD COLUMN pago BOOLEAN DEFAULT FALSE")
+                except Exception:
+                    pass  # Coluna já existe
+                try:
+                    cursor.execute("ALTER TABLE cartoes_cadastrados ADD COLUMN mes_pagamento INTEGER")
+                except Exception:
+                    pass  # Coluna já existe
+                try:
+                    cursor.execute("ALTER TABLE cartoes_cadastrados ADD COLUMN ano_pagamento INTEGER")
+                except Exception:
+                    pass  # Coluna já existe
+                try:
+                    cursor.execute("ALTER TABLE cartoes_cadastrados ADD COLUMN data_pagamento TIMESTAMP")
+                except Exception:
+                    pass  # Coluna já existe
+                
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_cadastrados_ativo ON cartoes_cadastrados(ativo)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_cadastrados_pago ON cartoes_cadastrados(pago)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_cartao_id ON compras_cartao(cartao_id)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_data ON compras_cartao(data)")
         finally:
@@ -4504,7 +4527,11 @@ def init_controle_db(usuario=None):
             vencimento INTEGER NOT NULL,
             cor TEXT NOT NULL,
             ativo BOOLEAN DEFAULT 1,
-            data_criacao TEXT DEFAULT CURRENT_TIMESTAMP
+            data_criacao TEXT DEFAULT CURRENT_TIMESTAMP,
+            pago BOOLEAN DEFAULT 0,
+            mes_pagamento INTEGER,
+            ano_pagamento INTEGER,
+            data_pagamento TEXT
         )
     ''')
     
@@ -4597,7 +4624,11 @@ def _upgrade_controle_schema(usuario=None):
                         vencimento INTEGER NOT NULL,
                         cor TEXT NOT NULL,
                         ativo BOOLEAN DEFAULT TRUE,
-                        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        pago BOOLEAN DEFAULT FALSE,
+                        mes_pagamento INTEGER,
+                        ano_pagamento INTEGER,
+                        data_pagamento TIMESTAMP
                     )
                 ''')
                 cursor.execute('''
@@ -4612,7 +4643,26 @@ def _upgrade_controle_schema(usuario=None):
                         FOREIGN KEY (cartao_id) REFERENCES cartoes_cadastrados(id) ON DELETE CASCADE
                     )
                 ''')
+                # Adicionar colunas de pagamento se não existirem
+                try:
+                    cursor.execute("ALTER TABLE cartoes_cadastrados ADD COLUMN pago BOOLEAN DEFAULT FALSE")
+                except Exception:
+                    pass  # Coluna já existe
+                try:
+                    cursor.execute("ALTER TABLE cartoes_cadastrados ADD COLUMN mes_pagamento INTEGER")
+                except Exception:
+                    pass  # Coluna já existe
+                try:
+                    cursor.execute("ALTER TABLE cartoes_cadastrados ADD COLUMN ano_pagamento INTEGER")
+                except Exception:
+                    pass  # Coluna já existe
+                try:
+                    cursor.execute("ALTER TABLE cartoes_cadastrados ADD COLUMN data_pagamento TIMESTAMP")
+                except Exception:
+                    pass  # Coluna já existe
+                
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_cadastrados_ativo ON cartoes_cadastrados(ativo)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_cadastrados_pago ON cartoes_cadastrados(pago)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_cartao_id ON compras_cartao(cartao_id)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_data ON compras_cartao(data)")
             conn.commit()
@@ -4659,9 +4709,34 @@ def _upgrade_controle_schema(usuario=None):
                     vencimento INTEGER NOT NULL,
                     cor TEXT NOT NULL,
                     ativo BOOLEAN DEFAULT 1,
-                    data_criacao TEXT DEFAULT CURRENT_TIMESTAMP
+                    data_criacao TEXT DEFAULT CURRENT_TIMESTAMP,
+                    pago BOOLEAN DEFAULT 0,
+                    mes_pagamento INTEGER,
+                    ano_pagamento INTEGER,
+                    data_pagamento TEXT
                 )
             ''')
+            
+ 
+            cursor.execute("PRAGMA table_info(cartoes_cadastrados)")
+            existing_columns = {row[1] for row in cursor.fetchall()}
+            
+            colunas_pagamento = [
+                ('pago', 'BOOLEAN DEFAULT 0'),
+                ('mes_pagamento', 'INTEGER'),
+                ('ano_pagamento', 'INTEGER'),
+                ('data_pagamento', 'TEXT')
+            ]
+            
+            for col_name, col_type in colunas_pagamento:
+                if col_name not in existing_columns:
+                    try:
+                        cursor.execute(f"ALTER TABLE cartoes_cadastrados ADD COLUMN {col_name} {col_type}")
+                    except Exception:
+                        pass  # Coluna já existe ou erro ao adicionar
+            
+            conn.commit()
+            
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS compras_cartao (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5450,6 +5525,9 @@ def listar_cartoes_cadastrados():
     if not usuario:
         return {"success": False, "message": "Usuário não autenticado"}
 
+    # Garantir que o schema está atualizado
+    _upgrade_controle_schema(usuario)
+
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
@@ -5757,4 +5835,156 @@ def calcular_total_compras_cartao(cartao_id, mes=None, ano=None):
     result = cursor.fetchone()
     conn.close()
     return float(result[0]) if result else 0.0
+
+def marcar_cartao_como_pago(cartao_id, mes_pagamento, ano_pagamento):
+    """Marca um cartão como pago e converte em despesa"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return False
+    
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+
+                cursor.execute("SELECT nome, limite FROM cartoes_cadastrados WHERE id = %s", [cartao_id])
+                cartao = cursor.fetchone()
+                if not cartao:
+                    return False
+                
+                nome_cartao, limite = cartao
+                
+
+                total_compras = calcular_total_compras_cartao(cartao_id)
+                
+
+                cursor.execute("""
+                    UPDATE cartoes_cadastrados 
+                    SET pago = TRUE, mes_pagamento = %s, ano_pagamento = %s, data_pagamento = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, [mes_pagamento, ano_pagamento, cartao_id])
+                
+                # Limpar compras do cartão (devolver limite)
+                cursor.execute("""
+                    DELETE FROM compras_cartao WHERE cartao_id = %s
+                """, [cartao_id])
+                
+                # Adicionar como despesa no mês do pagamento
+                data_pagamento = f"{ano_pagamento}-{mes_pagamento:02d}-01"
+                cursor.execute("""
+                    INSERT INTO outros_gastos (nome, valor, data, categoria, tipo, observacao)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, [f"Pagamento {nome_cartao}", total_compras, data_pagamento, "cartao", "variavel", f"Pagamento do cartão {nome_cartao}"])
+                
+                conn.commit()
+                return True
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "controle")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cursor = conn.cursor()
+            
+            # Buscar dados do cartão
+            cursor.execute("SELECT nome, limite FROM cartoes_cadastrados WHERE id = ?", [cartao_id])
+            cartao = cursor.fetchone()
+            if not cartao:
+                return False
+            
+            nome_cartao, limite = cartao
+            
+            # Calcular total de compras não pagas (todas as compras do cartão)
+            total_compras = calcular_total_compras_cartao(cartao_id)
+            
+            # Marcar cartão como pago
+            cursor.execute("""
+                UPDATE cartoes_cadastrados 
+                SET pago = 1, mes_pagamento = ?, ano_pagamento = ?, data_pagamento = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, [mes_pagamento, ano_pagamento, cartao_id])
+            
+            # Limpar compras do cartão (devolver limite)
+            cursor.execute("""
+                DELETE FROM compras_cartao WHERE cartao_id = ?
+            """, [cartao_id])
+            
+            # Adicionar como despesa no mês do pagamento
+            data_pagamento = f"{ano_pagamento}-{mes_pagamento:02d}-01"
+            cursor.execute("""
+                INSERT INTO outros_gastos (nome, valor, data, categoria, tipo, observacao)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, [f"Pagamento {nome_cartao}", total_compras, data_pagamento, "cartao", "variavel", f"Pagamento do cartão {nome_cartao}"])
+            
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
+def desmarcar_cartao_como_pago(cartao_id):
+    """Desmarca um cartão como pago e remove a despesa correspondente"""
+    usuario = get_usuario_atual()
+    if not usuario:
+        return False
+    
+    if _is_postgres():
+        conn = _pg_conn_for_user(usuario)
+        try:
+            with conn.cursor() as cursor:
+                # Buscar dados do cartão
+                cursor.execute("SELECT nome FROM cartoes_cadastrados WHERE id = %s", [cartao_id])
+                cartao = cursor.fetchone()
+                if not cartao:
+                    return False
+                
+                nome_cartao = cartao[0]
+                
+                # Desmarcar cartão como pago
+                cursor.execute("""
+                    UPDATE cartoes_cadastrados 
+                    SET pago = FALSE, mes_pagamento = NULL, ano_pagamento = NULL, data_pagamento = NULL
+                    WHERE id = %s
+                """, [cartao_id])
+                
+                # Remover despesa correspondente
+                cursor.execute("""
+                    DELETE FROM outros_gastos 
+                    WHERE nome = %s AND categoria = 'cartao'
+                """, [f"Pagamento {nome_cartao}"])
+                
+                conn.commit()
+                return True
+        finally:
+            conn.close()
+    else:
+        db_path = get_db_path(usuario, "controle")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        try:
+            cursor = conn.cursor()
+            
+            # Buscar dados do cartão
+            cursor.execute("SELECT nome FROM cartoes_cadastrados WHERE id = ?", [cartao_id])
+            cartao = cursor.fetchone()
+            if not cartao:
+                return False
+            
+            nome_cartao = cartao[0]
+            
+            # Desmarcar cartão como pago
+            cursor.execute("""
+                UPDATE cartoes_cadastrados 
+                SET pago = 0, mes_pagamento = NULL, ano_pagamento = NULL, data_pagamento = NULL
+                WHERE id = ?
+            """, [cartao_id])
+            
+            # Remover despesa correspondente
+            cursor.execute("""
+                DELETE FROM outros_gastos 
+                WHERE nome = ? AND categoria = 'cartao'
+            """, [f"Pagamento {nome_cartao}"])
+            
+            conn.commit()
+            return True
+        finally:
+            conn.close()
 

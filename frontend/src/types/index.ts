@@ -217,6 +217,10 @@ export interface CartaoCadastrado {
   cor: string
   ativo: boolean
   data_criacao: string
+  pago: boolean
+  mes_pagamento?: number
+  ano_pagamento?: number
+  data_pagamento?: string
 }
 
 export interface CompraCartao {

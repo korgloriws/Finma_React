@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
@@ -51,26 +51,30 @@ export default function ControleCartaoTab({
   ocultarValores, 
   setOcultarValores 
 }: ControleCartaoTabProps) {
-  // Estados do formulário de cartão
+  
   const [inputNome, setInputNome] = useState('')
   const [inputBandeira, setInputBandeira] = useState('')
   const [inputLimite, setInputLimite] = useState('')
   const [inputVencimento, setInputVencimento] = useState('')
   const [inputCor, setInputCor] = useState('#1A1F71')
 
-  // Estados do formulário de compra
+
   const [inputCompraNome, setInputCompraNome] = useState('')
   const [inputCompraValor, setInputCompraValor] = useState('')
   const [inputCompraData, setInputCompraData] = useState('')
   const [inputCompraCategoria, setInputCompraCategoria] = useState('')
   const [inputCompraObservacao, setInputCompraObservacao] = useState('')
 
-  // Estados de controle
+
   const [cartaoSelecionado, setCartaoSelecionado] = useState<number | null>(null)
   const [mostrarFormularioCartao, setMostrarFormularioCartao] = useState(false)
   const [mostrarFormularioCompra, setMostrarFormularioCompra] = useState(false)
   const [editingCartaoId, setEditingCartaoId] = useState<number | null>(null)
   const [editandoCartao, setEditandoCartao] = useState(false)
+  const [mostrarModalPagamento, setMostrarModalPagamento] = useState(false)
+  const [cartaoParaPagar, setCartaoParaPagar] = useState<CartaoCadastrado | null>(null)
+  const [mesPagamento, setMesPagamento] = useState<string>(String(new Date().getMonth() + 1).padStart(2, '0'))
+  const [anoPagamento, setAnoPagamento] = useState<string>(String(new Date().getFullYear()))
 
   const queryClient = useQueryClient()
 
@@ -81,6 +85,7 @@ export default function ControleCartaoTab({
     retry: 1,
     refetchOnWindowFocus: false,
   })
+
 
   const { data: compras } = useQuery<CompraCartao[]>({
     queryKey: ['compras-cartao', cartaoSelecionado, filtroMes, filtroAno],
@@ -143,6 +148,60 @@ export default function ControleCartaoTab({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['compras-cartao'] })
       queryClient.invalidateQueries({ queryKey: ['total-compras-cartao'] })
+    },
+  })
+
+  const marcarCartaoPagoMutation = useMutation({
+    mutationFn: ({ cartaoId, mesPagamento, anoPagamento }: { cartaoId: number, mesPagamento: number, anoPagamento: number }) =>
+      cartaoService.marcarCartaoComoPago(cartaoId, mesPagamento, anoPagamento),
+    onSuccess: () => {
+      // Invalidar todas as queries relacionadas
+      queryClient.invalidateQueries({ queryKey: ['cartoes-cadastrados'] })
+      queryClient.invalidateQueries({ queryKey: ['outros'] })
+      queryClient.invalidateQueries({ queryKey: ['receitas-despesas'] })
+      queryClient.invalidateQueries({ queryKey: ['marmitas'] })
+      queryClient.invalidateQueries({ queryKey: ['receitas'] })
+      queryClient.invalidateQueries({ queryKey: ['saldo'] })
+      
+      // Forçar refetch das queries principais
+      queryClient.refetchQueries({ queryKey: ['outros'] })
+      queryClient.refetchQueries({ queryKey: ['receitas-despesas'] })
+      queryClient.refetchQueries({ queryKey: ['saldo'] })
+      
+      // Mostrar notificação de sucesso
+      alert('Cartão marcado como pago! A despesa foi adicionada, o saldo foi atualizado e o limite foi devolvido.')
+      
+      setMostrarModalPagamento(false)
+      setCartaoParaPagar(null)
+    },
+    onError: (error) => {
+      console.error('Erro ao marcar cartão como pago:', error)
+      alert('Erro ao marcar cartão como pago. Tente novamente.')
+    },
+  })
+
+  const desmarcarCartaoPagoMutation = useMutation({
+    mutationFn: cartaoService.desmarcarCartaoComoPago,
+    onSuccess: () => {
+
+      queryClient.invalidateQueries({ queryKey: ['cartoes-cadastrados'] })
+      queryClient.invalidateQueries({ queryKey: ['outros'] })
+      queryClient.invalidateQueries({ queryKey: ['receitas-despesas'] })
+      queryClient.invalidateQueries({ queryKey: ['marmitas'] })
+      queryClient.invalidateQueries({ queryKey: ['receitas'] })
+      queryClient.invalidateQueries({ queryKey: ['saldo'] })
+      
+ 
+      queryClient.refetchQueries({ queryKey: ['outros'] })
+      queryClient.refetchQueries({ queryKey: ['receitas-despesas'] })
+      queryClient.refetchQueries({ queryKey: ['saldo'] })
+      
+
+      alert('Cartão desmarcado como pago! A despesa foi removida e o saldo foi atualizado.')
+    },
+    onError: (error) => {
+      console.error('Erro ao desmarcar cartão como pago:', error)
+      alert('Erro ao desmarcar cartão como pago. Tente novamente.')
     },
   })
 
@@ -241,10 +300,31 @@ export default function ControleCartaoTab({
     }
   }, [removerCompraMutation])
 
+  const handleMarcarComoPago = useCallback((cartao: CartaoCadastrado) => {
+    setCartaoParaPagar(cartao)
+    setMostrarModalPagamento(true)
+  }, [])
+
+  const handleConfirmarPagamento = useCallback(() => {
+    if (cartaoParaPagar) {
+      marcarCartaoPagoMutation.mutate({
+        cartaoId: cartaoParaPagar.id,
+        mesPagamento: parseInt(mesPagamento),
+        anoPagamento: parseInt(anoPagamento)
+      })
+    }
+  }, [cartaoParaPagar, mesPagamento, anoPagamento, marcarCartaoPagoMutation])
+
+  const handleDesmarcarPagamento = useCallback((cartaoId: number) => {
+    if (confirm('Tem certeza que deseja desmarcar este cartão como pago? A despesa correspondente será removida.')) {
+      desmarcarCartaoPagoMutation.mutate(cartaoId)
+    }
+  }, [desmarcarCartaoPagoMutation])
+
   // Cálculos
   const cartaoAtual = useMemo(() => {
     if (!cartaoSelecionado || !cartoes) return null
-    return cartoes.find(c => c.id === cartaoSelecionado)
+    return cartoes.find((c: CartaoCadastrado) => c.id === cartaoSelecionado)
   }, [cartaoSelecionado, cartoes])
 
   const limiteRestante = useMemo(() => {
@@ -286,7 +366,7 @@ export default function ControleCartaoTab({
 
       {/* Lista de Cartões */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cartoes?.map((cartao) => {
+        {cartoes?.map((cartao: CartaoCadastrado) => {
           const bandeira = BANDEIRAS_CARTAO.find(b => b.value === cartao.bandeira) || BANDEIRAS_CARTAO[0]
           const isSelected = cartaoSelecionado === cartao.id
           
@@ -379,6 +459,35 @@ export default function ControleCartaoTab({
                 </div>
                 {isSelected && (
                   <ChevronDown size={16} className="text-blue-500" />
+                )}
+              </div>
+
+              {/* Botões de Pagamento */}
+              <div className="mt-4 flex gap-2">
+                {Boolean(cartao.pago) ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDesmarcarPagamento(cartao.id)
+                    }}
+                    className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm flex items-center justify-center gap-2"
+                    disabled={desmarcarCartaoPagoMutation.isPending}
+                  >
+                    <X size={14} />
+                    Desmarcar Pago
+                  </button>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleMarcarComoPago(cartao)
+                    }}
+                    className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm flex items-center justify-center gap-2 relative z-10"
+                  >
+                    <DollarSign size={14} />
+                    Marcar Pago
+                  </button>
                 )}
               </div>
             </motion.div>
@@ -779,6 +888,103 @@ export default function ControleCartaoTab({
                 <button
                   onClick={() => setMostrarFormularioCompra(false)}
                   className="px-4 py-2 bg-muted text-muted-foreground rounded-md hover:bg-muted/80"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação de Pagamento */}
+      <AnimatePresence>
+        {mostrarModalPagamento && cartaoParaPagar && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setMostrarModalPagamento(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-card border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-foreground mb-4">
+                Marcar Cartão como Pago
+              </h3>
+              
+              <div className="mb-4">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Cartão: <span className="font-semibold text-foreground">{cartaoParaPagar.nome}</span>
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Este cartão será convertido em despesa no mês selecionado.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Mês do Pagamento
+                  </label>
+                  <select
+                    value={mesPagamento}
+                    onChange={(e) => setMesPagamento(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    aria-label="Selecionar mês do pagamento"
+                    title="Selecionar mês do pagamento"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const month = i + 1
+                      return (
+                        <option key={month} value={String(month).padStart(2, '0')}>
+                          {new Date(2024, i).toLocaleDateString('pt-BR', { month: 'long' })}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Ano do Pagamento
+                  </label>
+                  <select
+                    value={anoPagamento}
+                    onChange={(e) => setAnoPagamento(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    aria-label="Selecionar ano do pagamento"
+                    title="Selecionar ano do pagamento"
+                  >
+                    {Array.from({ length: 5 }, (_, i) => {
+                      const year = new Date().getFullYear() - 2 + i
+                      return (
+                        <option key={year} value={String(year)}>
+                          {year}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleConfirmarPagamento}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+                  disabled={marcarCartaoPagoMutation.isPending}
+                >
+                  <DollarSign size={16} />
+                  {marcarCartaoPagoMutation.isPending ? 'Processando...' : 'Confirmar Pagamento'}
+                </button>
+                <button
+                  onClick={() => setMostrarModalPagamento(false)}
+                  className="px-4 py-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80"
                 >
                   Cancelar
                 </button>

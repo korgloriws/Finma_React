@@ -682,6 +682,22 @@ export const cartaoService = {
     const response = await api.get(`/controle/total-compras-cartao?${params.toString()}`)
     return response.data.total
   },
+
+  marcarCartaoComoPago: async (cartaoId: number, mesPagamento: number, anoPagamento: number): Promise<any> => {
+    const response = await api.post('/controle/marcar-cartao-pago', {
+      cartao_id: cartaoId,
+      mes_pagamento: mesPagamento,
+      ano_pagamento: anoPagamento
+    })
+    return response.data
+  },
+
+  desmarcarCartaoComoPago: async (cartaoId: number): Promise<any> => {
+    const response = await api.post('/controle/desmarcar-cartao-pago', {
+      cartao_id: cartaoId
+    })
+    return response.data
+  },
 }
 
 export default api 

@@ -8,7 +8,7 @@ import {
   ArrowUpRight, ArrowDownRight,
   ChefHat, CreditCard, Target, Calendar
 } from 'lucide-react'
-import { controleService } from '../services/api'
+import { controleService, cartaoService, marmitasService } from '../services/api'
 import HelpTips from '../components/HelpTips'
 import ControleAlimentacaoTab from '../components/controle/ControleAlimentacaoTab'
 import ControleReceitaTab from '../components/controle/ControleReceitaTab'
@@ -16,7 +16,21 @@ import ControleDespesaTab from '../components/controle/ControleDespesaTab'
 import ControleCartaoTab from '../components/controle/ControleCartaoTab'
 import { formatCurrency } from '../utils/formatters'
 import { EvolucaoFinanceira, ReceitasDespesas } from '../types'
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, PieChart as RechartsPieChart, Pie, Cell, Area, ComposedChart } from 'recharts'
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, PieChart as RechartsPieChart, Pie, Cell, Area, ComposedChart, BarChart, Bar } from 'recharts'
+
+// Categorias de despesas com ícones (copiado da ControleDespesaTab)
+const CATEGORIAS_DESPESAS = [
+  { value: 'farmacia', label: 'Farmácia', icon: '💊', color: '#ef4444' },
+  { value: 'supermercado', label: 'Supermercado', icon: '🛒', color: '#10b981' },
+  { value: 'contas_casa', label: 'Contas da Casa', icon: '🏠', color: '#3b82f6' },
+  { value: 'contas_filhos', label: 'Contas dos Filhos', icon: '👶', color: '#f59e0b' },
+  { value: 'despesas_fixas', label: 'Despesas Fixas', icon: '⚡', color: '#8b5cf6' },
+  { value: 'saude', label: 'Saúde', icon: '❤️', color: '#ec4899' },
+  { value: 'alimentacao', label: 'Alimentação', icon: '🍽️', color: '#06b6d4' },
+  { value: 'transporte', label: 'Transporte', icon: '🚗', color: '#84cc16' },
+  { value: 'lazer', label: 'Lazer', icon: '🎬', color: '#f97316' },
+  { value: 'outros', label: 'Outros', icon: '📋', color: '#6b7280' }
+]
 
 export default function ControlePage() {
   
@@ -67,6 +81,7 @@ export default function ControlePage() {
     queryFn: () => controleService.getReceitasDespesas(filtroMes, filtroAno),
     retry: 1,
     refetchOnWindowFocus: false,
+    staleTime: 0 // Sempre considerar os dados como obsoletos
   })
 
   const { data: saldo } = useQuery<{ saldo: number }>({
@@ -94,6 +109,31 @@ export default function ControlePage() {
     },
     retry: 1,
     refetchOnWindowFocus: false
+  })
+
+  // Query para despesas (outros gastos)
+  const { data: outros } = useQuery({
+    queryKey: ['outros', filtroMes, filtroAno],
+    queryFn: () => controleService.getOutros(filtroMes, filtroAno),
+    retry: 1,
+    refetchOnWindowFocus: false,
+    staleTime: 0 // Sempre considerar os dados como obsoletos
+  })
+
+  // Query para cartões
+  const { data: cartoes } = useQuery({
+    queryKey: ['cartoes-cadastrados', filtroMes, filtroAno],
+    queryFn: () => cartaoService.getCartoesCadastrados(),
+    retry: 1,
+    refetchOnWindowFocus: false,
+  })
+
+  // Query para alimentação (marmitas)
+  const { data: marmitas } = useQuery({
+    queryKey: ['marmitas', filtroMes, filtroAno],
+    queryFn: () => marmitasService.getMarmitas(parseInt(filtroMes), parseInt(filtroAno)),
+    retry: 1,
+    refetchOnWindowFocus: false,
   })
 
 
@@ -133,22 +173,68 @@ export default function ControlePage() {
     { name: 'Despesas', value: receitasDespesas?.despesas || 0, fill: '#ef4444' }
   ], [receitasDespesas])
 
-  const totaisPorCategoria = useMemo(() => {
-   
+  // Unificar despesas de diferentes fontes
+  const despesasUnificadas = useMemo(() => {
+    const outrosArray = Array.isArray(outros) ? outros : []
+    const cartoesArray = Array.isArray(cartoes) ? cartoes : []
+    
+    // Converter cartões para formato de despesa
+    const despesasCartoes = cartoesArray.map(cartao => ({
+      id: cartao.id,
+      nome: cartao.nome,
+      valor: (cartao as any).total_compras || 0,
+      categoria: 'cartao',
+      tipo: 'variavel',
+      data: new Date().toISOString().split('T')[0],
+      observacao: `Cartão ${cartao.nome}`,
+      fonte: 'cartao' as const
+    }))
+    
     return [
-      { name: 'Supermercado', value: 500 },
-      { name: 'Farmácia', value: 200 },
-      { name: 'Transporte', value: 300 }
+      ...outrosArray.map(item => ({ ...item, fonte: 'outro' as const })),
+      ...despesasCartoes
     ]
-  }, [receitasDespesas])
+  }, [outros, cartoes])
+
+
+  const totaisPorCategoria = useMemo(() => {
+    const acc: Record<string, number> = {}
+    despesasUnificadas.forEach((d) => {
+      const categoria = d.categoria || 'outros'
+      acc[categoria] = (acc[categoria] || 0) + (d.valor || 0)
+    })
+    return Object.entries(acc)
+      .map(([name, value]) => ({ 
+        name, 
+        value,
+        categoria: CATEGORIAS_DESPESAS.find(c => c.value === name) || CATEGORIAS_DESPESAS[CATEGORIAS_DESPESAS.length - 1]
+      }))
+      .sort((a, b) => b.value - a.value)
+  }, [despesasUnificadas])
+
 
   const totaisPorTipo = useMemo(() => {
-  
+    const result = { fixo: 0, variavel: 0 }
+    despesasUnificadas.forEach((d) => {
+      const key = (String(d.tipo) === 'fixo') ? 'fixo' : 'variavel'
+      result[key as 'fixo' | 'variavel'] += d.valor || 0
+    })
     return [
-      { name: 'Fixo', value: 800, fill: '#3b82f6' },
-      { name: 'Variável', value: 400, fill: '#f59e0b' }
+      { name: 'Fixas', value: result.fixo, fill: '#6366F1' },
+      { name: 'Variáveis', value: result.variavel, fill: '#F59E0B' },
     ]
-  }, [receitasDespesas])
+  }, [despesasUnificadas])
+
+  // Calcular totais reais para cartões e alimentação
+  const totalCartoes = useMemo(() => {
+    if (!cartoes || !Array.isArray(cartoes)) return 0
+    return cartoes.reduce((total, cartao) => total + ((cartao as any).total_compras || 0), 0)
+  }, [cartoes])
+
+  const totalAlimentacao = useMemo(() => {
+    if (!marmitas || !Array.isArray(marmitas)) return 0
+    return marmitas.reduce((total, marmita) => total + (marmita.valor || 0), 0)
+  }, [marmitas])
 
   if (hasError) {
     return (
@@ -191,11 +277,11 @@ export default function ControlePage() {
               </button>
               {abrirMesPicker && (
                 <div className="absolute left-0 mt-2 w-64 bg-popover text-popover-foreground border border-border rounded-lg shadow-lg p-3 z-20">
-                  <div className="flex items-center gap-2">
-                    <select
+          <div className="flex items-center gap-2">
+              <select
                       aria-label="Selecionar mês"
-                      value={filtroMes}
-                      onChange={(e) => setFiltroMes(e.target.value)}
+                value={filtroMes}
+                onChange={(e) => setFiltroMes(e.target.value)}
                       className="flex-1 px-2 py-1 border border-border rounded bg-background text-foreground text-sm"
                     >
                       {Array.from({ length: 12 }, (_, i) => {
@@ -206,11 +292,11 @@ export default function ControlePage() {
                           </option>
                         )
                       })}
-                    </select>
-                    <select
+              </select>
+              <select
                       aria-label="Selecionar ano"
-                      value={filtroAno}
-                      onChange={(e) => setFiltroAno(e.target.value)}
+                value={filtroAno}
+                onChange={(e) => setFiltroAno(e.target.value)}
                       className="w-[90px] px-2 py-1 border border-border rounded bg-background text-foreground text-sm"
                     >
                       {Array.from({ length: 5 }, (_, i) => {
@@ -221,18 +307,18 @@ export default function ControlePage() {
                           </option>
                         )
                       })}
-                    </select>
-                    <button
+              </select>
+            <button
                       onClick={() => setAbrirMesPicker(false)}
                       className="px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90"
-                    >
+            >
                       OK
-                    </button>
+            </button>
                   </div>
                 </div>
-              )}
-            </div>
+          )}
           </div>
+        </div>
 
           <div className="flex items-center gap-2">
             <motion.button
@@ -369,11 +455,11 @@ export default function ControlePage() {
             </div>
                   <ArrowUpRight className="w-4 h-4 text-primary" />
           </div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-1">Cartões</h3>
-                <p className="text-2xl font-bold text-foreground mb-2">
-                  {ocultarValores ? '***' : formatCurrency(0)}
-                </p>
-                <p className="text-xs text-muted-foreground">Clique para gerenciar cartões</p>
+                 <h3 className="text-sm font-medium text-muted-foreground mb-1">Cartões</h3>
+                 <p className="text-2xl font-bold text-foreground mb-2">
+                   {ocultarValores ? '***' : formatCurrency(totalCartoes)}
+                 </p>
+                 <p className="text-xs text-muted-foreground">Clique para gerenciar cartões</p>
         </motion.div>
 
         <motion.div
@@ -389,58 +475,58 @@ export default function ControlePage() {
             </div>
                   <ArrowUpRight className="w-4 h-4 text-primary" />
           </div>
-                <h3 className="text-sm font-medium text-muted-foreground mb-1">Alimentação</h3>
-                <p className="text-2xl font-bold text-foreground mb-2">
-                  {ocultarValores ? '***' : formatCurrency(0)}
-                </p>
-                <p className="text-xs text-muted-foreground">Clique para gerenciar marmitas</p>
+                 <h3 className="text-sm font-medium text-muted-foreground mb-1">Alimentação</h3>
+                 <p className="text-2xl font-bold text-foreground mb-2">
+                   {ocultarValores ? '***' : formatCurrency(totalAlimentacao)}
+                 </p>
+                 <p className="text-xs text-muted-foreground">Clique para gerenciar marmitas</p>
         </motion.div>
       </div>
 
             {/* Card de Saldo Principal */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
               className="bg-card border border-border rounded-2xl p-8 mb-8 shadow-xl"
             >
               <div className="flex items-center justify-between mb-4">
-                <div>
+            <div>
                   <h3 className="text-lg font-semibold mb-2 text-foreground">Saldo Total do Mês</h3>
                   <p className={`text-4xl font-bold ${(saldo?.saldo || 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
                     {ocultarValores ? '***' : formatCurrency(saldo?.saldo || 0)}
                   </p>
-                </div>
+            </div>
                 <div className="text-right">
                   <div className={`text-2xl ${(saldo?.saldo || 0) >= 0 ? 'text-positive' : 'text-negative'}`}>
                     {(saldo?.saldo || 0) >= 0 ? '✓ Positivo' : '⚠ Negativo'}
-                  </div>
+            </div>
                   <p className="text-sm text-muted-foreground">
                     {receitasDespesas?.receitas ? 
                       `${Math.round(((receitasDespesas.despesas || 0) / receitasDespesas.receitas) * 100)}% das receitas em despesas` : 
                       'Nenhuma receita registrada'
                     }
                   </p>
-                </div>
-              </div>
-            </motion.div>
+            </div>
+          </div>
+      </motion.div>
 
             {/* Botões de Ação Rápida */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <motion.button
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
                 onClick={() => setAbaAtiva('receitas')}
                 className="bg-card border border-border rounded-2xl p-4 shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center gap-3 group"
               >
                 <div className="p-2 rounded-lg bg-primary/10">
                   <DollarSign size={24} className="text-primary" />
-                </div>
+                    </div>
                 <div className="text-left">
                   <div className="font-semibold text-foreground">Registrar Receita</div>
                   <div className="text-sm text-muted-foreground">Adicionar nova receita</div>
-                </div>
+                  </div>
               </motion.button>
 
               <motion.button
@@ -452,7 +538,7 @@ export default function ControlePage() {
               >
                 <div className="p-2 rounded-lg bg-destructive/10">
                   <TrendingDown size={24} className="text-destructive" />
-                </div>
+                  </div>
                 <div className="text-left">
                   <div className="font-semibold text-foreground">Registrar Despesa</div>
                   <div className="text-sm text-muted-foreground">Adicionar nova despesa</div>
@@ -468,7 +554,7 @@ export default function ControlePage() {
               >
                 <div className="p-2 rounded-lg bg-primary/10">
                   <CreditCard size={24} className="text-primary" />
-                </div>
+                  </div>
                 <div className="text-left">
                   <div className="font-semibold text-foreground">Gerenciar Cartões</div>
                   <div className="text-sm text-muted-foreground">Ver e editar cartões</div>
@@ -476,19 +562,19 @@ export default function ControlePage() {
               </motion.button>
 
               <motion.button
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.8 }}
                 onClick={() => setAbaAtiva('alimentacao')}
                 className="bg-card border border-border rounded-2xl p-4 shadow-xl hover:shadow-2xl transition-all duration-300 flex items-center gap-3 group"
               >
                 <div className="p-2 rounded-lg bg-primary/10">
                   <ChefHat size={24} className="text-primary" />
-                </div>
+        </div>
                 <div className="text-left">
                   <div className="font-semibold text-foreground">Controle Marmitas</div>
                   <div className="text-sm text-muted-foreground">Gerenciar alimentação</div>
-                </div>
+            </div>
               </motion.button>
             </div>
 
@@ -503,7 +589,7 @@ export default function ControlePage() {
               >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-foreground">Evolução Financeira</h3>
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                     <select
                       value={periodoEvolucao}
                       onChange={(e) => setPeriodoEvolucao(e.target.value as '3m' | '6m' | '12m')}
@@ -514,8 +600,8 @@ export default function ControlePage() {
                       <option value="6m">6 meses</option>
                       <option value="12m">12 meses</option>
                     </select>
-                  </div>
-                </div>
+          </div>
+        </div>
 
                 {/* Cards de Comparação com Mês Anterior */}
                 {comparacaoMensal && (
@@ -533,15 +619,15 @@ export default function ControlePage() {
                           }`}>
                             {comparacaoMensal.receitas.variacao >= 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                             {Math.abs(comparacaoMensal.receitas.variacao).toFixed(1)}%
-                          </div>
-                        </div>
+        </div>
+            </div>
                         <div className="text-lg font-bold text-foreground">
                           {ocultarValores ? '••••••' : formatCurrency(comparacaoMensal.receitas.atual)}
-                        </div>
+            </div>
                         <div className="text-xs text-muted-foreground mt-1">
                           vs {ocultarValores ? '••••••' : formatCurrency(comparacaoMensal.receitas.anterior)} (mês anterior)
-                        </div>
-                      </div>
+        </div>
+            </div>
 
                       <div className="bg-muted/30 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-2">
@@ -551,15 +637,15 @@ export default function ControlePage() {
                           }`}>
                             {comparacaoMensal.despesas.variacao <= 0 ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
                             {Math.abs(comparacaoMensal.despesas.variacao).toFixed(1)}%
-                          </div>
-                        </div>
+            </div>
+                </div>
                         <div className="text-lg font-bold text-foreground">
                           {ocultarValores ? '••••••' : formatCurrency(comparacaoMensal.despesas.atual)}
-                        </div>
+                </div>
                         <div className="text-xs text-muted-foreground mt-1">
                           vs {ocultarValores ? '••••••' : formatCurrency(comparacaoMensal.despesas.anterior)} (mês anterior)
-                        </div>
-                      </div>
+                </div>
+            </div>
 
                       <div className="bg-muted/30 rounded-lg p-4">
                         <div className="flex items-center justify-between mb-2">
@@ -569,17 +655,17 @@ export default function ControlePage() {
                           }`}>
                             {comparacaoMensal.saldo.variacao >= 0 ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                             {Math.abs(comparacaoMensal.saldo.variacao).toFixed(1)}%
-                          </div>
-                        </div>
+          </div>
+          </div>
                         <div className="text-lg font-bold text-foreground">
                           {ocultarValores ? '••••••' : formatCurrency(comparacaoMensal.saldo.atual)}
-                        </div>
+                  </div>
                         <div className="text-xs text-muted-foreground mt-1">
                           vs {ocultarValores ? '••••••' : formatCurrency(comparacaoMensal.saldo.anterior)} (mês anterior)
-                        </div>
-                      </div>
-                    </div>
                   </div>
+                  </div>
+        </div>
+          </div>
                 )}
 
                 <ResponsiveContainer width="100%" height={300}>
@@ -630,10 +716,10 @@ export default function ControlePage() {
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
-              </motion.div>
+          </motion.div>
 
               {/* Gráfico de Pizza */}
-              <motion.div
+          <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 1.0 }}
@@ -657,66 +743,86 @@ export default function ControlePage() {
               <Tooltip formatter={(value) => formatCurrency(Number(value))} />
             </RechartsPieChart>
           </ResponsiveContainer>
-        </motion.div>
-      </div>
-
+          </motion.div>
+            </div>
+            
             {/* Insights e Métricas */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
               {/* Despesas por Categoria */}
-              <motion.div 
-                initial={{ opacity: 0, x: -20 }} 
-                animate={{ opacity: 1, x: 0 }} 
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 1.1 }}
                 className="bg-card border border-border rounded-2xl p-6 shadow-xl"
               >
-                <h3 className="text-lg font-semibold text-foreground mb-4">Despesas por Categoria</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <RechartsPieChart>
-              <Pie data={totaisPorCategoria} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${formatCurrency(value)}`}>
-                {totaisPorCategoria.map((_, index) => (
-                  <Cell key={`cat-${index}`} fill={["#3b82f6","#ef4444","#10b981","#f59e0b","#8b5cf6","#06b6d4"][index % 6]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-            </RechartsPieChart>
-          </ResponsiveContainer>
-        </motion.div>
+                 <h3 className="text-lg font-semibold text-foreground mb-4">Despesas por Categoria</h3>
+                 {totaisPorCategoria.length > 0 ? (
+                   <ResponsiveContainer width="100%" height={300}>
+                     <RechartsPieChart>
+                       <Pie
+                         data={totaisPorCategoria}
+                         cx="50%"
+                         cy="50%"
+                         labelLine={false}
+                         label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                         outerRadius={80}
+                         fill="#8884d8"
+                         dataKey="value"
+                       >
+                         {totaisPorCategoria.map((entry, index) => (
+                           <Cell key={`cell-${index}`} fill={entry.categoria.color} />
+                         ))}
+                       </Pie>
+                       <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
+                     </RechartsPieChart>
+                   </ResponsiveContainer>
+                 ) : (
+                   <div className="h-64 flex items-center justify-center text-muted-foreground">
+                     Nenhum dado disponível para o período selecionado.
+          </div>
+        )}
+            </motion.div>
 
               {/* Despesas Fixas vs Variáveis */}
-              <motion.div 
-                initial={{ opacity: 0, x: 20 }} 
-                animate={{ opacity: 1, x: 0 }} 
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 1.2 }}
                 className="bg-card border border-border rounded-2xl p-6 shadow-xl"
               >
-                <h3 className="text-lg font-semibold text-foreground mb-4">Despesas Fixas vs Variáveis</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <RechartsPieChart>
-              <Pie data={totaisPorTipo} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${formatCurrency(value)}`}>
-                {totaisPorTipo.map((entry, index) => (
-                  <Cell key={`tipo-${index}`} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-            </RechartsPieChart>
-          </ResponsiveContainer>
-        </motion.div>
+                 <h3 className="text-lg font-semibold text-foreground mb-4">Despesas Fixas vs Variáveis</h3>
+                 {totaisPorTipo.length > 0 ? (
+                   <ResponsiveContainer width="100%" height={200}>
+                     <BarChart data={totaisPorTipo}>
+                <CartesianGrid strokeDasharray="3 3" />
+                       <XAxis dataKey="name" />
+                <YAxis />
+                       <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
+                       <Bar dataKey="value" fill="#8884d8" />
+                    </BarChart>
+            </ResponsiveContainer>
+          ) : (
+                   <div className="h-32 flex items-center justify-center text-muted-foreground">
+                     Nenhum dado disponível.
+            </div>
+          )}
+              </motion.div>
       </div>
 
             {/* Cards de Insights */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1.3 }}
                 className="bg-card border border-border rounded-2xl p-6 shadow-xl"
               >
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 rounded-lg bg-primary/10">
                     <TrendingUp className="w-5 h-5 text-primary" />
-                  </div>
+            </div>
                   <h3 className="text-lg font-semibold text-foreground">Tendência</h3>
-                </div>
+      </div>
                 <p className="text-sm text-muted-foreground mb-2">
                   {receitasDespesas?.receitas && receitasDespesas?.despesas ? 
                     (receitasDespesas.receitas > receitasDespesas.despesas ? 
@@ -758,7 +864,7 @@ export default function ControlePage() {
                     '0%'
                   }
           </div>
-        </motion.div>
+                </motion.div>
 
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -769,23 +875,23 @@ export default function ControlePage() {
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 rounded-lg bg-primary/10">
                     <BarChart3 className="w-5 h-5 text-primary" />
-                  </div>
+      </div>
                   <h3 className="text-lg font-semibold text-foreground">Categoria Top</h3>
                 </div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  {totaisPorCategoria.length > 0 ? 
-                    `Maior gasto: ${totaisPorCategoria[0]?.name}` : 
-                    'Nenhuma despesa registrada'
-                  }
-                </p>
-                <div className="text-2xl font-bold text-foreground">
-                  {totaisPorCategoria.length > 0 ? 
-                    formatCurrency(totaisPorCategoria[0]?.value || 0) : 
-                    'R$ 0,00'
-                  }
-        </div>
+                 <p className="text-sm text-muted-foreground mb-2">
+                   {totaisPorCategoria.length > 0 ? 
+                     `Maior gasto: ${totaisPorCategoria[0]?.categoria.label}` : 
+                     'Nenhuma despesa registrada'
+                   }
+                 </p>
+                 <div className="text-2xl font-bold text-foreground">
+                   {totaisPorCategoria.length > 0 ? 
+                     formatCurrency(totaisPorCategoria[0]?.value || 0) : 
+                     'R$ 0,00'
+                   }
+         </div>
       </motion.div>
-        </div>
+          </div>
         </>
       )}
 
