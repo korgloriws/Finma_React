@@ -384,7 +384,7 @@ def _ensure_rf_catalog_schema():
             with conn.cursor() as c:
                 try:
                     print(f"_ensure_rf_catalog_schema: Criando tabela para usuário {usuario}")
-                c.execute('''
+                    c.execute('''
                     CREATE TABLE IF NOT EXISTS rf_catalog (
                         id SERIAL PRIMARY KEY,
                         nome TEXT NOT NULL,
@@ -484,8 +484,8 @@ def rf_catalog_list():
         try:
             with conn.cursor() as c:
                 try:
-                c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
-                rows = c.fetchall()
+                    c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
+                    rows = c.fetchall()
                     print(f"rf_catalog_list: Encontrados {len(rows)} itens para usuário {usuario}")
                     def safe_float(value):
                         try:
@@ -494,18 +494,18 @@ def rf_catalog_list():
                             return None
                     
                     result = [
-                    {
-                        'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
-                        'taxa_percentual': safe_float(r[5]),
-                        'taxa_fixa': safe_float(r[6]),
-                        'quantidade': safe_float(r[7]),
-                        'preco': safe_float(r[8]),
-                        'data_inicio': r[9], 'vencimento': r[10],
-                        'liquidez_diaria': bool(r[11]) if r[11] is not None else False,
-                        'isento_ir': bool(r[12]) if r[12] is not None else False,
-                        'observacao': r[13]
-                    } for r in rows
-                ]
+                        {
+                            'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
+                            'taxa_percentual': safe_float(r[5]),
+                            'taxa_fixa': safe_float(r[6]),
+                            'quantidade': safe_float(r[7]),
+                            'preco': safe_float(r[8]),
+                            'data_inicio': r[9], 'vencimento': r[10],
+                            'liquidez_diaria': bool(r[11]) if r[11] is not None else False,
+                            'isento_ir': bool(r[12]) if r[12] is not None else False,
+                            'observacao': r[13]
+                        } for r in rows
+                    ]
                     print(f"rf_catalog_list: Retornando {len(result)} itens")
                     return result
                 except Exception as e:
@@ -583,15 +583,14 @@ def rf_catalog_create(item: dict):
                 try:
                     print(f"rf_catalog_create: Inserindo item para usuário {usuario}")
                     print(f"rf_catalog_create: Fields: {fields}")
-                c.execute('''
-                    INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                    RETURNING id
-                ''', fields)
-                new_id = c.fetchone()[0]
+                    c.execute('''
+                        INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        RETURNING id
+                    ''', fields)
+                    new_id = c.fetchone()[0]
                     print(f"rf_catalog_create: Item criado com ID {new_id}")
-                    # Não precisa de commit explícito, pois a conexão está em autocommit
-                return { 'success': True, 'id': new_id }
+                    return { 'success': True, 'id': new_id }
                 except Exception as e:
                     print(f"Erro ao inserir em rf_catalog: {e}")
                     print(f"Fields: {fields}")
@@ -626,11 +625,10 @@ def rf_catalog_update(id_: int, item: dict):
         try:
             with conn.cursor() as c:
                 try:
-                c.execute('''
-                    UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
+                    c.execute('''
+                        UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
                     ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('quantidade'), item.get('preco'), item.get('data_inicio'), item.get('vencimento'), 1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, id_))
-                    # Não precisa de commit explícito, pois a conexão está em autocommit
-                return { 'success': True }
+                    return { 'success': True }
                 except Exception as e:
                     print(f"Erro ao atualizar rf_catalog: {e}")
                     return { 'success': False, 'message': f'Erro ao atualizar: {str(e)}' }
@@ -662,9 +660,8 @@ def rf_catalog_delete(id_: int):
         try:
             with conn.cursor() as c:
                 try:
-                c.execute('DELETE FROM rf_catalog WHERE id=%s', (id_,))
-                    # Não precisa de commit explícito, pois a conexão está em autocommit
-                return { 'success': True }
+                    c.execute('DELETE FROM rf_catalog WHERE id=%s', (id_,))
+                    return { 'success': True }
                 except Exception as e:
                     print(f"Erro ao deletar rf_catalog: {e}")
                     return { 'success': False, 'message': f'Erro ao deletar: {str(e)}' }
