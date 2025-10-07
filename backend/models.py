@@ -520,7 +520,7 @@ def rf_catalog_create(item: dict):
                     RETURNING id
                 ''', fields)
                 new_id = c.fetchone()[0]
-                conn.commit()
+                # Não precisa de commit explícito, pois a conexão está em autocommit
                 return { 'success': True, 'id': new_id }
         finally:
             conn.close()
@@ -551,7 +551,7 @@ def rf_catalog_update(id_: int, item: dict):
                 c.execute('''
                     UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
                 ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('quantidade'), item.get('preco'), item.get('data_inicio'), item.get('vencimento'), bool(item.get('liquidez_diaria')), bool(item.get('isento_ir')), item.get('observacao'), now, id_))
-                conn.commit()
+                # Não precisa de commit explícito, pois a conexão está em autocommit
                 return { 'success': True }
         finally:
             conn.close()
@@ -578,7 +578,7 @@ def rf_catalog_delete(id_: int):
         try:
             with conn.cursor() as c:
                 c.execute('DELETE FROM rf_catalog WHERE id=%s', (id_,))
-                conn.commit()
+                # Não precisa de commit explícito, pois a conexão está em autocommit
                 return { 'success': True }
         finally:
             conn.close()
