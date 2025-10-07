@@ -19,6 +19,7 @@ interface EditAtivoModalProps {
 export default function EditAtivoModal({ open, onClose, ativo }: EditAtivoModalProps) {
   const [novaQuantidade, setNovaQuantidade] = useState('')
   const [tipoOperacao, setTipoOperacao] = useState<'comprar' | 'vender' | 'ajustar'>('ajustar')
+  const [venderTudo, setVenderTudo] = useState(false)
   const [precoOperacao, setPrecoOperacao] = useState('')
   const [tipoPreco, setTipoPreco] = useState<'atual' | 'historico' | 'manual'>('atual')
   const [dataOperacao, setDataOperacao] = useState('')
@@ -29,11 +30,12 @@ export default function EditAtivoModal({ open, onClose, ativo }: EditAtivoModalP
 
   const queryClient = useQueryClient()
 
-  // Resetar estados quando modal abrir
+
   useEffect(() => {
     if (open && ativo) {
       setNovaQuantidade(ativo.quantidade.toString())
       setTipoOperacao('ajustar')
+      setVenderTudo(false)
       setPrecoOperacao('')
       setTipoPreco('atual')
       setDataOperacao('')
@@ -43,7 +45,7 @@ export default function EditAtivoModal({ open, onClose, ativo }: EditAtivoModalP
     }
   }, [open, ativo])
 
-  // Buscar preço atual quando necessário
+
   useEffect(() => {
     if (open && ativo && tipoPreco === 'atual' && !precoAtual) {
       const buscarPrecoAtual = async () => {
@@ -85,9 +87,15 @@ export default function EditAtivoModal({ open, onClose, ativo }: EditAtivoModalP
     mutationFn: async () => {
       if (!ativo) return
 
-      const quantidadeNova = parseFloat(novaQuantidade.replace(',', '.'))
+      let quantidadeNova: number
       
-      // Determinar preço de compra baseado na opção selecionada
+      if (tipoOperacao === 'vender' && venderTudo) {
+        // Vender tudo = quantidade 0
+        quantidadeNova = 0
+      } else {
+        quantidadeNova = parseFloat(novaQuantidade.replace(',', '.'))
+      }
+
       let precoCompraFinal: number | undefined
       
       if (tipoPreco === 'atual' && precoAtual) {
@@ -115,7 +123,14 @@ export default function EditAtivoModal({ open, onClose, ativo }: EditAtivoModalP
     if (!ativo) return null
 
     const quantidadeAtual = ativo.quantidade
-    const quantidadeNova = parseFloat(novaQuantidade.replace(',', '.'))
+    let quantidadeNova: number
+    
+    if (tipoOperacao === 'vender' && venderTudo) {
+      quantidadeNova = 0
+    } else {
+      quantidadeNova = parseFloat(novaQuantidade.replace(',', '.'))
+    }
+    
     const diferenca = quantidadeNova - quantidadeAtual
 
     let precoOperacaoFinal = 0
@@ -164,14 +179,38 @@ export default function EditAtivoModal({ open, onClose, ativo }: EditAtivoModalP
             {/* Nova quantidade */}
             <div className="space-y-2">
               <label className="block text-sm font-medium">Nova quantidade</label>
+              <input
+                type="text"
+                value={novaQuantidade}
+                onChange={(e) => setNovaQuantidade(e.target.value)}
+                placeholder="Ex.: 100"
+                aria-label="Nova quantidade"
+                className="w-full px-3 py-2 bg-background border border-border rounded"
+                disabled={tipoOperacao === 'vender' && venderTudo}
+              />
+              
+              {/* Opção "Vender tudo" */}
+              {tipoOperacao === 'vender' && (
+                <div className="flex items-center space-x-2">
                   <input
-                    type="text"
-                    value={novaQuantidade}
-                    onChange={(e) => setNovaQuantidade(e.target.value)}
-                    placeholder="Ex.: 100"
-                    aria-label="Nova quantidade"
-                    className="w-full px-3 py-2 bg-background border border-border rounded"
+                    type="checkbox"
+                    id="venderTudo"
+                    checked={venderTudo}
+                    onChange={(e) => {
+                      setVenderTudo(e.target.checked)
+                      if (e.target.checked) {
+                        setNovaQuantidade('0')
+                      } else {
+                        setNovaQuantidade(ativo.quantidade.toString())
+                      }
+                    }}
+                    className="rounded"
                   />
+                  <label htmlFor="venderTudo" className="text-sm font-medium text-red-600">
+                    Vender tudo (quantidade = 0)
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Tipo de operação */}

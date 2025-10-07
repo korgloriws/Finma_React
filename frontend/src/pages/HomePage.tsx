@@ -119,7 +119,8 @@ export default function HomePage() {
   const receitas = resumoHome?.receitas?.registros || []
   const cartoes = resumoHome?.cartoes?.registros || []
   const outros = resumoHome?.outros?.registros || []
-  const marmitas = resumoHome?.marmitas?.registros || []
+  // Removido: marmitas não são mais exibidas no gráfico de gastos por categoria
+  // const marmitas = resumoHome?.marmitas?.registros || []
 
   
   
@@ -160,10 +161,7 @@ export default function HomePage() {
     percentage: totalInvestido > 0 ? ((valor / totalInvestido) * 100).toFixed(1) : '0'
   }))
 
-  // Evolução financeira diária (não usada no gráfico principal; mantida para futuras seções)
-  // removido: dadosEvolucao não é usado neste card
 
-  // Gastos dinâmicos por categoria (reflete categorias livres do Controle)
   const filtraPorPeriodo = (dataStr?: string) => {
     if (!dataStr) return true
     try {
@@ -189,13 +187,7 @@ export default function HomePage() {
     const valor = Number(o?.valor || 0)
     gastosPorCategoria[categoria] = (gastosPorCategoria[categoria] || 0) + valor
   })
-  if ((marmitas as any[])?.length) {
-    marmitas.forEach((m: any) => {
-      if (!filtraPorPeriodo(m?.data)) return
-      const valor = Number(m?.valor || 0)
-      gastosPorCategoria['Marmitas'] = (gastosPorCategoria['Marmitas'] || 0) + valor
-    })
-  }
+
   const dadosGastos = Object.entries(gastosPorCategoria)
     .map(([name, valor]) => ({ name, valor, cor: getRandomColor(name) }))
     .filter((item) => item.valor > 0)
