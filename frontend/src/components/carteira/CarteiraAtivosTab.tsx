@@ -1,15 +1,19 @@
 import { 
-  Plus, 
   BarChart3, 
   Target, 
   ChevronUp, 
   ChevronDown, 
   Settings, 
   Edit, 
-  Trash2 
+  Trash2,
+  FileSpreadsheet,
+  Plus
 } from 'lucide-react'
+import { useState } from 'react'
 import { formatCurrency, formatDividendYield, formatPercentage, formatNumber } from '../../utils/formatters'
 import TickerWithLogo from '../TickerWithLogo'
+import B3ImportModal from './B3ImportModal'
+import { B3Ativo } from '../../utils/excelParser'
 
 
 
@@ -646,6 +650,54 @@ export default function CarteiraAtivosTab({
   tesouroTitulos,
   onPickTesouro
 }: CarteiraAtivosTabProps) {
+  const [showB3Import, setShowB3Import] = useState(false)
+
+  const handleB3Import = async (ativos: B3Ativo[]) => {
+    try {
+      // Converter ativos B3 para formato de compras da carteira
+      const compras = ativos.map(ativo => {
+        // Para renda fixa e tesouro, usar valor total como preço unitário
+        // Para ações e FIIs, usar preço médio da B3 (valor histórico)
+        const precoUnitario = ativo.tipo.includes('Renda Fixa') || ativo.tipo === 'Tesouro Direto' 
+          ? ativo.valorTotal  // Para renda fixa, valor total = preço unitário
+          : ativo.precoMedio // Para ações/FIIs, usar preço histórico da B3
+
+        return {
+          ticker: ativo.ticker,
+          quantidade: ativo.quantidade,
+          preco: precoUnitario, // Usar valor histórico da B3, não valor atual do yfinance
+          tipo: ativo.tipo,
+          data_aplicacao: ativo.dataAplicacao || new Date().toISOString().split('T')[0],
+          vencimento: ativo.vencimento || '',
+          indexador: ativo.indexador || '',
+          indexador_pct: 0,
+          isento_ir: false
+        }
+      })
+
+      // Adicionar cada ativo como uma compra
+      for (const compra of compras) {
+        console.log('Adicionando compra:', compra)
+        await adicionarMutation.mutateAsync({
+          ticker: compra.ticker,
+          quantidade: compra.quantidade,
+          preco: compra.preco,
+          tipo: compra.tipo,
+          data_aplicacao: compra.data_aplicacao,
+          vencimento: compra.vencimento,
+          indexador: compra.indexador,
+          indexador_pct: compra.indexador_pct,
+          isento_ir: compra.isento_ir
+        })
+      }
+
+      alert(`${ativos.length} ativos importados com sucesso! Os valores históricos da B3 foram preservados.`)
+    } catch (error) {
+      console.error('Erro ao importar ativos:', error)
+      alert('Erro ao importar ativos. Tente novamente.')
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Formulário original removido: a adição de ativos acontece via modal */}
@@ -653,10 +705,19 @@ export default function CarteiraAtivosTab({
       {/* Resumo da Carteira */}
       {!loadingCarteira && carteira && carteira.length > 0 && (
         <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-border rounded-lg p-3 sm:p-4 md:p-6 mb-6">
-          <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-            Resumo da Carteira
-          </h3>
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+              Resumo da Carteira
+            </h3>
+            <button
+              onClick={() => setShowB3Import(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Importar B3 .xlsx
+            </button>
+          </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
             <div className="bg-card border border-border rounded-lg p-2 sm:p-3 md:p-4">
               <div className="text-xs sm:text-sm text-muted-foreground">Total de Ativos</div>
@@ -690,7 +751,7 @@ export default function CarteiraAtivosTab({
         <div className="text-center text-muted-foreground py-8">
           Carregando carteira...
         </div>
-      ) : (
+      ) : carteira && carteira.length > 0 ? (
         <div className="space-y-6">
           {Object.keys(ativosPorTipo).sort().map(tipo => (
             <TabelaAtivosPorTipo 
@@ -716,7 +777,54 @@ export default function CarteiraAtivosTab({
             />
           ))}
         </div>
+      ) : (
+        /* Carteira Vazia - Mostrar opções de importação */
+        <div className="text-center py-12">
+          <div className="mb-8">
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+              <BarChart3 className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-xl font-semibold text-foreground mb-2">
+              Sua carteira está vazia
+            </h3>
+            <p className="text-muted-foreground mb-6">
+              Comece adicionando ativos manualmente ou importe um relatório da B3
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onClick={() => setShowB3Import(true)}
+              className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <FileSpreadsheet className="w-5 h-5" />
+              Importar da B3
+            </button>
+            
+            <button
+              onClick={() => {
+                
+                alert('Funcionalidade de adicionar ativo será implementada')
+              }}
+              className="flex items-center gap-2 px-6 py-3 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Adicionar Ativo
+            </button>
+          </div>
+
+          <div className="mt-8 text-sm text-muted-foreground">
+            <p>💡 <strong>Dica:</strong> Use a importação da B3 para adicionar todos os seus ativos de uma vez!</p>
+          </div>
+        </div>
       )}
+
+      {/* Modal de Importação B3 */}
+      <B3ImportModal
+        isOpen={showB3Import}
+        onClose={() => setShowB3Import(false)}
+        onImport={handleB3Import}
+      />
     </div>
   )
 }
