@@ -34,9 +34,11 @@ export default function RendaFixaFormModal({ open, onClose, onSuccess, editingIt
 
   const createMutation = useMutation({
     mutationFn: rfCatalogService.create,
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('DEBUG: Item criado com sucesso:', data)
       queryClient.invalidateQueries({ queryKey: ['rf-catalog-modal'] })
       queryClient.invalidateQueries({ queryKey: ['rf-catalog'] })
+      queryClient.refetchQueries({ queryKey: ['rf-catalog-modal'] })
       onSuccess?.()
       onClose()
     },
@@ -50,6 +52,7 @@ export default function RendaFixaFormModal({ open, onClose, onSuccess, editingIt
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rf-catalog-modal'] })
       queryClient.invalidateQueries({ queryKey: ['rf-catalog'] })
+      queryClient.refetchQueries({ queryKey: ['rf-catalog-modal'] })
       onSuccess?.()
       onClose()
     },

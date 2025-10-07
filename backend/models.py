@@ -373,26 +373,26 @@ def _ensure_rf_catalog_schema():
         try:
             with conn.cursor() as c:
                 try:
-                    c.execute('''
-                        CREATE TABLE IF NOT EXISTS rf_catalog (
-                            id SERIAL PRIMARY KEY,
-                            nome TEXT NOT NULL,
-                            emissor TEXT,
-                            tipo TEXT,
-                            indexador TEXT,
-                            taxa_percentual NUMERIC,
-                            taxa_fixa NUMERIC,
-                            quantidade NUMERIC,
-                            preco NUMERIC,
-                            data_inicio TEXT,
-                            vencimento TEXT,
+                c.execute('''
+                    CREATE TABLE IF NOT EXISTS rf_catalog (
+                        id SERIAL PRIMARY KEY,
+                        nome TEXT NOT NULL,
+                        emissor TEXT,
+                        tipo TEXT,
+                        indexador TEXT,
+                        taxa_percentual NUMERIC,
+                        taxa_fixa NUMERIC,
+                        quantidade NUMERIC,
+                        preco NUMERIC,
+                        data_inicio TEXT,
+                        vencimento TEXT,
                             liquidez_diaria INTEGER,
                             isento_ir INTEGER,
-                            observacao TEXT,
-                            created_at TEXT,
-                            updated_at TEXT
-                        )
-                    ''')
+                        observacao TEXT,
+                        created_at TEXT,
+                        updated_at TEXT
+                    )
+                ''')
                 except Exception as e:
                     print(f"Erro ao criar tabela rf_catalog: {e}")
                     raise
@@ -519,13 +519,13 @@ def rf_catalog_create(item: dict):
         try:
             with conn.cursor() as c:
                 try:
-                    c.execute('''
-                        INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                        RETURNING id
-                    ''', fields)
-                    new_id = c.fetchone()[0]
-                    return { 'success': True, 'id': new_id }
+                c.execute('''
+                    INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id
+                ''', fields)
+                new_id = c.fetchone()[0]
+                return { 'success': True, 'id': new_id }
                 except Exception as e:
                     print(f"Erro ao inserir em rf_catalog: {e}")
                     print(f"Fields: {fields}")
