@@ -372,26 +372,30 @@ def _ensure_rf_catalog_schema():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
-                c.execute('''
-                    CREATE TABLE IF NOT EXISTS rf_catalog (
-                        id SERIAL PRIMARY KEY,
-                        nome TEXT NOT NULL,
-                        emissor TEXT,
-                        tipo TEXT,
-                        indexador TEXT,
-                        taxa_percentual NUMERIC,
-                        taxa_fixa NUMERIC,
-                        quantidade NUMERIC,
-                        preco NUMERIC,
-                        data_inicio TEXT,
-                        vencimento TEXT,
-                        liquidez_diaria BOOLEAN,
-                        isento_ir BOOLEAN,
-                        observacao TEXT,
-                        created_at TEXT,
-                        updated_at TEXT
-                    )
-                ''')
+                try:
+                    c.execute('''
+                        CREATE TABLE IF NOT EXISTS rf_catalog (
+                            id SERIAL PRIMARY KEY,
+                            nome TEXT NOT NULL,
+                            emissor TEXT,
+                            tipo TEXT,
+                            indexador TEXT,
+                            taxa_percentual NUMERIC,
+                            taxa_fixa NUMERIC,
+                            quantidade NUMERIC,
+                            preco NUMERIC,
+                            data_inicio TEXT,
+                            vencimento TEXT,
+                            liquidez_diaria INTEGER,
+                            isento_ir INTEGER,
+                            observacao TEXT,
+                            created_at TEXT,
+                            updated_at TEXT
+                        )
+                    ''')
+                except Exception as e:
+                    print(f"Erro ao criar tabela rf_catalog: {e}")
+                    raise
         finally:
             conn.close()
     else:
@@ -443,8 +447,8 @@ def rf_catalog_list():
                         'quantidade': float(r[7]) if r[7] is not None else None,
                         'preco': float(r[8]) if r[8] is not None else None,
                         'data_inicio': r[9], 'vencimento': r[10],
-                        'liquidez_diaria': bool(r[11]) if r[11] is not None else None,
-                        'isento_ir': bool(r[12]) if r[12] is not None else None,
+                        'liquidez_diaria': bool(r[11]) if r[11] is not None else False,
+                        'isento_ir': bool(r[12]) if r[12] is not None else False,
                         'observacao': r[13]
                     } for r in rows
                 ]
@@ -514,14 +518,18 @@ def rf_catalog_create(item: dict):
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
-                c.execute('''
-                    INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                    RETURNING id
-                ''', fields)
-                new_id = c.fetchone()[0]
-                # Não precisa de commit explícito, pois a conexão está em autocommit
-                return { 'success': True, 'id': new_id }
+                try:
+                    c.execute('''
+                        INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        RETURNING id
+                    ''', fields)
+                    new_id = c.fetchone()[0]
+                    return { 'success': True, 'id': new_id }
+                except Exception as e:
+                    print(f"Erro ao inserir em rf_catalog: {e}")
+                    print(f"Fields: {fields}")
+                    return { 'success': False, 'message': f'Erro ao inserir: {str(e)}' }
         finally:
             conn.close()
     else:
