@@ -527,9 +527,7 @@ def api_rf_catalog():
             return jsonify({ 'items': rf_catalog_list() })
         data = request.get_json() or {}
         if request.method == 'POST':
-            print(f"DEBUG: Dados recebidos para rf_catalog_create: {data}")
             res = rf_catalog_create(data)
-            print(f"DEBUG: Resultado rf_catalog_create: {res}")
             return jsonify(res)
         if request.method == 'PUT':
             id_ = int(data.get('id'))
@@ -541,7 +539,6 @@ def api_rf_catalog():
             return jsonify(res)
         return jsonify({"error":"Método não suportado"}), 405
     except Exception as e:
-        print(f"DEBUG: Erro na API rf_catalog: {e}")
         return jsonify({"error": str(e)}), 500
 
 @server.route("/api/analise/resumo", methods=["GET"])

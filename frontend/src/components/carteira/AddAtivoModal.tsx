@@ -68,23 +68,12 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
     return tipoNorm.includes('renda fixa') || tipoNorm.includes('tesouro') || tipoNorm.includes('publica')
   }, [tipoNorm])
 
-  const { data: rfCatalog, refetch: refetchRfCatalog, error: rfCatalogError } = useQuery({
+  const { data: rfCatalog, refetch: refetchRfCatalog } = useQuery({
     queryKey: ['rf-catalog-modal'],
     queryFn: rfCatalogService.list,
     enabled: open && (tipoNorm.includes('renda fixa') || tipoNorm.includes('tesouro') || tipoNorm.includes('publica')),
-    staleTime: 0, // Sempre refetch para garantir dados atualizados
-    refetchOnWindowFocus: true,
+    staleTime: 60_000,
   })
-
-  // Debug logs
-  useEffect(() => {
-    if (rfCatalog) {
-      console.log('DEBUG: rfCatalog carregado:', rfCatalog)
-    }
-    if (rfCatalogError) {
-      console.error('DEBUG: Erro ao carregar rfCatalog:', rfCatalogError)
-    }
-  }, [rfCatalog, rfCatalogError])
 
   const { data: sugestoes } = useQuery({
     queryKey: ['ativos-sugestoes-modal'],
@@ -828,7 +817,6 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
           setEditingRfItem(null)
         }}
         onSuccess={() => {
-          console.log('DEBUG: RendaFixaFormModal onSuccess chamado, refetching rfCatalog...')
           refetchRfCatalog()
         }}
         editingItem={editingRfItem}

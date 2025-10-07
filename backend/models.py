@@ -372,26 +372,54 @@ def _ensure_rf_catalog_schema():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
-                c.execute('''
-                    CREATE TABLE IF NOT EXISTS rf_catalog (
-                        id SERIAL PRIMARY KEY,
-                        nome TEXT NOT NULL,
-                        emissor TEXT,
-                        tipo TEXT,
-                        indexador TEXT,
-                        taxa_percentual NUMERIC,
-                        taxa_fixa NUMERIC,
-                        quantidade NUMERIC,
-                        preco NUMERIC,
-                        data_inicio TEXT,
-                        vencimento TEXT,
-                        liquidez_diaria INTEGER,
-                        isento_ir INTEGER,
-                        observacao TEXT,
-                        created_at TEXT,
-                        updated_at TEXT
-                    )
-                ''')
+                try:
+                    c.execute('''
+                        CREATE TABLE IF NOT EXISTS rf_catalog (
+                            id SERIAL PRIMARY KEY,
+                            nome TEXT NOT NULL,
+                            emissor TEXT,
+                            tipo TEXT,
+                            indexador TEXT,
+                            taxa_percentual NUMERIC,
+                            taxa_fixa NUMERIC,
+                            quantidade NUMERIC,
+                            preco NUMERIC,
+                            data_inicio TEXT,
+                            vencimento TEXT,
+                            liquidez_diaria INTEGER,
+                            isento_ir INTEGER,
+                            observacao TEXT,
+                            created_at TEXT,
+                            updated_at TEXT
+                        )
+                    ''')
+                except Exception as e:
+                    print(f"Erro ao criar tabela rf_catalog: {e}")
+                    # Tentar dropar e recriar se necessário
+                    try:
+                        c.execute('DROP TABLE IF EXISTS rf_catalog')
+                        c.execute('''
+                            CREATE TABLE rf_catalog (
+                                id SERIAL PRIMARY KEY,
+                                nome TEXT NOT NULL,
+                                emissor TEXT,
+                                tipo TEXT,
+                                indexador TEXT,
+                                taxa_percentual NUMERIC,
+                                taxa_fixa NUMERIC,
+                                quantidade NUMERIC,
+                                preco NUMERIC,
+                                data_inicio TEXT,
+                                vencimento TEXT,
+                                liquidez_diaria INTEGER,
+                                isento_ir INTEGER,
+                                observacao TEXT,
+                                created_at TEXT,
+                                updated_at TEXT
+                            )
+                        ''')
+                    except Exception as e2:
+                        print(f"Erro ao recriar tabela rf_catalog: {e2}")
         finally:
             conn.close()
     else:
@@ -433,21 +461,25 @@ def rf_catalog_list():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
-                c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
-                rows = c.fetchall()
-                return [
-                    {
-                        'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
-                        'taxa_percentual': float(r[5]) if r[5] is not None else None,
-                        'taxa_fixa': float(r[6]) if r[6] is not None else None,
-                        'quantidade': float(r[7]) if r[7] is not None else None,
-                        'preco': float(r[8]) if r[8] is not None else None,
-                        'data_inicio': r[9], 'vencimento': r[10],
-                        'liquidez_diaria': bool(r[11]) if r[11] is not None else False,
-                        'isento_ir': bool(r[12]) if r[12] is not None else False,
-                        'observacao': r[13]
-                    } for r in rows
-                ]
+                try:
+                    c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
+                    rows = c.fetchall()
+                    return [
+                        {
+                            'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
+                            'taxa_percentual': float(r[5]) if r[5] is not None else None,
+                            'taxa_fixa': float(r[6]) if r[6] is not None else None,
+                            'quantidade': float(r[7]) if r[7] is not None else None,
+                            'preco': float(r[8]) if r[8] is not None else None,
+                            'data_inicio': r[9], 'vencimento': r[10],
+                            'liquidez_diaria': bool(r[11]) if r[11] is not None else False,
+                            'isento_ir': bool(r[12]) if r[12] is not None else False,
+                            'observacao': r[13]
+                        } for r in rows
+                    ]
+                except Exception as e:
+                    print(f"Erro ao listar rf_catalog: {e}")
+                    return []
         finally:
             conn.close()
     else:
@@ -514,13 +546,19 @@ def rf_catalog_create(item: dict):
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
-                c.execute('''
-                    INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                    RETURNING id
-                ''', fields)
-                new_id = c.fetchone()[0]
-                return { 'success': True, 'id': new_id }
+                try:
+                    c.execute('''
+                        INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        RETURNING id
+                    ''', fields)
+                    new_id = c.fetchone()[0]
+                    # Não precisa de commit explícito, pois a conexão está em autocommit
+                    return { 'success': True, 'id': new_id }
+                except Exception as e:
+                    print(f"Erro ao inserir em rf_catalog: {e}")
+                    print(f"Fields: {fields}")
+                    return { 'success': False, 'message': f'Erro ao inserir: {str(e)}' }
         finally:
             conn.close()
     else:
@@ -547,11 +585,15 @@ def rf_catalog_update(id_: int, item: dict):
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
-                c.execute('''
-                    UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
-                ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('quantidade'), item.get('preco'), item.get('data_inicio'), item.get('vencimento'), bool(item.get('liquidez_diaria')), bool(item.get('isento_ir')), item.get('observacao'), now, id_))
-                # Não precisa de commit explícito, pois a conexão está em autocommit
-                return { 'success': True }
+                try:
+                    c.execute('''
+                        UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
+                    ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('quantidade'), item.get('preco'), item.get('data_inicio'), item.get('vencimento'), 1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, id_))
+                    # Não precisa de commit explícito, pois a conexão está em autocommit
+                    return { 'success': True }
+                except Exception as e:
+                    print(f"Erro ao atualizar rf_catalog: {e}")
+                    return { 'success': False, 'message': f'Erro ao atualizar: {str(e)}' }
         finally:
             conn.close()
     else:
@@ -576,9 +618,13 @@ def rf_catalog_delete(id_: int):
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
-                c.execute('DELETE FROM rf_catalog WHERE id=%s', (id_,))
-                # Não precisa de commit explícito, pois a conexão está em autocommit
-                return { 'success': True }
+                try:
+                    c.execute('DELETE FROM rf_catalog WHERE id=%s', (id_,))
+                    # Não precisa de commit explícito, pois a conexão está em autocommit
+                    return { 'success': True }
+                except Exception as e:
+                    print(f"Erro ao deletar rf_catalog: {e}")
+                    return { 'success': False, 'message': f'Erro ao deletar: {str(e)}' }
         finally:
             conn.close()
     else:
