@@ -5,6 +5,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import SecurityCheck from './components/SecurityCheck'
+import LoadingSpinner from './components/LoadingSpinner'
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RecuperacaoSenhaPage = lazy(() => import('./pages/RecuperacaoSenhaPage'))
 const ConfigurarSegurancaPage = lazy(() => import('./pages/ConfigurarSegurancaPage'))
@@ -24,16 +25,16 @@ function App() {
       <ThemeProvider>
         <Routes>
           {/* Rotas públicas */}
-          <Route path="/login" element={<Suspense fallback={<div />}> <LoginPage /> </Suspense>} />
-          <Route path="/recuperar-senha" element={<Suspense fallback={<div />}> <RecuperacaoSenhaPage /> </Suspense>} />
-          <Route path="/configurar-seguranca" element={<Suspense fallback={<div />}> <ConfigurarSegurancaPage /> </Suspense>} />
+          <Route path="/login" element={<Suspense fallback={<LoadingSpinner text="Carregando página de login..." />}> <LoginPage /> </Suspense>} />
+          <Route path="/recuperar-senha" element={<Suspense fallback={<LoadingSpinner text="Carregando recuperação de senha..." />}> <RecuperacaoSenhaPage /> </Suspense>} />
+          <Route path="/configurar-seguranca" element={<Suspense fallback={<LoadingSpinner text="Carregando configurações..." />}> <ConfigurarSegurancaPage /> </Suspense>} />
           
           {/* Rotas protegidas */}
           <Route path="/" element={
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <Suspense fallback={<div />}> <HomePage /> </Suspense>
+                  <Suspense fallback={<LoadingSpinner text="Carregando dashboard..." />}> <HomePage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
@@ -43,7 +44,7 @@ function App() {
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <Suspense fallback={<div />}> <DetalhesPage /> </Suspense>
+                  <Suspense fallback={<LoadingSpinner text="Carregando detalhes do ativo..." />}> <DetalhesPage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
@@ -53,7 +54,7 @@ function App() {
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <Suspense fallback={<div />}> <AnalisePage /> </Suspense>
+                  <Suspense fallback={<LoadingSpinner text="Carregando análise de mercado..." />}> <AnalisePage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
@@ -63,7 +64,7 @@ function App() {
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <Suspense fallback={<div />}> <CarteiraPage /> </Suspense>
+                  <Suspense fallback={<LoadingSpinner text="Carregando carteira..." />}> <CarteiraPage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
@@ -73,7 +74,7 @@ function App() {
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <Suspense fallback={<div />}> <ControlePage /> </Suspense>
+                  <Suspense fallback={<LoadingSpinner text="Carregando controle financeiro..." />}> <ControlePage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
@@ -83,7 +84,7 @@ function App() {
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <Suspense fallback={<div />}> <JurosCompostosPage /> </Suspense>
+                  <Suspense fallback={<LoadingSpinner text="Carregando calculadora..." />}> <JurosCompostosPage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
@@ -93,7 +94,7 @@ function App() {
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <Suspense fallback={<div />}> <GuiaMercadoPage /> </Suspense>
+                  <Suspense fallback={<LoadingSpinner text="Carregando guia de mercado..." />}> <GuiaMercadoPage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>
@@ -103,7 +104,7 @@ function App() {
             <ProtectedRoute>
               <SecurityCheck>
                 <Layout>
-                  <Suspense fallback={<div />}> <ConversorMoedasPage /> </Suspense>
+                  <Suspense fallback={<LoadingSpinner text="Carregando conversor de moedas..." />}> <ConversorMoedasPage /> </Suspense>
                 </Layout>
               </SecurityCheck>
             </ProtectedRoute>

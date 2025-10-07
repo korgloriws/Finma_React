@@ -68,21 +68,23 @@ export default function HomePage() {
   const [abrirConfigMeta, setAbrirConfigMeta] = useState(false)
 
 
+  // Carregamento prioritário - dados essenciais primeiro
   const { data: carteira, isLoading: loadingCarteira } = useQuery({
     queryKey: ['carteira', user],
     queryFn: carteiraService.getCarteira,
     retry: 3,
     refetchOnWindowFocus: false,
-    enabled: !!user
+    enabled: !!user,
+    staleTime: 2 * 60 * 1000, // 2 minutos
   })
-
 
   const { data: resumoHome, isLoading: loadingResumo } = useQuery({
     queryKey: ['home-resumo', user, mesAtual, anoAtual],
     queryFn: () => homeService.getResumo(mesAtual.toString(), anoAtual.toString()),
     retry: 3,
     refetchOnWindowFocus: false,
-    enabled: !!user
+    enabled: !!user,
+    staleTime: 1 * 60 * 1000, // 1 minuto
   })
 
 
@@ -98,21 +100,24 @@ export default function HomePage() {
     return { mes: 12, ano: anoAtual - 1 }
   }, [mesAtual, anoAtual])
 
+  // Carregamento secundário - dados de comparação
   const { data: resumoAnterior } = useQuery({
     queryKey: ['home-resumo', user, prev.mes, prev.ano],
     queryFn: () => homeService.getResumo(prev.mes.toString(), prev.ano.toString()),
     retry: 3,
     refetchOnWindowFocus: false,
-    enabled: !!user
+    enabled: !!user && !!resumoHome, // Só carrega após resumo principal
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
 
- 
+  // Carregamento sob demanda - histórico da carteira
   const { data: historicoCarteira } = useQuery({
     queryKey: ['carteira-historico', user, filtroPeriodo],
     queryFn: () => carteiraService.getHistorico(filtroPeriodo),
     retry: 3,
     refetchOnWindowFocus: false,
-    enabled: !!user
+    enabled: !!user && !!carteira, // Só carrega após carteira principal
+    staleTime: 10 * 60 * 1000, // 10 minutos
   })
 
 

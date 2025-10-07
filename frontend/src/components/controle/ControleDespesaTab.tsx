@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 
 import { 
   Trash2, DollarSign, TrendingDown, BarChart3, 
-  Eye, EyeOff, TrendingUp, Edit, Save, X, Plus, Calendar,
+  TrendingUp, Edit, Save, X, Plus, Calendar,
   ShoppingCart, Home, Baby, Zap, Heart, Utensils, Receipt
 } from 'lucide-react'
 import { controleService } from '../../services/api'
@@ -16,7 +16,6 @@ interface ControleDespesaTabProps {
   filtroMes: string
   filtroAno: string
   ocultarValores: boolean
-  setOcultarValores: (value: boolean) => void
 }
 
 // Categorias de despesas com ícones
@@ -38,8 +37,7 @@ const CATEGORIAS_DESPESAS = [
 export default function ControleDespesaTab({ 
   filtroMes, 
   filtroAno, 
-  ocultarValores, 
-  setOcultarValores 
+  ocultarValores
 }: ControleDespesaTabProps) {
   const [inputNome, setInputNome] = useState('')
   const [inputValor, setInputValor] = useState('')
@@ -352,13 +350,6 @@ export default function ControleDespesaTab({
               <DollarSign className="w-5 h-5 text-destructive" />
             </div>
             <span className="text-sm text-muted-foreground">Total Despesas</span>
-            <button
-              onClick={() => setOcultarValores(!ocultarValores)}
-              className="p-1 hover:bg-muted rounded"
-              title={ocultarValores ? "Mostrar valores" : "Ocultar valores"}
-            >
-              {ocultarValores ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
           </div>
           <div className="text-2xl font-bold text-foreground">
             {ocultarValores ? '••••••' : formatCurrency(totalDespesas)}

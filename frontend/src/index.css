@@ -40,7 +40,7 @@
 
 @layer base {
   :root {
-    /* Light theme: clean whites, subtle orange accents, greens/reds preserved */
+    
     --background: 0 0% 100%; /* white */
     --foreground: 222 47% 11%; /* near-black */
     --card: 0 0% 100%;

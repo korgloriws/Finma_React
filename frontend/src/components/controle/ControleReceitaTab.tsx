@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 
 import { 
   Trash2, DollarSign, TrendingUp, BarChart3, 
-  Eye, EyeOff, Edit, Save, X, Plus, Calendar,
+  Edit, Save, X, Plus, Calendar,
   ArrowUpRight, ArrowDownRight, TrendingDown
 } from 'lucide-react'
 import { controleService } from '../../services/api'
@@ -16,14 +16,12 @@ interface ControleReceitaTabProps {
   filtroMes: string
   filtroAno: string
   ocultarValores: boolean
-  setOcultarValores: (value: boolean) => void
 }
 
 export default function ControleReceitaTab({ 
   filtroMes, 
   filtroAno, 
-  ocultarValores, 
-  setOcultarValores 
+  ocultarValores
 }: ControleReceitaTabProps) {
   const [inputNome, setInputNome] = useState('')
   const [inputValor, setInputValor] = useState('')
@@ -335,13 +333,6 @@ export default function ControleReceitaTab({
               <DollarSign className="w-5 h-5 text-primary" />
             </div>
             <span className="text-sm text-muted-foreground">Total Receitas</span>
-            <button
-              onClick={() => setOcultarValores(!ocultarValores)}
-              className="p-1 hover:bg-muted rounded"
-              title={ocultarValores ? "Mostrar valores" : "Ocultar valores"}
-            >
-              {ocultarValores ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
           </div>
           <div className="text-2xl font-bold text-foreground">
             {ocultarValores ? '••••••' : formatCurrency(totalReceitas)}

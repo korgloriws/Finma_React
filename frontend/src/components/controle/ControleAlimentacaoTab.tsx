@@ -14,14 +14,12 @@ interface ControleAlimentacaoTabProps {
   filtroMes: string
   filtroAno: string
   ocultarValores: boolean
-  setOcultarValores: (value: boolean) => void
 }
 
 export default function ControleAlimentacaoTab({ 
   filtroMes, 
   filtroAno, 
-  ocultarValores, 
-  setOcultarValores 
+  ocultarValores
 }: ControleAlimentacaoTabProps) {
   const [inputData, setInputData] = useState('')
   const [inputValor, setInputValor] = useState('')
@@ -236,13 +234,6 @@ export default function ControleAlimentacaoTab({
               <DollarSign className="w-5 h-5 text-primary" />
             </div>
             <span className="text-sm text-muted-foreground">Total Gasto</span>
-            <button
-              onClick={() => setOcultarValores(!ocultarValores)}
-              className="p-1 hover:bg-muted rounded"
-              title={ocultarValores ? "Mostrar valores" : "Ocultar valores"}
-            >
-              {ocultarValores ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
           </div>
           <div className="text-2xl font-bold text-foreground">
             {ocultarValores ? '••••••' : formatCurrency(totalGasto)}

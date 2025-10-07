@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo,  } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
-  CreditCard, Plus, Edit, Trash2, Eye, EyeOff, 
+  CreditCard, Plus, Edit, Trash2, 
   DollarSign, ShoppingCart, X, ChevronDown
 } from 'lucide-react'
 import { cartaoService } from '../../services/api'
@@ -13,7 +13,6 @@ interface ControleCartaoTabProps {
   filtroMes: string
   filtroAno: string
   ocultarValores: boolean
-  setOcultarValores: (ocultar: boolean) => void
 }
 
 const BANDEIRAS_CARTAO: BandeiraCartao[] = [
@@ -48,8 +47,7 @@ const CORES_CARTAO = [
 export default function ControleCartaoTab({ 
   filtroMes, 
   filtroAno, 
-  ocultarValores, 
-  setOcultarValores 
+  ocultarValores
 }: ControleCartaoTabProps) {
   
   const [inputNome, setInputNome] = useState('')
@@ -378,13 +376,6 @@ export default function ControleCartaoTab({
           <p className="text-muted-foreground">Gerencie seus cartões e compras</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setOcultarValores(!ocultarValores)}
-            className="p-2 rounded-md bg-muted hover:bg-muted/80 transition-colors"
-            title={ocultarValores ? 'Mostrar valores' : 'Ocultar valores'}
-          >
-            {ocultarValores ? <EyeOff size={20} /> : <Eye size={20} />}
-          </button>
           <button
             onClick={() => setMostrarFormularioCartao(true)}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 flex items-center gap-2"

@@ -47,7 +47,7 @@ export default function CarteiraPage() {
   const [inputPreco, setInputPreco] = useState('')
   const [inputIndexador, setInputIndexador] = useState<'CDI' | 'IPCA' | 'SELIC' | 'PREFIXADO' | ''>('')
   const [inputIndexadorPct, setInputIndexadorPct] = useState('')
-  // Novos campos RF
+
   const [inputDataAplicacao, setInputDataAplicacao] = useState<string>('')
   const [inputVencimento, setInputVencimento] = useState<string>('')
   const [inputIsentoIr, setInputIsentoIr] = useState<boolean>(false)
@@ -65,33 +65,35 @@ export default function CarteiraPage() {
   })
   const [manageTipoOpen, setManageTipoOpen] = useState<{open: boolean; tipo?: string}>({open: false})
   const [renameTipoValue, setRenameTipoValue] = useState('')
+  // Carregamento sob demanda - insights (só na aba insights)
   const { data: insights, isLoading: loadingInsights } = useQuery({
     queryKey: ['carteira-insights', user],
     queryFn: carteiraService.getInsights,
-    enabled: !!user,
-    staleTime: 30_000,
+    enabled: !!user && activeTab === 'insights',
+    staleTime: 5 * 60 * 1000, // 5 minutos
     refetchOnWindowFocus: false,
   })
+  // Carregamento sob demanda - rebalanceamento (só na aba rebalance)
   const { data: rbConfig } = useQuery({
     queryKey: ['rebalance-config', user],
     queryFn: carteiraService.getRebalanceConfig,
-    enabled: !!user,
+    enabled: !!user && activeTab === 'rebalance',
     refetchOnWindowFocus: false,
-    staleTime: 60_000,
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
   const { data: rbStatus, refetch: refetchRbStatus } = useQuery({
     queryKey: ['rebalance-status', user],
     queryFn: carteiraService.getRebalanceStatus,
-    enabled: !!user,
+    enabled: !!user && activeTab === 'rebalance',
     refetchOnWindowFocus: false,
-    staleTime: 30_000,
+    staleTime: 2 * 60 * 1000, // 2 minutos
   })
   const { data: rbHistory } = useQuery({
     queryKey: ['rebalance-history', user],
     queryFn: carteiraService.getRebalanceHistory,
-    enabled: !!user,
+    enabled: !!user && activeTab === 'rebalance',
     refetchOnWindowFocus: false,
-    staleTime: 60_000,
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
   const saveRebalanceMutation = useMutation({
     mutationFn: carteiraService.saveRebalanceConfig,
@@ -112,7 +114,7 @@ export default function CarteiraPage() {
   })
   const [idealPreview, setIdealPreview] = useState<{ periodo: string; targets: Record<string, number> } | null>(null)
   
-  // Inicializar preview quando rbConfig mudar
+
   useEffect(() => {
     if (rbConfig && !idealPreview) {
       const cfg: any = rbConfig as any
@@ -122,7 +124,7 @@ export default function CarteiraPage() {
     }
   }, [rbConfig, idealPreview])
 
-  // Atalho: Ctrl+I para abrir a modal de adição (somente na aba Ativos)
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
@@ -152,11 +154,12 @@ export default function CarteiraPage() {
   const queryClient = useQueryClient()
 
 
+  // Carregamento prioritário - carteira principal
   const { data: carteira, isLoading: loadingCarteira } = useQuery<AtivoCarteira[]>({
     queryKey: ['carteira', user], 
     queryFn: async () => await carteiraService.getCarteira(),
     enabled: !!user, 
-    staleTime: 0,
+    staleTime: 2 * 60 * 1000, // 2 minutos
   })
 
   const { data: tiposApi } = useQuery({
@@ -172,27 +175,31 @@ export default function CarteiraPage() {
     return Array.from(new Set([ ...fromApi, ...fromCarteira ]))
   }, [carteira, tiposApi])
 
+  // Carregamento sob demanda - movimentações (só na aba movimentações)
   const { data: movimentacoes, isLoading: loadingMovimentacoes } = useQuery<Movimentacao[]>({
     queryKey: ['movimentacoes', user, filtroMes, filtroAno], 
     queryFn: () => carteiraService.getMovimentacoes(filtroMes, filtroAno),
-    enabled: !!user, 
+    enabled: !!user && activeTab === 'movimentacoes',
+    staleTime: 2 * 60 * 1000, // 2 minutos
   })
-
 
   const { data: movimentacoesAll } = useQuery<Movimentacao[]>({
     queryKey: ['movimentacoes-all', user],
     queryFn: () => carteiraService.getMovimentacoes(),
-    enabled: !!user,
+    enabled: !!user && activeTab === 'movimentacoes',
     refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
 
   
+  // Carregamento sob demanda - proventos (só na aba proventos)
   const { data: proventos, isLoading: loadingProventos, error: proventosError } = useQuery({
     queryKey: ['proventos', user, carteira?.map(ativo => ativo?.ticker), filtroProventos], 
     queryFn: () => carteiraService.getProventosComFiltro(carteira?.map(ativo => ativo?.ticker || '') || [], filtroProventos),
-    enabled: !!user && !!carteira && carteira.length > 0, 
+    enabled: !!user && !!carteira && carteira.length > 0 && activeTab === 'proventos', 
     retry: 1,
     refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
 
   
@@ -203,12 +210,12 @@ export default function CarteiraPage() {
     refetchOnWindowFocus: false,
   })
 
-  // Atualizações em background ao entrar na tela (não bloqueia UI)
+
   useEffect(() => {
     let cancelled = false
     const runBackgroundUpdates = async () => {
       try {
-        // Dispara as duas atualizações em paralelo e silenciosas
+       
         const [resIdx, resPrecos] = await Promise.allSettled([
           carteiraService.refreshIndexadores(),
           carteiraService.refreshCarteira(),
@@ -227,15 +234,15 @@ export default function CarteiraPage() {
           toast.success(n != null ? `Preços atualizados (${n})` : 'Preços atualizados')
         }
       } catch {
-        // Erros já tratados abaixo; evitamos bloquear a UI
+      
       }
     }
     runBackgroundUpdates()
     return () => { cancelled = true }
-  // Executa ao entrar, e também quando usuário/logged-in mudar
+  
   }, [user, queryClient])
 
-  // Tesouro Direto - lista de títulos para autocompletar
+
   const { data: tesouroData } = useQuery({
     queryKey: ['tesouro-titulos'],
     queryFn: carteiraService.getTesouroTitulos,

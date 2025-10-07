@@ -9,8 +9,11 @@ import './index.css'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutos
+      staleTime: 1000 * 60 * 2, // 2 minutos (reduzido para melhor performance)
+      gcTime: 1000 * 60 * 10, // 10 minutos (dados ficam em cache)
       retry: 1,
+      refetchOnWindowFocus: false, // Evita refetch desnecessário
+      refetchOnMount: true, // Refetch quando montar componente
     },
   },
 })

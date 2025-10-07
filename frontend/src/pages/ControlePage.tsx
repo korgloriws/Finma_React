@@ -76,12 +76,13 @@ export default function ControlePage() {
   }, [])
 
 
+  // Carregamento prioritário - dados essenciais da aba financeiro
   const { data: receitasDespesas } = useQuery<ReceitasDespesas>({
     queryKey: ['receitas-despesas', filtroMes, filtroAno],
     queryFn: () => controleService.getReceitasDespesas(filtroMes, filtroAno),
     retry: 1,
     refetchOnWindowFocus: false,
-    staleTime: 0 // Sempre considerar os dados como obsoletos
+    staleTime: 1 * 60 * 1000, // 1 minuto
   })
 
   const { data: saldo } = useQuery<{ saldo: number }>({
@@ -89,13 +90,17 @@ export default function ControlePage() {
     queryFn: () => controleService.getSaldo(filtroMes, filtroAno),
     retry: 1,
     refetchOnWindowFocus: false,
+    staleTime: 1 * 60 * 1000, // 1 minuto
   })
 
+  // Carregamento secundário - gráficos (só quando necessário)
   const { data: dadosGraficoEvolucao } = useQuery<EvolucaoFinanceira[]>({
     queryKey: ['evolucao-financeira', filtroMes, filtroAno, periodoEvolucao],
     queryFn: () => controleService.getEvolucaoFinanceira(filtroMes, filtroAno),
     retry: 1,
     refetchOnWindowFocus: false,
+    enabled: abaAtiva === 'financeiro', // Só carrega na aba financeiro
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
 
   // Query para comparação com mês anterior (sempre ativa)
@@ -111,33 +116,36 @@ export default function ControlePage() {
     refetchOnWindowFocus: false
   })
 
-  // Query para despesas (outros gastos)
+  // Carregamento sob demanda - dados das abas específicas
   const { data: outros } = useQuery({
     queryKey: ['outros', filtroMes, filtroAno],
     queryFn: () => controleService.getOutros(filtroMes, filtroAno),
     retry: 1,
     refetchOnWindowFocus: false,
-    staleTime: 0 // Sempre considerar os dados como obsoletos
+    enabled: abaAtiva === 'despesas', // Só carrega na aba despesas
+    staleTime: 2 * 60 * 1000, // 2 minutos
   })
 
-  // Query para cartões
   const { data: cartoes } = useQuery({
     queryKey: ['cartoes-cadastrados', filtroMes, filtroAno],
     queryFn: () => cartaoService.getCartoesCadastrados(),
     retry: 1,
     refetchOnWindowFocus: false,
+    enabled: abaAtiva === 'cartoes', // Só carrega na aba cartões
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
 
-  // Query para alimentação (marmitas)
   const { data: marmitas } = useQuery({
     queryKey: ['marmitas', filtroMes, filtroAno],
     queryFn: () => marmitasService.getMarmitas(parseInt(filtroMes), parseInt(filtroAno)),
     retry: 1,
     refetchOnWindowFocus: false,
+    enabled: abaAtiva === 'alimentacao', // Só carrega na aba alimentação
+    staleTime: 2 * 60 * 1000, // 2 minutos
   })
 
 
-  // Cálculos para comparações
+
   const comparacaoMensal = useMemo(() => {
     if (!dadosGraficoEvolucao || !dadosComparacao) return null
     
@@ -325,10 +333,20 @@ export default function ControlePage() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setOcultarValores(!ocultarValores)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-card/60 backdrop-blur border border-border rounded-full text-sm hover:bg-card/80 transition shadow-sm"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm ${
+                ocultarValores 
+                  ? 'bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200' 
+                  : 'bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200'
+              }`}
+              title={ocultarValores ? 'Clique para mostrar todos os valores' : 'Clique para ocultar todos os valores'}
             >
               {ocultarValores ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              <span className="hidden sm:inline">{ocultarValores ? 'Mostrar' : 'Ocultar'} Valores</span>
+              <span className="hidden sm:inline">
+                {ocultarValores ? 'Mostrar' : 'Ocultar'} Todos os Valores
+              </span>
+              <span className="sm:hidden">
+                {ocultarValores ? 'Mostrar' : 'Ocultar'}
+              </span>
             </motion.button>
           </div>
         </div>
@@ -734,13 +752,13 @@ export default function ControlePage() {
                 cy="50%"
                 outerRadius={80}
                 dataKey="value"
-                label={({ name, value }) => `${name}: ${formatCurrency(value)}`}
+                label={({ name, value }) => `${name}: ${ocultarValores ? '••••••' : formatCurrency(value)}`}
               >
                 {dadosGraficoReceitasDespesas.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+              <Tooltip formatter={(value) => ocultarValores ? '••••••' : formatCurrency(Number(value))} />
             </RechartsPieChart>
           </ResponsiveContainer>
           </motion.div>
@@ -773,7 +791,7 @@ export default function ControlePage() {
                            <Cell key={`cell-${index}`} fill={entry.categoria.color} />
                          ))}
                        </Pie>
-                       <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
+                       <Tooltip formatter={(value: any) => [ocultarValores ? '••••••' : formatCurrency(value), 'Valor']} />
                      </RechartsPieChart>
                    </ResponsiveContainer>
                  ) : (
@@ -797,7 +815,7 @@ export default function ControlePage() {
                 <CartesianGrid strokeDasharray="3 3" />
                        <XAxis dataKey="name" />
                 <YAxis />
-                       <Tooltip formatter={(value: any) => [formatCurrency(value), 'Valor']} />
+                       <Tooltip formatter={(value: any) => [ocultarValores ? '••••••' : formatCurrency(value), 'Valor']} />
                        <Bar dataKey="value" fill="#8884d8" />
                     </BarChart>
             </ResponsiveContainer>
@@ -854,7 +872,7 @@ export default function ControlePage() {
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
                   {receitasDespesas?.receitas ? 
-                    `Recomendado: ${formatCurrency(receitasDespesas.receitas * 0.2)}` : 
+                    `Recomendado: ${ocultarValores ? '••••••' : formatCurrency(receitasDespesas.receitas * 0.2)}` : 
                     'Adicione receitas para calcular meta'
                   }
                 </p>
@@ -886,7 +904,7 @@ export default function ControlePage() {
                  </p>
                  <div className="text-2xl font-bold text-foreground">
                    {totaisPorCategoria.length > 0 ? 
-                     formatCurrency(totaisPorCategoria[0]?.value || 0) : 
+                     (ocultarValores ? '••••••' : formatCurrency(totaisPorCategoria[0]?.value || 0)) : 
                      'R$ 0,00'
                    }
          </div>
@@ -901,7 +919,6 @@ export default function ControlePage() {
             filtroMes={filtroMes}
             filtroAno={filtroAno}
             ocultarValores={ocultarValores}
-            setOcultarValores={setOcultarValores}
           />
         )}
 
@@ -911,7 +928,6 @@ export default function ControlePage() {
             filtroMes={filtroMes}
             filtroAno={filtroAno}
             ocultarValores={ocultarValores}
-            setOcultarValores={setOcultarValores}
           />
         )}
 
@@ -921,7 +937,6 @@ export default function ControlePage() {
             filtroMes={filtroMes}
             filtroAno={filtroAno}
             ocultarValores={ocultarValores}
-            setOcultarValores={setOcultarValores}
           />
         )}
 
@@ -931,7 +946,6 @@ export default function ControlePage() {
             filtroMes={filtroMes}
             filtroAno={filtroAno}
             ocultarValores={ocultarValores}
-            setOcultarValores={setOcultarValores}
           />
         )}
 
