@@ -44,33 +44,43 @@ def _sanitize_db_url(url: str) -> str:
 DATABASE_URL = _sanitize_db_url(os.getenv("DATABASE_URL") or os.getenv("USUARIOS_DB_URL"))
 
 def _is_postgres() -> bool:
-    return bool(DATABASE_URL) and psycopg is not None
+    is_pg = bool(DATABASE_URL) and psycopg is not None
+    print(f"_is_postgres: DATABASE_URL={bool(DATABASE_URL)}, psycopg={psycopg is not None}, resultado={is_pg}")
+    return is_pg
 
 def _get_pg_conn():
+    print(f"_get_pg_conn: Conectando ao PostgreSQL")
     conn = psycopg.connect(DATABASE_URL)
     try:
         conn.autocommit = True
-    except Exception:
+        print(f"_get_pg_conn: Conexão estabelecida com autocommit")
+    except Exception as e:
+        print(f"_get_pg_conn: Erro ao configurar autocommit: {e}")
         pass
     return conn
 
 def _pg_schema_for_user(username: str) -> str:
-   
     base = re.sub(r"[^a-zA-Z0-9_]", "_", (username or "anon").lower())
     if not base:
         base = "anon"
-    return f"u_{base}"
+    schema = f"u_{base}"
+    print(f"_pg_schema_for_user: Schema gerado para usuário {username}: {schema}")
+    return schema
 
 def _pg_use_schema(conn, username: str):
     schema = _pg_schema_for_user(username)
+    print(f"_pg_use_schema: Usando schema {schema} para usuário {username}")
     with conn.cursor() as cur:
         cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
         cur.execute(f"SET search_path TO {schema}")
+    print(f"_pg_use_schema: Schema {schema} configurado com sucesso")
     return schema
 
 def _pg_conn_for_user(username: str):
+    print(f"_pg_conn_for_user: Conectando para usuário {username}")
     conn = _get_pg_conn()
     _pg_use_schema(conn, username)
+    print(f"_pg_conn_for_user: Conexão estabelecida para usuário {username}")
     return conn
 
 def _ensure_rebalance_schema():
@@ -364,39 +374,43 @@ def rename_asset_type(old: str, new: str):
         conn.close()
 
 def _ensure_rf_catalog_schema():
-
     usuario = get_usuario_atual()
     if not usuario:
-        return
+        print("_ensure_rf_catalog_schema: Usuário não autenticado")
+        return False
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
                 try:
-                    c.execute('''
-                        CREATE TABLE IF NOT EXISTS rf_catalog (
-                            id SERIAL PRIMARY KEY,
-                            nome TEXT NOT NULL,
-                            emissor TEXT,
-                            tipo TEXT,
-                            indexador TEXT,
-                            taxa_percentual REAL,
-                            taxa_fixa REAL,
-                            quantidade REAL,
-                            preco REAL,
-                            data_inicio TEXT,
-                            vencimento TEXT,
-                            liquidez_diaria INTEGER,
-                            isento_ir INTEGER,
-                            observacao TEXT,
-                            created_at TEXT,
-                            updated_at TEXT
-                        )
-                    ''')
+                    print(f"_ensure_rf_catalog_schema: Criando tabela para usuário {usuario}")
+                c.execute('''
+                    CREATE TABLE IF NOT EXISTS rf_catalog (
+                        id SERIAL PRIMARY KEY,
+                        nome TEXT NOT NULL,
+                        emissor TEXT,
+                        tipo TEXT,
+                        indexador TEXT,
+                        taxa_percentual DOUBLE PRECISION,
+                        taxa_fixa DOUBLE PRECISION,
+                        quantidade DOUBLE PRECISION,
+                        preco DOUBLE PRECISION,
+                        data_inicio TEXT,
+                        vencimento TEXT,
+                        liquidez_diaria INTEGER,
+                        isento_ir INTEGER,
+                        observacao TEXT,
+                        created_at TEXT,
+                        updated_at TEXT
+                    )
+                ''')
+                    print(f"_ensure_rf_catalog_schema: Tabela criada/verificada com sucesso")
+                    return True
                 except Exception as e:
                     print(f"Erro ao criar tabela rf_catalog: {e}")
                     # Tentar dropar e recriar se necessário
                     try:
+                        print(f"_ensure_rf_catalog_schema: Tentando recriar tabela")
                         c.execute('DROP TABLE IF EXISTS rf_catalog')
                         c.execute('''
                             CREATE TABLE rf_catalog (
@@ -405,10 +419,10 @@ def _ensure_rf_catalog_schema():
                                 emissor TEXT,
                                 tipo TEXT,
                                 indexador TEXT,
-                                taxa_percentual REAL,
-                                taxa_fixa REAL,
-                                quantidade REAL,
-                                preco REAL,
+                                taxa_percentual DOUBLE PRECISION,
+                                taxa_fixa DOUBLE PRECISION,
+                                quantidade DOUBLE PRECISION,
+                                preco DOUBLE PRECISION,
                                 data_inicio TEXT,
                                 vencimento TEXT,
                                 liquidez_diaria INTEGER,
@@ -418,8 +432,11 @@ def _ensure_rf_catalog_schema():
                                 updated_at TEXT
                             )
                         ''')
+                        print(f"_ensure_rf_catalog_schema: Tabela recriada com sucesso")
+                        return True
                     except Exception as e2:
                         print(f"Erro ao recriar tabela rf_catalog: {e2}")
+                        return False
         finally:
             conn.close()
     else:
@@ -448,35 +465,49 @@ def _ensure_rf_catalog_schema():
                 )
             ''')
             conn.commit()
+            return True
         finally:
             conn.close()
 
 def rf_catalog_list():
-
     usuario = get_usuario_atual()
     if not usuario:
+        print("rf_catalog_list: Usuário não autenticado")
         return []
-    _ensure_rf_catalog_schema()
+    
+    schema_created = _ensure_rf_catalog_schema()
+    if not schema_created:
+        print("rf_catalog_list: Falha ao criar/verificar schema")
+        return []
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
                 try:
-                    c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
-                    rows = c.fetchall()
-                    return [
-                        {
-                            'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
-                            'taxa_percentual': float(r[5]) if r[5] is not None else None,
-                            'taxa_fixa': float(r[6]) if r[6] is not None else None,
-                            'quantidade': float(r[7]) if r[7] is not None else None,
-                            'preco': float(r[8]) if r[8] is not None else None,
-                            'data_inicio': r[9], 'vencimento': r[10],
-                            'liquidez_diaria': bool(r[11]) if r[11] is not None else False,
-                            'isento_ir': bool(r[12]) if r[12] is not None else False,
-                            'observacao': r[13]
-                        } for r in rows
-                    ]
+                c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
+                rows = c.fetchall()
+                    print(f"rf_catalog_list: Encontrados {len(rows)} itens para usuário {usuario}")
+                    def safe_float(value):
+                        try:
+                            return float(value) if value is not None else None
+                        except (ValueError, TypeError):
+                            return None
+                    
+                    result = [
+                    {
+                        'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
+                        'taxa_percentual': safe_float(r[5]),
+                        'taxa_fixa': safe_float(r[6]),
+                        'quantidade': safe_float(r[7]),
+                        'preco': safe_float(r[8]),
+                        'data_inicio': r[9], 'vencimento': r[10],
+                        'liquidez_diaria': bool(r[11]) if r[11] is not None else False,
+                        'isento_ir': bool(r[12]) if r[12] is not None else False,
+                        'observacao': r[13]
+                    } for r in rows
+                ]
+                    print(f"rf_catalog_list: Retornando {len(result)} itens")
+                    return result
                 except Exception as e:
                     print(f"Erro ao listar rf_catalog: {e}")
                     return []
@@ -509,7 +540,10 @@ def rf_catalog_create(item: dict):
     usuario = get_usuario_atual()
     if not usuario:
         return { 'success': False, 'message': 'Não autenticado' }
-    _ensure_rf_catalog_schema()
+    
+    schema_created = _ensure_rf_catalog_schema()
+    if not schema_created:
+        return { 'success': False, 'message': 'Falha ao criar/verificar schema' }
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     # Validar campos obrigatórios
@@ -547,14 +581,17 @@ def rf_catalog_create(item: dict):
         try:
             with conn.cursor() as c:
                 try:
-                    c.execute('''
-                        INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                        RETURNING id
-                    ''', fields)
-                    new_id = c.fetchone()[0]
+                    print(f"rf_catalog_create: Inserindo item para usuário {usuario}")
+                    print(f"rf_catalog_create: Fields: {fields}")
+                c.execute('''
+                    INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id
+                ''', fields)
+                new_id = c.fetchone()[0]
+                    print(f"rf_catalog_create: Item criado com ID {new_id}")
                     # Não precisa de commit explícito, pois a conexão está em autocommit
-                    return { 'success': True, 'id': new_id }
+                return { 'success': True, 'id': new_id }
                 except Exception as e:
                     print(f"Erro ao inserir em rf_catalog: {e}")
                     print(f"Fields: {fields}")
@@ -579,18 +616,21 @@ def rf_catalog_update(id_: int, item: dict):
     usuario = get_usuario_atual()
     if not usuario:
         return { 'success': False, 'message': 'Não autenticado' }
-    _ensure_rf_catalog_schema()
+    
+    schema_created = _ensure_rf_catalog_schema()
+    if not schema_created:
+        return { 'success': False, 'message': 'Falha ao criar/verificar schema' }
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
                 try:
-                    c.execute('''
-                        UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
+                c.execute('''
+                    UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
                     ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('quantidade'), item.get('preco'), item.get('data_inicio'), item.get('vencimento'), 1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, id_))
                     # Não precisa de commit explícito, pois a conexão está em autocommit
-                    return { 'success': True }
+                return { 'success': True }
                 except Exception as e:
                     print(f"Erro ao atualizar rf_catalog: {e}")
                     return { 'success': False, 'message': f'Erro ao atualizar: {str(e)}' }
@@ -613,15 +653,18 @@ def rf_catalog_delete(id_: int):
     usuario = get_usuario_atual()
     if not usuario:
         return { 'success': False, 'message': 'Não autenticado' }
-    _ensure_rf_catalog_schema()
+    
+    schema_created = _ensure_rf_catalog_schema()
+    if not schema_created:
+        return { 'success': False, 'message': 'Falha ao criar/verificar schema' }
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
                 try:
-                    c.execute('DELETE FROM rf_catalog WHERE id=%s', (id_,))
+                c.execute('DELETE FROM rf_catalog WHERE id=%s', (id_,))
                     # Não precisa de commit explícito, pois a conexão está em autocommit
-                    return { 'success': True }
+                return { 'success': True }
                 except Exception as e:
                     print(f"Erro ao deletar rf_catalog: {e}")
                     return { 'success': False, 'message': f'Erro ao deletar: {str(e)}' }
