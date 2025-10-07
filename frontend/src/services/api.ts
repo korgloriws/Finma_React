@@ -40,10 +40,21 @@ export const ativoService = {
     return response.data
   },
 
-
   getHistorico: async (ticker: string, periodo: string = '1y'): Promise<Array<Record<string, any>>> => {
     const normalizedTicker = normalizeTicker(ticker)
     const response = await api.get(`/ativo/${normalizedTicker}/historico?periodo=${periodo}`)
+    return response.data
+  },
+
+  getPrecoHistorico: async (ticker: string, data: string): Promise<{preco: number, data_historico: string, data_solicitada: string, ticker: string}> => {
+    const normalizedTicker = normalizeTicker(ticker)
+    const response = await api.get(`/ativo/${normalizedTicker}/preco-historico?data=${data}`)
+    return response.data
+  },
+
+  getPrecoAtual: async (ticker: string): Promise<{preco: number, data: string, ticker: string}> => {
+    const normalizedTicker = normalizeTicker(ticker)
+    const response = await api.get(`/ativo/${normalizedTicker}/preco-atual`)
     return response.data
   },
 
@@ -194,10 +205,11 @@ export const carteiraService = {
   },
 
 
-  atualizarAtivo: async (id: number, payload: { quantidade?: number; preco_atual?: number }): Promise<any> => {
+  atualizarAtivo: async (id: number, payload: { quantidade?: number; preco_atual?: number; preco_compra?: number }): Promise<any> => {
     const body: any = {}
     if (typeof payload.quantidade === 'number') body.quantidade = payload.quantidade
     if (typeof payload.preco_atual === 'number') body.preco_atual = payload.preco_atual
+    if (typeof payload.preco_compra === 'number') body.preco_compra = payload.preco_compra
     const response = await api.put(`/carteira/atualizar/${id}`, body)
     return response.data
   },

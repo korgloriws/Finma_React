@@ -250,6 +250,10 @@ def _ensure_indexador_schema():
                     c.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS liquidez_diaria BOOLEAN')
                 except Exception:
                     pass
+                try:
+                    c.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS preco_compra DECIMAL(10,2)')
+                except Exception:
+                    pass
         finally:
             conn.close()
     else:
@@ -292,6 +296,10 @@ def _ensure_indexador_schema():
                 pass
             try:
                 cur.execute('ALTER TABLE carteira ADD COLUMN liquidez_diaria INTEGER')
+            except Exception:
+                pass
+            try:
+                cur.execute('ALTER TABLE carteira ADD COLUMN preco_compra REAL')
             except Exception:
                 pass
             conn.commit()
@@ -373,6 +381,8 @@ def _ensure_rf_catalog_schema():
                         indexador TEXT,
                         taxa_percentual NUMERIC,
                         taxa_fixa NUMERIC,
+                        quantidade NUMERIC,
+                        preco NUMERIC,
                         data_inicio TEXT,
                         vencimento TEXT,
                         liquidez_diaria BOOLEAN,
@@ -398,6 +408,8 @@ def _ensure_rf_catalog_schema():
                     indexador TEXT,
                     taxa_percentual REAL,
                     taxa_fixa REAL,
+                    quantidade REAL,
+                    preco REAL,
                     data_inicio TEXT,
                     vencimento TEXT,
                     liquidez_diaria INTEGER,
@@ -421,17 +433,19 @@ def rf_catalog_list():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
-                c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
+                c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
                 rows = c.fetchall()
                 return [
                     {
                         'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
                         'taxa_percentual': float(r[5]) if r[5] is not None else None,
                         'taxa_fixa': float(r[6]) if r[6] is not None else None,
-                        'data_inicio': r[7], 'vencimento': r[8],
-                        'liquidez_diaria': bool(r[9]) if r[9] is not None else None,
-                        'isento_ir': bool(r[10]) if r[10] is not None else None,
-                        'observacao': r[11]
+                        'quantidade': float(r[7]) if r[7] is not None else None,
+                        'preco': float(r[8]) if r[8] is not None else None,
+                        'data_inicio': r[9], 'vencimento': r[10],
+                        'liquidez_diaria': bool(r[11]) if r[11] is not None else None,
+                        'isento_ir': bool(r[12]) if r[12] is not None else None,
+                        'observacao': r[13]
                     } for r in rows
                 ]
         finally:
@@ -441,32 +455,59 @@ def rf_catalog_list():
         conn = sqlite3.connect(db_path, check_same_thread=False)
         try:
             cur = conn.cursor()
-            cur.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
+            cur.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
             rows = cur.fetchall()
             return [
                 {
                     'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
                     'taxa_percentual': float(r[5]) if r[5] is not None else None,
                     'taxa_fixa': float(r[6]) if r[6] is not None else None,
-                    'data_inicio': r[7], 'vencimento': r[8],
-                    'liquidez_diaria': bool(r[9]) if r[9] else False,
-                    'isento_ir': bool(r[10]) if r[10] else False,
-                    'observacao': r[11]
+                    'quantidade': float(r[7]) if r[7] is not None else None,
+                    'preco': float(r[8]) if r[8] is not None else None,
+                    'data_inicio': r[9], 'vencimento': r[10],
+                    'liquidez_diaria': bool(r[11]) if r[11] else False,
+                    'isento_ir': bool(r[12]) if r[12] else False,
+                    'observacao': r[13]
                 } for r in rows
             ]
         finally:
             conn.close()
 
 def rf_catalog_create(item: dict):
-
     usuario = get_usuario_atual()
     if not usuario:
         return { 'success': False, 'message': 'Não autenticado' }
     _ensure_rf_catalog_schema()
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Validar campos obrigatórios
+    if not item.get('nome'):
+        return { 'success': False, 'message': 'Nome é obrigatório' }
+    if not item.get('emissor'):
+        return { 'success': False, 'message': 'Emissor é obrigatório' }
+    if not item.get('tipo'):
+        return { 'success': False, 'message': 'Tipo é obrigatório' }
+    if not item.get('indexador'):
+        return { 'success': False, 'message': 'Indexador é obrigatório' }
+    try:
+        quantidade_val = float(item.get('quantidade', 0)) if item.get('quantidade') else 0
+        preco_val = float(item.get('preco', 0)) if item.get('preco') else 0
+    except (ValueError, TypeError):
+        return { 'success': False, 'message': 'Quantidade e preço devem ser números válidos' }
+    
+    if not item.get('quantidade') or item.get('quantidade') == '' or quantidade_val <= 0:
+        return { 'success': False, 'message': 'Quantidade é obrigatória e deve ser maior que zero' }
+    if not item.get('preco') or item.get('preco') == '' or preco_val <= 0:
+        return { 'success': False, 'message': 'Preço é obrigatório e deve ser maior que zero' }
+    
+    # Converter taxas para números
+    taxa_percentual_val = float(item.get('taxa_percentual', 100)) if item.get('taxa_percentual') else 100
+    taxa_fixa_val = float(item.get('taxa_fixa', 0)) if item.get('taxa_fixa') else 0
+    
     fields = (
         item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'),
-        item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('data_inicio'), item.get('vencimento'),
+        taxa_percentual_val, taxa_fixa_val, quantidade_val, preco_val,
+        item.get('data_inicio'), item.get('vencimento'),
         1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, now
     )
     if _is_postgres():
@@ -474,8 +515,8 @@ def rf_catalog_create(item: dict):
         try:
             with conn.cursor() as c:
                 c.execute('''
-                    INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     RETURNING id
                 ''', fields)
                 new_id = c.fetchone()[0]
@@ -489,8 +530,8 @@ def rf_catalog_create(item: dict):
         try:
             cur = conn.cursor()
             cur.execute('''
-                INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ''', fields)
             conn.commit()
             return { 'success': True, 'id': cur.lastrowid }
@@ -508,8 +549,8 @@ def rf_catalog_update(id_: int, item: dict):
         try:
             with conn.cursor() as c:
                 c.execute('''
-                    UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
-                ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('data_inicio'), item.get('vencimento'), bool(item.get('liquidez_diaria')), bool(item.get('isento_ir')), item.get('observacao'), now, id_))
+                    UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
+                ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('quantidade'), item.get('preco'), item.get('data_inicio'), item.get('vencimento'), bool(item.get('liquidez_diaria')), bool(item.get('isento_ir')), item.get('observacao'), now, id_))
                 conn.commit()
                 return { 'success': True }
         finally:
@@ -520,8 +561,8 @@ def rf_catalog_update(id_: int, item: dict):
         try:
             cur = conn.cursor()
             cur.execute('''
-                UPDATE rf_catalog SET nome=?, emissor=?, tipo=?, indexador=?, taxa_percentual=?, taxa_fixa=?, data_inicio=?, vencimento=?, liquidez_diaria=?, isento_ir=?, observacao=?, updated_at=? WHERE id=?
-            ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('data_inicio'), item.get('vencimento'), 1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, id_))
+                UPDATE rf_catalog SET nome=?, emissor=?, tipo=?, indexador=?, taxa_percentual=?, taxa_fixa=?, quantidade=?, preco=?, data_inicio=?, vencimento=?, liquidez_diaria=?, isento_ir=?, observacao=?, updated_at=? WHERE id=?
+            ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('quantidade'), item.get('preco'), item.get('data_inicio'), item.get('vencimento'), 1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, id_))
             conn.commit()
             return { 'success': True }
         finally:
@@ -2115,6 +2156,116 @@ def carregar_ativos():
         print(f" Erro no carregamento dos ativos: {e}")
 
 
+def obter_preco_historico(ticker, data, max_retentativas=3):
+    """
+    Obtém o preço histórico de um ativo em uma data específica
+    """
+    def to_float_or_none(valor):
+        try:
+            result = float(valor)
+            return result if result != float('inf') and result > 0 else None
+        except (ValueError, TypeError):
+            return None
+
+    tentativas = 0
+    while tentativas < max_retentativas:
+        try:
+            print(f"🔍 Buscando preço histórico para {ticker} na data {data}...")
+            
+            # Normalizar ticker para yfinance
+            ticker_yf = ticker.strip().upper()
+            if '-' not in ticker_yf and '.' not in ticker_yf and len(ticker_yf) <= 6:
+                ticker_yf += '.SA'
+            
+            acao = yf.Ticker(ticker_yf)
+            
+            # Converter data para datetime
+            if isinstance(data, str):
+                data_obj = datetime.strptime(data[:10], '%Y-%m-%d').date()
+            else:
+                data_obj = data
+            
+            # Buscar histórico com margem de segurança
+            start_date = data_obj - timedelta(days=30)
+            end_date = data_obj + timedelta(days=1)
+            
+            historico = acao.history(start=start_date.isoformat(), end=end_date.isoformat())
+            
+            if historico is None or historico.empty:
+                print(f"❌ Nenhum histórico encontrado para {ticker}")
+                return None
+            
+            # Buscar o preço mais próximo da data (não posterior)
+            preco_encontrado = None
+            for idx, row in historico[::-1].iterrows():
+                data_historico = idx.date()
+                if data_historico <= data_obj:
+                    preco_encontrado = to_float_or_none(row.get('Close') or row.get('Adj Close'))
+                    if preco_encontrado:
+                        print(f"✅ Preço encontrado: R$ {preco_encontrado:.2f} em {data_historico}")
+                        return {
+                            "preco": preco_encontrado,
+                            "data_historico": data_historico.isoformat(),
+                            "data_solicitada": data_obj.isoformat(),
+                            "ticker": ticker
+                        }
+            
+            print(f"❌ Nenhum preço válido encontrado para {ticker} na data {data}")
+            return None
+            
+        except Exception as e:
+            tentativas += 1
+            print(f"⚠️ Tentativa {tentativas} falhou para {ticker}: {str(e)}")
+            if tentativas >= max_retentativas:
+                print(f"❌ Falha definitiva ao buscar preço histórico para {ticker}")
+                return None
+            time.sleep(1)
+    
+    return None
+
+def obter_preco_atual(ticker, max_retentativas=3):
+    """
+    Obtém o preço atual de um ativo
+    """
+    tentativas = 0
+    while tentativas < max_retentativas:
+        try:
+            print(f"🔍 Buscando preço atual para {ticker}...")
+            
+            # Normalizar ticker para yfinance
+            ticker_yf = ticker.strip().upper()
+            if '-' not in ticker_yf and '.' not in ticker_yf and len(ticker_yf) <= 6:
+                ticker_yf += '.SA'
+            
+            acao = yf.Ticker(ticker_yf)
+            info = acao.info
+            
+            if not info:
+                return None
+            
+            preco_atual = info.get("currentPrice")
+            if preco_atual is None:
+                preco_atual = info.get("regularMarketPrice")
+            
+            if preco_atual and preco_atual > 0:
+                print(f"✅ Preço atual encontrado: R$ {preco_atual:.2f}")
+                return {
+                    "preco": float(preco_atual),
+                    "data": datetime.now().strftime('%Y-%m-%d'),
+                    "ticker": ticker
+                }
+            
+            return None
+            
+        except Exception as e:
+            tentativas += 1
+            print(f"⚠️ Tentativa {tentativas} falhou para {ticker}: {str(e)}")
+            if tentativas >= max_retentativas:
+                return None
+            time.sleep(1)
+    
+    return None
+
 def obter_informacoes(ticker, tipo_ativo, max_retentativas=3):
     def to_float_or_inf(valor):
         try:
@@ -3164,9 +3315,18 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                         mensagem = f"Quantidade do ativo {info['ticker']} atualizada: {quantidade_existente} + {quantidade} = {nova_quantidade}"
                     else:
                         # Ativo não existe - criar novo registro
+                        # Adicionar coluna preco_compra se não existir
+                        try:
+                            cursor.execute('ALTER TABLE carteira ADD COLUMN preco_compra DECIMAL(10,2)')
+                        except Exception:
+                            pass  # Coluna já existe
+                        
+                        # Usar preco_inicial como preco_compra se fornecido
+                        preco_compra = preco_inicial if preco_inicial is not None else info["preco_atual"]
+                        
                         cursor.execute(
-                            'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-                        (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, bool(isento_ir) if isento_ir is not None else None, bool(liquidez_diaria) if liquidez_diaria is not None else None) 
+                            'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                        (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], preco_compra, valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, bool(isento_ir) if isento_ir is not None else None, bool(liquidez_diaria) if liquidez_diaria is not None else None) 
                         )
                         mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
                 try:
@@ -3214,11 +3374,20 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                 mensagem = f"Quantidade do ativo {info['ticker']} atualizada: {quantidade_existente} + {quantidade} = {nova_quantidade}"
             else:
                
+                # Adicionar coluna preco_compra se não existir
+                try:
+                    cursor.execute('ALTER TABLE carteira ADD COLUMN preco_compra REAL')
+                except Exception:
+                    pass  # Coluna já existe
+                
+                # Usar preco_inicial como preco_compra se fornecido
+                preco_compra = preco_inicial if preco_inicial is not None else info["preco_atual"]
+                
                 cursor.execute('''
-                    INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, valor_total, 
+                    INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total, 
                                         data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], preco_compra,
                       valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), 
                       info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, (1 if isento_ir else 0) if isento_ir is not None else None, (1 if liquidez_diaria else 0) if liquidez_diaria is not None else None))
                 mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
@@ -3281,7 +3450,11 @@ def remover_ativo_carteira(id):
     except Exception as e:
         return {"success": False, "message": f"Erro ao remover ativo: {str(e)}"}
 
-def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None):
+def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None, preco_compra=None):
+    """
+    Atualiza apenas a quantidade do ativo.
+    NÃO deve alterar preco_atual - isso é feito apenas pela atualização automática de preços.
+    """
   
     try:
         usuario = get_usuario_atual()
@@ -3299,22 +3472,30 @@ def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None):
                     current_price = float(ativo[2]) if ativo[2] is not None else 0.0
                     current_qty = float(ativo[3]) if ativo[3] is not None else 0.0
                     new_qty = float(quantidade) if quantidade is not None else current_qty
-                    new_price = float(preco_atual) if preco_atual is not None else current_price
-                    valor_total = new_price * new_qty
-       
-                    has_indexador = (len(ativo) > 4 and ativo[4] is not None and ativo[5] is not None)
-                    if preco_atual is not None and has_indexador:
-                        base_data = datetime.now().strftime('%Y-%m-%d')
-                        cursor.execute('UPDATE carteira SET quantidade = %s, preco_atual = %s, valor_total = %s, indexador_base_preco = %s, indexador_base_data = %s WHERE id = %s', (new_qty, new_price, valor_total, new_price, base_data, id))
-                    else:
-                        cursor.execute('UPDATE carteira SET quantidade = %s, preco_atual = %s, valor_total = %s WHERE id = %s', (new_qty, new_price, valor_total, id))
+                    
+                    # IMPORTANTE: NÃO alterar preco_atual - apenas atualizar valor_total
+                    valor_total = current_price * new_qty
+                    
+                    # Preparar campos para atualização
+                    update_fields = ['quantidade = %s', 'valor_total = %s']
+                    update_values = [new_qty, valor_total]
+                    
+                    # Adicionar preco_compra se fornecido
+                    if preco_compra is not None:
+                        update_fields.append('preco_compra = %s')
+                        update_values.append(float(preco_compra))
+                    
+                    update_values.append(id)
+        
+                    # Atualizar campos necessários
+                    cursor.execute(f'UPDATE carteira SET {", ".join(update_fields)} WHERE id = %s', update_values)
 
                     # Registrar movimentação se houve alteração de quantidade
                     qty_diff = new_qty - current_qty
                     if abs(qty_diff) > 0:
                         tipo_mov = 'compra' if qty_diff > 0 else 'venda'
                         data_mov = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        preco_mov = float(preco_atual) if preco_atual is not None else (float(new_price) if new_price is not None else current_price)
+                        preco_mov = float(preco_atual) if preco_atual is not None else current_price
                         try:
                             registrar_movimentacao(data_mov, str(ativo[0] or ''), str(ativo[1] or ''), abs(qty_diff), preco_mov, tipo_mov)
                         except Exception as _:
@@ -3335,30 +3516,34 @@ def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None):
         current_price = float(ativo[2]) if ativo[2] is not None else 0.0
         current_qty = float(ativo[3]) if ativo[3] is not None else 0.0
         new_qty = float(quantidade) if quantidade is not None else current_qty
-        new_price = float(preco_atual) if preco_atual is not None else current_price
-        valor_total = new_price * new_qty
         
-        has_indexador = (len(ativo) > 4 and ativo[4] is not None and ativo[5] is not None)
-        if preco_atual is not None and has_indexador:
-            base_data = datetime.now().strftime('%Y-%m-%d')
-            cursor.execute('''
-                UPDATE carteira 
-                SET quantidade = ?, preco_atual = ?, valor_total = ?, indexador_base_preco = ?, indexador_base_data = ?
-                WHERE id = ?
-            ''', (new_qty, new_price, valor_total, new_price, base_data, id))
-        else:
-            cursor.execute('''
-                UPDATE carteira 
-                SET quantidade = ?, preco_atual = ?, valor_total = ?
-                WHERE id = ?
-            ''', (new_qty, new_price, valor_total, id))
+        # IMPORTANTE: NÃO alterar preco_atual - apenas atualizar valor_total
+        valor_total = current_price * new_qty
+        
+        # Preparar campos para atualização
+        update_fields = ['quantidade = ?', 'valor_total = ?']
+        update_values = [new_qty, valor_total]
+        
+        # Adicionar preco_compra se fornecido
+        if preco_compra is not None:
+            update_fields.append('preco_compra = ?')
+            update_values.append(float(preco_compra))
+        
+        update_values.append(id)
+        
+        # Atualizar campos necessários
+        cursor.execute(f'''
+            UPDATE carteira 
+            SET {", ".join(update_fields)}
+            WHERE id = ?
+        ''', update_values)
 
         
         qty_diff = new_qty - current_qty
         if abs(qty_diff) > 0:
             tipo_mov = 'compra' if qty_diff > 0 else 'venda'
             data_mov = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            preco_mov = float(preco_atual) if preco_atual is not None else (float(new_price) if new_price is not None else current_price)
+            preco_mov = float(preco_atual) if preco_atual is not None else current_price
             try:
                 registrar_movimentacao(data_mov, str(ativo[0] or ''), str(ativo[1] or ''), abs(qty_diff), preco_mov, tipo_mov, conn)
             except Exception as _:
@@ -3547,6 +3732,71 @@ def compute_goals_projection(goal: dict):
         'taxa_manual': taxa_crescimento is not None,
         'roadmap': roadmap,
     }
+def migrar_preco_compra_existente():
+    """Migra preco_compra para ativos existentes que não possuem esse campo"""
+    try:
+        usuario = get_usuario_atual()
+        if not usuario:
+            return
+
+        if _is_postgres():
+            conn = _pg_conn_for_user(usuario)
+            try:
+                with conn.cursor() as cursor:
+                    # Buscar ativos sem preco_compra
+                    cursor.execute('SELECT id, ticker FROM carteira WHERE preco_compra IS NULL')
+                    ativos_sem_preco = cursor.fetchall()
+                    
+                    for ativo_id, ticker in ativos_sem_preco:
+                        # Buscar primeira movimentação de compra
+                        cursor.execute('''
+                            SELECT preco FROM movimentacoes 
+                            WHERE ticker = %s AND tipo = 'compra' 
+                            ORDER BY data ASC LIMIT 1
+                        ''', (ticker,))
+                        primeira_compra = cursor.fetchone()
+                        
+                        if primeira_compra:
+                            preco_compra = primeira_compra[0]
+                            cursor.execute('''
+                                UPDATE carteira SET preco_compra = %s WHERE id = %s
+                            ''', (preco_compra, ativo_id))
+                            print(f"DEBUG: Migrado preco_compra para {ticker}: {preco_compra}")
+                    
+                    conn.commit()
+            finally:
+                conn.close()
+        else:
+            db_path = get_db_path(usuario, "carteira")
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            try:
+                cursor = conn.cursor()
+                # Buscar ativos sem preco_compra
+                cursor.execute('SELECT id, ticker FROM carteira WHERE preco_compra IS NULL')
+                ativos_sem_preco = cursor.fetchall()
+                
+                for ativo_id, ticker in ativos_sem_preco:
+                    # Buscar primeira movimentação de compra
+                    cursor.execute('''
+                        SELECT preco FROM movimentacoes 
+                        WHERE ticker = ? AND tipo = 'compra' 
+                        ORDER BY data ASC LIMIT 1
+                    ''', (ticker,))
+                    primeira_compra = cursor.fetchone()
+                    
+                    if primeira_compra:
+                        preco_compra = primeira_compra[0]
+                        cursor.execute('''
+                            UPDATE carteira SET preco_compra = ? WHERE id = ?
+                        ''', (preco_compra, ativo_id))
+                        print(f"DEBUG: Migrado preco_compra para {ticker}: {preco_compra}")
+                
+                conn.commit()
+            finally:
+                conn.close()
+    except Exception as e:
+        print(f"Erro na migração de preco_compra: {e}")
+
 def obter_carteira():
 
     try:
@@ -3557,6 +3807,8 @@ def obter_carteira():
         
         try:
             _ensure_indexador_schema()
+            # Migrar preco_compra para ativos existentes
+            migrar_preco_compra_existente()
         except Exception:
             pass
 
@@ -3565,7 +3817,7 @@ def obter_carteira():
             try:
                 with conn.cursor() as cursor:
                     cursor.execute('''
-                        SELECT id, ticker, nome_completo, quantidade, preco_atual, valor_total,
+                        SELECT id, ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total,
                                data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct
                         FROM carteira
                         ORDER BY valor_total DESC
@@ -3575,28 +3827,30 @@ def obter_carteira():
                 conn.close()
             ativos = []
             for row in rows:
+                preco_compra = float(row[5]) if row[5] is not None else None
                 ativos.append({
                     "id": row[0],
                     "ticker": row[1],
                     "nome_completo": row[2],
                     "quantidade": float(row[3]) if row[3] is not None else 0,
                     "preco_atual": float(row[4]) if row[4] is not None else 0,
-                    "valor_total": float(row[5]) if row[5] is not None else 0,
-                    "data_adicao": row[6],
-                    "tipo": row[7],
-                    "dy": float(row[8]) if row[8] is not None else None,
-                    "pl": float(row[9]) if row[9] is not None else None,
-                    "pvp": float(row[10]) if row[10] is not None else None,
-                    "roe": float(row[11]) if row[11] is not None else None,
-                    "indexador": row[12],
-                    "indexador_pct": float(row[13]) if (len(row) > 13 and row[13] is not None) else None,
+                    "preco_compra": preco_compra,
+                    "valor_total": float(row[6]) if row[6] is not None else 0,
+                    "data_adicao": row[7],
+                    "tipo": row[8],
+                    "dy": float(row[9]) if row[9] is not None else None,
+                    "pl": float(row[10]) if row[10] is not None else None,
+                    "pvp": float(row[11]) if row[11] is not None else None,
+                    "roe": float(row[12]) if row[12] is not None else None,
+                    "indexador": row[13],
+                    "indexador_pct": float(row[14]) if (len(row) > 14 and row[14] is not None) else None,
                 })
             return ativos
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT id, ticker, nome_completo, quantidade, preco_atual, valor_total,
+            SELECT id, ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total,
                    data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct
             FROM carteira
             ORDER BY valor_total DESC
@@ -3605,21 +3859,23 @@ def obter_carteira():
         ativos = []
         for row in cursor.fetchall():
             row_len = len(row)
+            preco_compra = row[5] if row_len > 5 else None
             ativos.append({
                 "id": row[0],
                 "ticker": row[1],
                 "nome_completo": row[2],
                 "quantidade": row[3],
                 "preco_atual": row[4],
-                "valor_total": row[5],
-                "data_adicao": row[6],
-                "tipo": row[7],
-                "dy": row[8],
-                "pl": row[9],
-                "pvp": row[10],
-                "roe": row[11],
-                "indexador": row[12] if row_len > 12 else None,
-                "indexador_pct": row[13] if row_len > 13 else None,
+                "preco_compra": preco_compra,
+                "valor_total": row[6] if row_len > 6 else row[5],
+                "data_adicao": row[7] if row_len > 7 else row[6],
+                "tipo": row[8] if row_len > 8 else row[7],
+                "dy": row[9] if row_len > 9 else row[8],
+                "pl": row[10] if row_len > 10 else row[9],
+                "pvp": row[11] if row_len > 11 else row[10],
+                "roe": row[12] if row_len > 12 else row[11],
+                "indexador": row[13] if row_len > 13 else row[12],
+                "indexador_pct": row[14] if row_len > 14 else row[13],
             })
         
         conn.close()

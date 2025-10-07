@@ -26,6 +26,14 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
   const [filtroLista, setFiltroLista] = useState('')
   const [rfFormOpen, setRfFormOpen] = useState(false)
   const [editingRfItem, setEditingRfItem] = useState<any>(null)
+  
+  // Novos estados para preço
+  const [tipoPreco, setTipoPreco] = useState<'atual' | 'historico' | 'manual'>('atual')
+  const [dataCompra, setDataCompra] = useState('')
+  const [precoAtual, setPrecoAtual] = useState<{preco: number, data: string, ticker: string} | null>(null)
+  const [precoHistorico, setPrecoHistorico] = useState<{preco: number, data_historico: string, data_solicitada: string, ticker: string} | null>(null)
+  const [erroPrecoHistorico, setErroPrecoHistorico] = useState('')
+  const [carregandoPreco, setCarregandoPreco] = useState(false)
 
   const queryClient = useQueryClient()
 
@@ -139,7 +147,7 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
     if (open) loadBatch()
   }, [open, isAcoes, isFiis, isBdrs, acoesList, fiisList, bdrsList])
 
-  // Logo do ativo selecionado (para Ações/FIIs/BDRs)
+  
   useEffect(() => {
     let cancelled = false
     const loadLogo = async () => {
@@ -176,20 +184,74 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
     return <img src={logoUrl} alt={`Logo ${ticker}`} title={ticker} className="w-5 h-5 rounded object-contain" />
   }
 
+  // Buscar preço atual quando necessário
+  useEffect(() => {
+    if (step === 4 && tipoPreco === 'atual' && ticker && !precoAtual) {
+      const buscarPrecoAtual = async () => {
+        try {
+          setCarregandoPreco(true)
+          const resultado = await ativoService.getPrecoAtual(ticker)
+          setPrecoAtual(resultado)
+        } catch (error) {
+          console.error('Erro ao buscar preço atual:', error)
+        } finally {
+          setCarregandoPreco(false)
+        }
+      }
+      buscarPrecoAtual()
+    }
+  }, [step, tipoPreco, ticker])
+
+  // Buscar preço histórico quando data for alterada
+  useEffect(() => {
+    if (step === 4 && tipoPreco === 'historico' && ticker && dataCompra) {
+      const buscarPrecoHistorico = async () => {
+        try {
+          setCarregandoPreco(true)
+          setErroPrecoHistorico('')
+          const resultado = await ativoService.getPrecoHistorico(ticker, dataCompra)
+          setPrecoHistorico(resultado)
+        } catch (error: any) {
+          setErroPrecoHistorico(error.response?.data?.error || 'Erro ao buscar preço histórico')
+          setPrecoHistorico(null)
+        } finally {
+          setCarregandoPreco(false)
+        }
+      }
+      buscarPrecoHistorico()
+    }
+  }, [step, tipoPreco, ticker, dataCompra])
+
   const adicionarMutation = useMutation({
     mutationFn: async () => {
       const q = parseFloat((quantidade || '').replace(',', '.'))
-      const p = preco ? parseFloat(preco.replace(',', '.')) : undefined
+      
+      // Determinar preço e data baseado na opção selecionada
+      let precoFinal: number | undefined
+      let dataCompraFinal: string | undefined
+      
+      if (tipoPreco === 'atual' && precoAtual) {
+        precoFinal = precoAtual.preco
+        dataCompraFinal = undefined // Não usar data_aplicacao para preço atual
+      } else if (tipoPreco === 'historico' && precoHistorico) {
+        precoFinal = precoHistorico.preco
+        dataCompraFinal = dataCompra // Usar data da compra para preço histórico
+      } else if (tipoPreco === 'manual' && preco) {
+        precoFinal = parseFloat(preco.replace(',', '.'))
+        dataCompraFinal = undefined // Não usar data_aplicacao para preço manual
+      }
+      
       const idxPct = indexadorPct ? parseFloat(indexadorPct.replace(',', '.')) : undefined
+      
       return carteiraService.adicionarAtivo(
         ticker || nome,
         isNaN(q) ? 0 : q,
         tipo || '',
-        p,
+        precoFinal,
         nome || undefined,
         indexador || undefined,
         idxPct,
-        dataAplicacao || undefined,
+        dataCompraFinal,
         vencimento || undefined,
         isentoIr || undefined,
         liquidezDiaria || undefined,
@@ -207,11 +269,25 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
     if (step === 1) return !!tipo
     if (step === 2) return (nome && nome.trim().length > 0) || (ticker && ticker.trim().length > 0)
     if (step === 3) return !!quantidade
-    if (step === 4) return true
-    if (step === 5) return true
+    if (step === 4) {
+      // Validação específica para preço
+      if (tipoPreco === 'atual') return precoAtual !== null
+      if (tipoPreco === 'historico') return precoHistorico !== null && !erroPrecoHistorico
+      if (tipoPreco === 'manual') return !!preco && parseFloat(preco.replace(',', '.')) > 0
+      return false
+    }
+    if (step === 5) return true // Só aparece para renda fixa
     if (step === 6) return true
     if (step === 7) return true
     return true
+  }
+
+  const getNextStep = () => {
+    if (step === 4 && !isTesouro) {
+      // Pular step 5 (indexador) para ativos do yfinance
+      return 6
+    }
+    return step + 1
   }
 
   const pickTesouro = (item: any) => {
@@ -398,14 +474,21 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
                               <div className="flex items-center justify-between p-3">
                                 <button 
                                   onClick={()=>{
+                                    // Preencher todos os campos do formulário principal
                                     setTipo('Renda Fixa')
                                     setNome(it.nome)
                                     setTicker(it.nome.toUpperCase())
+                                    setQuantidade(it.quantidade ? String(it.quantidade) : '')
+                                    setPreco(it.preco ? String(it.preco) : '')
                                     setIndexador((it.indexador || '') as any)
                                     setIndexadorPct(it.taxa_percentual != null ? String(it.taxa_percentual) : '')
                                     setVencimento(it.vencimento || '')
                                     setLiquidezDiaria(!!it.liquidez_diaria)
                                     setIsentoIr(!!it.isento_ir)
+                                    setDataAplicacao(it.data_inicio || '')
+                                    
+                                
+                                    setStep(7)
                                   }} 
                                   className="flex-1 text-left hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
                                 >
@@ -416,6 +499,9 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
                                         {it.emissor} • {it.tipo} • {it.indexador}
                                         {it.taxa_percentual ? ` • ${it.taxa_percentual}%` : ''}
                                         {it.taxa_fixa ? ` + ${it.taxa_fixa}% a.a.` : ''}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground mt-1">
+                                        Qtd: {it.quantidade || 'N/A'} • Preço: R$ {it.preco ? it.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : 'N/A'}
                                       </div>
                                     </div>
                                   </div>
@@ -519,27 +605,144 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
                   placeholder="Ex.: 100"
                   value={quantidade}
                   onChange={(e)=>setQuantidade(e.target.value)}
+                  aria-label="Quantidade"
                   className="w-full px-3 py-2 bg-background border border-border rounded"
                 />
               </div>
             )}
 
             {step === 4 && (
-              <div className="space-y-3">
-                <label className="block text-sm font-medium flex items-center gap-2"><DollarSign size={14}/> Preço (opcional)</label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="Ex.: 10,50"
-                  value={preco}
-                  onChange={(e)=>setPreco(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded"
-                />
-                <div className="text-xs text-muted-foreground">Se deixar vazio, tentaremos buscar automaticamente quando aplicável.</div>
+              <div className="space-y-4">
+                <label className="block text-sm font-medium flex items-center gap-2">
+                  <DollarSign size={14}/> Preço
+                </label>
+                
+                {/* Opções de preço */}
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="preco-atual"
+                      name="tipo-preco"
+                      value="atual"
+                      checked={tipoPreco === 'atual'}
+                      onChange={() => setTipoPreco('atual')}
+                      aria-label="Preço atual"
+                      className="text-primary"
+                    />
+                    <label htmlFor="preco-atual" className="text-sm">
+                      Preço atual (recomendado)
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="preco-historico"
+                      name="tipo-preco"
+                      value="historico"
+                      checked={tipoPreco === 'historico'}
+                      onChange={() => setTipoPreco('historico')}
+                      aria-label="Preço histórico"
+                      className="text-primary"
+                    />
+                    <label htmlFor="preco-historico" className="text-sm">
+                      Preço histórico
+                    </label>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="preco-manual"
+                      name="tipo-preco"
+                      value="manual"
+                      checked={tipoPreco === 'manual'}
+                      onChange={() => setTipoPreco('manual')}
+                      aria-label="Preço manual"
+                      className="text-primary"
+                    />
+                    <label htmlFor="preco-manual" className="text-sm">
+                      Preço manual
+                    </label>
+                  </div>
+                </div>
+
+                {/* Data para preço histórico */}
+                {tipoPreco === 'historico' && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium">Data da compra</label>
+                    <input
+                      type="date"
+                      value={dataCompra}
+                      onChange={(e) => setDataCompra(e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
+                      aria-label="Data da compra"
+                      className="w-full px-3 py-2 bg-background border border-border rounded"
+                    />
+                    {precoHistorico && (
+                      <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                        <div className="text-sm text-green-800 dark:text-green-200">
+                          <strong>Preço encontrado:</strong> R$ {precoHistorico.preco.toFixed(2)}
+                        </div>
+                        <div className="text-xs text-green-600 dark:text-green-400">
+                          Data: {new Date(precoHistorico.data_historico).toLocaleDateString('pt-BR')}
+                        </div>
+                      </div>
+                    )}
+                    {erroPrecoHistorico && (
+                      <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                        <div className="text-sm text-red-800 dark:text-red-200">
+                          {erroPrecoHistorico}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Preço manual */}
+                {tipoPreco === 'manual' && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium">Preço por ação</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Ex.: 10,50"
+                      value={preco}
+                      onChange={(e) => setPreco(e.target.value)}
+                      aria-label="Preço por ação"
+                      className="w-full px-3 py-2 bg-background border border-border rounded"
+                    />
+                  </div>
+                )}
+
+                {/* Preço atual */}
+                {tipoPreco === 'atual' && (
+                  <div>
+                    {carregandoPreco && (
+                      <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                        <div className="text-sm text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin"></div>
+                          Buscando preço atual...
+                        </div>
+                      </div>
+                    )}
+                    {precoAtual && !carregandoPreco && (
+                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                        <div className="text-sm text-blue-800 dark:text-blue-200">
+                          <strong>Preço atual:</strong> R$ {precoAtual.preco.toFixed(2)}
+                        </div>
+                        <div className="text-xs text-blue-600 dark:text-blue-400">
+                          Data: {new Date(precoAtual.data).toLocaleDateString('pt-BR')}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
-            {step === 5 && (
+            {step === 5 && isTesouro && (
               <div className="space-y-3">
                 <label className="block text-sm font-medium flex items-center gap-2"><Layers size={14}/> Indexador (opcional)</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -594,7 +797,7 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
               <ChevronLeft size={16}/> Voltar
             </button>
             {step < 7 ? (
-              <button onClick={()=> canNext() && setStep(step+1)} disabled={!canNext()} className="px-3 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50 flex items-center gap-1">
+              <button onClick={()=> canNext() && setStep(getNextStep())} disabled={!canNext()} className="px-3 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50 flex items-center gap-1">
                 Avançar <ChevronRight size={16}/>
               </button>
             ) : (

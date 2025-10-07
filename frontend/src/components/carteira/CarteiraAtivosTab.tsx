@@ -115,8 +115,12 @@ function TabelaAtivosPorTipo({
                 const qtd = lots.reduce((s, l) => s + l.qty, 0)
                 const val = lots.reduce((s, l) => s + l.qty * l.price, 0)
                 const precoMed = qtd > 0 ? (val / qtd) : null
-                if (precoMed != null) {
-                  somaValoresInvestidos += precoMed * (a?.quantidade || 0)
+                
+                // Usar preco_compra se disponível, senão usar preço médio das movimentações
+                const precoBase = a?.preco_compra || precoMed
+                
+                if (precoBase != null) {
+                  somaValoresInvestidos += precoBase * (a?.quantidade || 0)
                   somaValoresAtuais += (a?.preco_atual || 0) * (a?.quantidade || 0)
                 }
               }
@@ -170,6 +174,7 @@ function TabelaAtivosPorTipo({
                     <th className="px-3 py-2 text-left font-medium text-sm">Nome</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">Quantidade</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">Preço Atual</th>
+                    <th className="px-3 py-2 text-left font-medium text-sm">Preço de Compra</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">Valor Total</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">Indexado</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">Rentab. Estimada (anual)</th>
@@ -212,11 +217,15 @@ function TabelaAtivosPorTipo({
                     const totalQtd = lots.reduce((s, l) => s + l.qty, 0)
                     const totalValor = lots.reduce((s, l) => s + l.qty * l.price, 0)
                     const precoMedio = totalQtd > 0 ? (totalValor / totalQtd) : null
-                    const rendimentoPct = (precoMedio != null && ativo?.preco_atual)
-                      ? ((ativo.preco_atual - precoMedio) / precoMedio) * 100
+                    
+                    // Usar preco_compra se disponível, senão usar preço médio das movimentações
+                    const precoBase = ativo?.preco_compra || precoMedio
+                    
+                    const rendimentoPct = (precoBase != null && ativo?.preco_atual)
+                      ? ((ativo.preco_atual - precoBase) / precoBase) * 100
                       : null
-                    const valorizacaoAbs = (precoMedio != null && ativo?.preco_atual && totalQtd > 0)
-                      ? (ativo.preco_atual - precoMedio) * totalQtd
+                    const valorizacaoAbs = (precoBase != null && ativo?.preco_atual && ativo?.quantidade > 0)
+                      ? (ativo.preco_atual - precoBase) * ativo.quantidade
                       : null
                     const porcentagemAtivo = valorTotal > 0 ? ((ativo?.valor_total || 0) / valorTotal * 100).toFixed(1) : '0.0'
                     return (
@@ -253,6 +262,9 @@ function TabelaAtivosPorTipo({
                             formatCurrency(ativo?.preco_atual)
                           )}
                         </td>
+                        <td className="px-3 py-2 text-sm font-semibold">
+                          {formatCurrency(ativo?.preco_compra)}
+                        </td>
                         <td className="px-3 py-2 text-sm font-semibold">{formatCurrency(ativo?.valor_total)}</td>
                         <td className="px-3 py-2 text-xs text-muted-foreground">
                           {ativo?.indexador ? `${ativo.indexador} ${ativo.indexador_pct ? `${ativo.indexador_pct}%` : ''}` : '-'}
@@ -277,7 +289,7 @@ function TabelaAtivosPorTipo({
                             return `${anual.toFixed(1)}% a.a.`
                           })()}
                         </td>
-                        <td className="px-3 py-2 text-sm">{precoMedio != null ? formatCurrency(precoMedio) : '-'}</td>
+                        <td className="px-3 py-2 text-sm">{precoBase != null ? formatCurrency(precoBase) : '-'}</td>
                         <td className={`px-3 py-2 text-sm font-medium ${valorizacaoAbs != null ? (valorizacaoAbs >= 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
                           {valorizacaoAbs != null ? formatCurrency(valorizacaoAbs) : '-'}
                         </td>

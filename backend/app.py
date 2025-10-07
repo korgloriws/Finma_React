@@ -53,6 +53,8 @@ from models import (
     get_goals,
     save_goals,
     compute_goals_projection,
+    obter_preco_historico,
+    obter_preco_atual,
 )
 from models import cache
 import requests
@@ -748,6 +750,44 @@ def api_get_ativo_historico(ticker):
                 historico_json.append(row_dict)
         
         return jsonify(historico_json)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/ativo/<ticker>/preco-historico", methods=["GET"])
+def api_get_preco_historico(ticker):
+    """Endpoint para obter preço histórico de um ativo em data específica"""
+    try:
+        data = request.args.get('data')
+        if not data:
+            return jsonify({"error": "Parâmetro 'data' é obrigatório (formato: YYYY-MM-DD)"}), 400
+        
+        # Validar formato da data
+        try:
+            datetime.strptime(data, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({"error": "Formato de data inválido. Use YYYY-MM-DD"}), 400
+        
+        resultado = obter_preco_historico(ticker, data)
+        
+        if resultado:
+            return jsonify(resultado)
+        else:
+            return jsonify({"error": f"Preço histórico não encontrado para {ticker} na data {data}"}), 404
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/ativo/<ticker>/preco-atual", methods=["GET"])
+def api_get_preco_atual(ticker):
+    """Endpoint para obter preço atual de um ativo"""
+    try:
+        resultado = obter_preco_atual(ticker)
+        
+        if resultado:
+            return jsonify(resultado)
+        else:
+            return jsonify({"error": f"Preço atual não encontrado para {ticker}"}), 404
+            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1471,9 +1511,10 @@ def api_atualizar_ativo(id):
         data = request.get_json() or {}
         quantidade = data.get('quantidade')
         preco_atual = data.get('preco_atual')
-        if quantidade is None and preco_atual is None:
-            return jsonify({"error": "Informe quantidade e/ou preco_atual"}), 400
-        resultado = atualizar_ativo_carteira(id, quantidade, preco_atual)
+        preco_compra = data.get('preco_compra')
+        if quantidade is None and preco_atual is None and preco_compra is None:
+            return jsonify({"error": "Informe quantidade, preco_atual e/ou preco_compra"}), 400
+        resultado = atualizar_ativo_carteira(id, quantidade, preco_atual, preco_compra)
         try:
             if cache:
                 cache.clear()

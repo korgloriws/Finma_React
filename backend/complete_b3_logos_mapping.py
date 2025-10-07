@@ -273,6 +273,7 @@ COMPLETE_B3_LOGOS_MAPPING = {
     "INTU34.sa": "https://img.logo.dev/intuit.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "I1VZ34.sa": "https://img.logo.dev/itv.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "I1RM34.sa": "https://img.logo.dev/ironmountain.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
+    "IZAE4.sa": "https://img.logo.dev/isaenergiabrasil.com.br?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
 
     "J1KH34.sa": "https://img.logo.dev/johnsoncontrols.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "J1EG34.sa": "https://img.logo.dev/jacobs.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",

@@ -36,6 +36,7 @@ import CarteiraMovimentacoesTab from '../components/carteira/CarteiraMovimentaco
 import CarteiraProjecaoTab from '../components/carteira/CarteiraProjecaoTab'
 import CarteiraRelatoriosTab from '../components/carteira/CarteiraRelatoriosTab'
 import AddAtivoModal from '../components/carteira/AddAtivoModal'
+import EditAtivoModal from '../components/carteira/EditAtivoModal'
 
 export default function CarteiraPage() {
   const { user } = useAuth()
@@ -53,6 +54,8 @@ export default function CarteiraPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editQuantidade, setEditQuantidade] = useState('')
   const [editPreco, setEditPreco] = useState('')
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [ativoParaEditar, setAtivoParaEditar] = useState<any>(null)
   const [filtroMes, setFiltroMes] = useState<number>(new Date().getMonth() + 1)
   const [filtroAno, setFiltroAno] = useState<number>(new Date().getFullYear())
   const [activeTab, setActiveTab] = useState(() => {
@@ -391,11 +394,12 @@ export default function CarteiraPage() {
     }
   }, [removerMutation])
 
-  const handleEditar = useCallback((id: number, quantidade: number) => {
-    setEditingId(id)
-    setEditQuantidade(quantidade.toString())
+  const handleEditar = useCallback((id: number) => {
     const ativo = (carteira || []).find((a: any) => a?.id === id)
-    setEditPreco(ativo && typeof ativo.preco_atual === 'number' ? String(ativo.preco_atual) : '')
+    if (ativo) {
+      setAtivoParaEditar(ativo)
+      setEditModalOpen(true)
+    }
   }, [carteira])
 
   const handleSalvarEdicao = useCallback(() => {
@@ -792,6 +796,16 @@ export default function CarteiraPage() {
       {activeTab === 'ativos' && addModalOpen && (
         <AddAtivoModal open={addModalOpen} onClose={()=>setAddModalOpen(false)} />
       )}
+      
+      {/* Modal de editar ativo */}
+      <EditAtivoModal
+        open={editModalOpen}
+        onClose={() => {
+          setEditModalOpen(false)
+          setAtivoParaEditar(null)
+        }}
+        ativo={ativoParaEditar}
+      />
     </div>
   )
 } 

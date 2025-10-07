@@ -19,6 +19,8 @@ export default function RendaFixaFormModal({ open, onClose, onSuccess, editingIt
     indexador: editingItem?.indexador || 'CDI',
     taxa_percentual: editingItem?.taxa_percentual || 100,
     taxa_fixa: editingItem?.taxa_fixa || 0,
+    quantidade: editingItem?.quantidade || '',
+    preco: editingItem?.preco || '',
     data_inicio: editingItem?.data_inicio || '',
     vencimento: editingItem?.vencimento || '',
     liquidez_diaria: editingItem?.liquidez_diaria || false,
@@ -75,12 +77,20 @@ export default function RendaFixaFormModal({ open, onClose, onSuccess, editingIt
       newErrors.indexador = 'Indexador é obrigatório'
     }
 
-    if (formData.taxa_percentual < 0 || formData.taxa_percentual > 1000) {
+    if (formData.taxa_percentual && (Number(formData.taxa_percentual) < 0 || Number(formData.taxa_percentual) > 1000)) {
       newErrors.taxa_percentual = 'Taxa percentual deve estar entre 0 e 1000'
     }
 
-    if (formData.taxa_fixa < 0 || formData.taxa_fixa > 50) {
+    if (formData.taxa_fixa && (Number(formData.taxa_fixa) < 0 || Number(formData.taxa_fixa) > 50)) {
       newErrors.taxa_fixa = 'Taxa fixa deve estar entre 0 e 50%'
+    }
+
+    if (!formData.quantidade || formData.quantidade === '' || Number(formData.quantidade) <= 0) {
+      newErrors.quantidade = 'Quantidade é obrigatória e deve ser maior que zero'
+    }
+
+    if (!formData.preco || formData.preco === '' || Number(formData.preco) <= 0) {
+      newErrors.preco = 'Preço é obrigatório e deve ser maior que zero'
     }
 
     setErrors(newErrors)
@@ -97,7 +107,9 @@ export default function RendaFixaFormModal({ open, onClose, onSuccess, editingIt
     const submitData = {
       ...formData,
       taxa_percentual: Number(formData.taxa_percentual),
-      taxa_fixa: Number(formData.taxa_fixa)
+      taxa_fixa: Number(formData.taxa_fixa),
+      quantidade: Number(formData.quantidade),
+      preco: Number(formData.preco)
     }
 
     if (editingItem) {
@@ -331,6 +343,68 @@ export default function RendaFixaFormModal({ open, onClose, onSuccess, editingIt
                 <p className="text-sm text-destructive flex items-center gap-1">
                   <AlertCircle className="w-4 h-4" />
                   {errors.taxa_fixa}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Quantidade e Preço */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-foreground">
+                Quantidade *
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={formData.quantidade}
+                  onChange={(e) => handleInputChange('quantidade', e.target.value)}
+                  placeholder="Ex: 1000"
+                  className={`w-full px-4 py-3 rounded-xl border transition-colors ${
+                    errors.quantidade 
+                      ? 'border-destructive bg-destructive/5' 
+                      : 'border-border bg-background focus:border-primary'
+                  }`}
+                  disabled={isLoading}
+                  title="Quantidade do produto"
+                />
+              </div>
+              {errors.quantidade && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {errors.quantidade}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-foreground">
+                Preço Unitário (R$) *
+              </label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={formData.preco}
+                  onChange={(e) => handleInputChange('preco', e.target.value)}
+                  placeholder="Ex: 1000.00"
+                  className={`w-full pl-10 pr-4 py-3 rounded-xl border transition-colors ${
+                    errors.preco 
+                      ? 'border-destructive bg-destructive/5' 
+                      : 'border-border bg-background focus:border-primary'
+                  }`}
+                  disabled={isLoading}
+                  title="Preço unitário do produto"
+                />
+              </div>
+              {errors.preco && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {errors.preco}
                 </p>
               )}
             </div>
