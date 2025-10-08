@@ -36,13 +36,15 @@ import {
   ChevronRight,
   Settings
 } from 'lucide-react'
+// Lazy loading dos gráficos pesados
+import { lazy, Suspense } from 'react'
+import LoadingSpinner from '../components/LoadingSpinner'
+
+// Componentes leves (importação direta)
 import { 
-  AreaChart, 
   Area, 
-  PieChart as RechartsPieChart, 
   Pie, 
   Cell, 
-  BarChart, 
   Bar, 
   XAxis, 
   YAxis, 
@@ -52,8 +54,14 @@ import {
   Legend,
   Label
 } from 'recharts'
+
+// Componentes pesados (lazy loading)
+const AreaChart = lazy(() => import('recharts').then(module => ({ default: module.AreaChart })))
+const RechartsPieChart = lazy(() => import('recharts').then(module => ({ default: module.PieChart })))
+const BarChart = lazy(() => import('recharts').then(module => ({ default: module.BarChart })))
 import { carteiraService, homeService } from '../services/api'
 import { formatCurrency, } from '../utils/formatters'
+import { useLazyData } from '../hooks/useLazyData'
 
 export default function HomePage() {
   const { user } = useAuth()
@@ -110,15 +118,12 @@ export default function HomePage() {
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
 
-  // Carregamento sob demanda - histórico da carteira
-  const { data: historicoCarteira } = useQuery({
-    queryKey: ['carteira-historico', user, filtroPeriodo],
-    queryFn: () => carteiraService.getHistorico(filtroPeriodo),
-    retry: 3,
-    refetchOnWindowFocus: false,
-    enabled: !!user && !!carteira, // Só carrega após carteira principal
-    staleTime: 10 * 60 * 1000, // 10 minutos
-  })
+  // Carregamento sob demanda - histórico da carteira (lazy loading)
+  const { data: historicoCarteira } = useLazyData(
+    ['carteira-historico', user || 'anonymous', filtroPeriodo],
+    () => carteiraService.getHistorico(filtroPeriodo),
+    { priority: 'low', delay: 500 }
+  )
 
 
   const receitas = resumoHome?.receitas?.registros || []
@@ -1642,33 +1647,35 @@ export default function HomePage() {
               <div className="animate-pulse h-64 bg-muted rounded-lg"></div>
             ) : (historicoCarteira?.datas?.length || 0) > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
-                <AreaChart data={(historicoCarteira?.datas || []).map((d: string, i: number) => ({
-                  data: d,
-                  carteira: historicoCarteira?.carteira?.[i] ?? null,
-                  ibov: historicoCarteira?.ibov?.[i] ?? null,
-                  ivvb11: historicoCarteira?.ivvb11?.[i] ?? null,
-                  ifix: historicoCarteira?.ifix?.[i] ?? null,
-                  ipca: historicoCarteira?.ipca?.[i] ?? null,
-                  cdi: historicoCarteira?.cdi?.[i] ?? null,
-                }))}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="data" stroke="hsl(var(--muted-foreground))" />
-                  <YAxis stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))', 
-                      borderRadius: '8px',
-                      color: 'hsl(var(--foreground))'
-                    }}
-                  />
-                  <Area type="monotone" dataKey="carteira" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.12} strokeWidth={2} name="Carteira" />
-                  <Area type="monotone" dataKey="ibov" stroke="#22c55e" fill="#22c55e" fillOpacity={0.08} strokeWidth={1.5} name="Ibovespa" />
-                  <Area type="monotone" dataKey="ivvb11" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.08} strokeWidth={1.5} name="IVVB11" />
-                  <Area type="monotone" dataKey="ifix" stroke="#a855f7" fill="#a855f7" fillOpacity={0.08} strokeWidth={1.5} name="IFIX" />
-                  <Area type="monotone" dataKey="ipca" stroke="#ef4444" fill="#ef4444" fillOpacity={0.05} strokeWidth={1.2} name="IPCA" />
-                  <Area type="monotone" dataKey="cdi" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.06} strokeWidth={1.2} name="CDI" />
-                </AreaChart>
+                <Suspense fallback={<LoadingSpinner text="Carregando gráfico..." />}>
+                  <AreaChart data={(historicoCarteira?.datas || []).map((d: string, i: number) => ({
+                    data: d,
+                    carteira: historicoCarteira?.carteira?.[i] ?? null,
+                    ibov: historicoCarteira?.ibov?.[i] ?? null,
+                    ivvb11: historicoCarteira?.ivvb11?.[i] ?? null,
+                    ifix: historicoCarteira?.ifix?.[i] ?? null,
+                    ipca: historicoCarteira?.ipca?.[i] ?? null,
+                    cdi: historicoCarteira?.cdi?.[i] ?? null,
+                  }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="data" stroke="hsl(var(--muted-foreground))" />
+                    <YAxis stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))', 
+                        border: '1px solid hsl(var(--border))', 
+                        borderRadius: '8px',
+                        color: 'hsl(var(--foreground))'
+                      }}
+                    />
+                    <Area type="monotone" dataKey="carteira" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.12} strokeWidth={2} name="Carteira" />
+                    <Area type="monotone" dataKey="ibov" stroke="#22c55e" fill="#22c55e" fillOpacity={0.08} strokeWidth={1.5} name="Ibovespa" />
+                    <Area type="monotone" dataKey="ivvb11" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.08} strokeWidth={1.5} name="IVVB11" />
+                    <Area type="monotone" dataKey="ifix" stroke="#a855f7" fill="#a855f7" fillOpacity={0.08} strokeWidth={1.5} name="IFIX" />
+                    <Area type="monotone" dataKey="ipca" stroke="#ef4444" fill="#ef4444" fillOpacity={0.05} strokeWidth={1.2} name="IPCA" />
+                    <Area type="monotone" dataKey="cdi" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.06} strokeWidth={1.2} name="CDI" />
+                  </AreaChart>
+                </Suspense>
               </ResponsiveContainer>
             ) : (
               <div className="h-64 flex items-center justify-center text-muted-foreground">
@@ -1695,7 +1702,8 @@ export default function HomePage() {
               <div className="animate-pulse h-64 bg-muted rounded-lg"></div>
             ) : dadosPizza.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
-                <RechartsPieChart>
+                <Suspense fallback={<LoadingSpinner text="Carregando gráfico..." />}>
+                  <RechartsPieChart>
                   <Pie
                     data={dadosPizza}
                     cx="50%"
@@ -1750,7 +1758,8 @@ export default function HomePage() {
                     ]}
                   />
                   <Legend />
-                </RechartsPieChart>
+                  </RechartsPieChart>
+                </Suspense>
               </ResponsiveContainer>
                           ) : (
                 <div className="h-64 flex items-center justify-center text-muted-foreground">
@@ -1857,25 +1866,27 @@ export default function HomePage() {
               <div className="animate-pulse h-64 bg-muted rounded-lg"></div>
             ) : dadosGastos.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={dadosGastos}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
-                  <YAxis stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))', 
-                      borderRadius: '8px',
-                      color: 'hsl(var(--foreground))'
-                    }}
-                    formatter={(value: any) => [formatCurrency(value), 'Valor']}
-                  />
-                  <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
-                    {dadosGastos.map((entry, index) => (
-                      <Cell key={`cell-cat-${index}`} fill={entry.cor} />
-                    ))}
-                  </Bar>
-                </BarChart>
+                <Suspense fallback={<LoadingSpinner text="Carregando gráfico..." />}>
+                  <BarChart data={dadosGastos}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
+                    <YAxis stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))', 
+                        border: '1px solid hsl(var(--border))', 
+                        borderRadius: '8px',
+                        color: 'hsl(var(--foreground))'
+                      }}
+                      formatter={(value: any) => [formatCurrency(value), 'Valor']}
+                    />
+                    <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
+                      {dadosGastos.map((entry, index) => (
+                        <Cell key={`cell-cat-${index}`} fill={entry.cor} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </Suspense>
               </ResponsiveContainer>
             ) : (
               <div className="h-64 flex items-center justify-center text-muted-foreground">

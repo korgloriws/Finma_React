@@ -10,10 +10,14 @@ import {
 } from 'lucide-react'
 import { controleService, cartaoService, marmitasService } from '../services/api'
 import HelpTips from '../components/HelpTips'
-import ControleAlimentacaoTab from '../components/controle/ControleAlimentacaoTab'
-import ControleReceitaTab from '../components/controle/ControleReceitaTab'
-import ControleDespesaTab from '../components/controle/ControleDespesaTab'
-import ControleCartaoTab from '../components/controle/ControleCartaoTab'
+// Lazy loading dos componentes de controle
+import { lazy, Suspense } from 'react'
+import LoadingSpinner from '../components/LoadingSpinner'
+
+const ControleAlimentacaoTab = lazy(() => import('../components/controle/ControleAlimentacaoTab'))
+const ControleReceitaTab = lazy(() => import('../components/controle/ControleReceitaTab'))
+const ControleDespesaTab = lazy(() => import('../components/controle/ControleDespesaTab'))
+const ControleCartaoTab = lazy(() => import('../components/controle/ControleCartaoTab'))
 import { formatCurrency } from '../utils/formatters'
 import { EvolucaoFinanceira, ReceitasDespesas } from '../types'
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, PieChart as RechartsPieChart, Pie, Cell, Area, ComposedChart, BarChart, Bar } from 'recharts'
@@ -915,38 +919,46 @@ export default function ControlePage() {
 
         {/* Conteúdo da Aba Receitas */}
         {abaAtiva === 'receitas' && (
-          <ControleReceitaTab
-            filtroMes={filtroMes}
-            filtroAno={filtroAno}
-            ocultarValores={ocultarValores}
-          />
+          <Suspense fallback={<LoadingSpinner text="Carregando receitas..." />}>
+            <ControleReceitaTab
+              filtroMes={filtroMes}
+              filtroAno={filtroAno}
+              ocultarValores={ocultarValores}
+            />
+          </Suspense>
         )}
 
         {/* Conteúdo da Aba Despesas */}
         {abaAtiva === 'despesas' && (
-          <ControleDespesaTab
-            filtroMes={filtroMes}
-            filtroAno={filtroAno}
-            ocultarValores={ocultarValores}
-          />
+          <Suspense fallback={<LoadingSpinner text="Carregando despesas..." />}>
+            <ControleDespesaTab
+              filtroMes={filtroMes}
+              filtroAno={filtroAno}
+              ocultarValores={ocultarValores}
+            />
+          </Suspense>
         )}
 
         {/* Conteúdo da Aba Cartões */}
         {abaAtiva === 'cartoes' && (
-          <ControleCartaoTab
-            filtroMes={filtroMes}
-            filtroAno={filtroAno}
-            ocultarValores={ocultarValores}
-          />
+          <Suspense fallback={<LoadingSpinner text="Carregando cartões..." />}>
+            <ControleCartaoTab
+              filtroMes={filtroMes}
+              filtroAno={filtroAno}
+              ocultarValores={ocultarValores}
+            />
+          </Suspense>
         )}
 
         {/* Conteúdo da Aba Alimentação */}
         {abaAtiva === 'alimentacao' && (
-          <ControleAlimentacaoTab
-            filtroMes={filtroMes}
-            filtroAno={filtroAno}
-            ocultarValores={ocultarValores}
-          />
+          <Suspense fallback={<LoadingSpinner text="Carregando alimentação..." />}>
+            <ControleAlimentacaoTab
+              filtroMes={filtroMes}
+              filtroAno={filtroAno}
+              ocultarValores={ocultarValores}
+            />
+          </Suspense>
         )}
 
         <HelpTips tips={[]} />

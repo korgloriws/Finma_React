@@ -378,93 +378,67 @@ def _ensure_rf_catalog_schema():
     if not usuario:
         print("_ensure_rf_catalog_schema: Usuário não autenticado")
         return False
-    
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
                 try:
-                    print(f"_ensure_rf_catalog_schema: Verificando schema para usuário {usuario}")
-                    
-                    # Verificar se o schema do usuário existe
-                    c.execute("SELECT EXISTS (SELECT FROM information_schema.schemata WHERE schema_name = current_schema())")
-                    schema_exists = c.fetchone()[0]
-                    print(f"_ensure_rf_catalog_schema: Schema existe: {schema_exists}")
-                    
-                    # Verificar se a tabela já existe
-                    c.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'rf_catalog' AND table_schema = current_schema())")
-                    table_exists = c.fetchone()[0]
-                    print(f"_ensure_rf_catalog_schema: Tabela rf_catalog existe: {table_exists}")
-                    
-                    if not table_exists:
-                        print(f"_ensure_rf_catalog_schema: Criando tabela rf_catalog para usuário {usuario}")
-                        c.execute('''
-                        CREATE TABLE rf_catalog (
-                            id SERIAL PRIMARY KEY,
-                            nome VARCHAR(255) NOT NULL,
-                            emissor VARCHAR(255),
-                            tipo VARCHAR(100),
-                            indexador VARCHAR(50),
-                            taxa_percentual DECIMAL(10,4),
-                            taxa_fixa DECIMAL(10,4),
-                            quantidade DECIMAL(15,4),
-                            preco DECIMAL(15,4),
-                            data_inicio VARCHAR(20),
-                            vencimento VARCHAR(20),
-                            liquidez_diaria BOOLEAN DEFAULT FALSE,
-                            isento_ir BOOLEAN DEFAULT FALSE,
-                            observacao TEXT,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                        ''')
-                        # Commit explícito para PostgreSQL
-                        conn.commit()
-                        print(f"_ensure_rf_catalog_schema: Tabela criada com sucesso")
-                    else:
-                        print(f"_ensure_rf_catalog_schema: Tabela já existe")
-                    
+                    print(f"_ensure_rf_catalog_schema: Criando tabela para usuário {usuario}")
+                    c.execute('''
+                    CREATE TABLE IF NOT EXISTS rf_catalog (
+                        id SERIAL PRIMARY KEY,
+                        nome TEXT NOT NULL,
+                        emissor TEXT,
+                        tipo TEXT,
+                        indexador TEXT,
+                        taxa_percentual DOUBLE PRECISION,
+                        taxa_fixa DOUBLE PRECISION,
+                        quantidade DOUBLE PRECISION,
+                        preco DOUBLE PRECISION,
+                        data_inicio TEXT,
+                        vencimento TEXT,
+                        liquidez_diaria INTEGER,
+                        isento_ir INTEGER,
+                        observacao TEXT,
+                        created_at TEXT,
+                        updated_at TEXT
+                    )
+                ''')
+                    print(f"_ensure_rf_catalog_schema: Tabela criada/verificada com sucesso")
                     return True
                 except Exception as e:
-                    print(f"Erro ao criar/verificar tabela rf_catalog: {e}")
+                    print(f"Erro ao criar tabela rf_catalog: {e}")
                     # Tentar dropar e recriar se necessário
                     try:
                         print(f"_ensure_rf_catalog_schema: Tentando recriar tabela")
-                        c.execute('DROP TABLE IF EXISTS rf_catalog CASCADE')
+                        c.execute('DROP TABLE IF EXISTS rf_catalog')
                         c.execute('''
                             CREATE TABLE rf_catalog (
                                 id SERIAL PRIMARY KEY,
-                                nome VARCHAR(255) NOT NULL,
-                                emissor VARCHAR(255),
-                                tipo VARCHAR(100),
-                                indexador VARCHAR(50),
-                                taxa_percentual DECIMAL(10,4),
-                                taxa_fixa DECIMAL(10,4),
-                                quantidade DECIMAL(15,4),
-                                preco DECIMAL(15,4),
-                                data_inicio VARCHAR(20),
-                                vencimento VARCHAR(20),
-                                liquidez_diaria BOOLEAN DEFAULT FALSE,
-                                isento_ir BOOLEAN DEFAULT FALSE,
+                                nome TEXT NOT NULL,
+                                emissor TEXT,
+                                tipo TEXT,
+                                indexador TEXT,
+                                taxa_percentual DOUBLE PRECISION,
+                                taxa_fixa DOUBLE PRECISION,
+                                quantidade DOUBLE PRECISION,
+                                preco DOUBLE PRECISION,
+                                data_inicio TEXT,
+                                vencimento TEXT,
+                                liquidez_diaria INTEGER,
+                                isento_ir INTEGER,
                                 observacao TEXT,
-                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                created_at TEXT,
+                                updated_at TEXT
                             )
                         ''')
-                        conn.commit()
                         print(f"_ensure_rf_catalog_schema: Tabela recriada com sucesso")
                         return True
                     except Exception as e2:
                         print(f"Erro ao recriar tabela rf_catalog: {e2}")
                         return False
-        except Exception as conn_error:
-            print(f"Erro de conexão PostgreSQL: {conn_error}")
-            return False
         finally:
-            try:
-                conn.close()
-            except:
-                pass
+            conn.close()
     else:
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -501,90 +475,44 @@ def rf_catalog_list():
         print("rf_catalog_list: Usuário não autenticado")
         return []
     
-    print(f"rf_catalog_list: Iniciando para usuário {usuario}")
-    
     schema_created = _ensure_rf_catalog_schema()
     if not schema_created:
         print("rf_catalog_list: Falha ao criar/verificar schema")
         return []
-    
     if _is_postgres():
-        conn = None
+        conn = _pg_conn_for_user(usuario)
         try:
-            conn = _pg_conn_for_user(usuario)
-            print(f"rf_catalog_list: Conexão PostgreSQL estabelecida para usuário {usuario}")
-            
             with conn.cursor() as c:
                 try:
-                    # Verificar se a tabela existe antes de consultar
-                    c.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'rf_catalog' AND table_schema = current_schema())")
-                    table_exists = c.fetchone()[0]
-                    print(f"rf_catalog_list: Tabela existe: {table_exists}")
-                    
-                    if not table_exists:
-                        print("rf_catalog_list: Tabela não existe, retornando lista vazia")
-                        return []
-                    
-                    c.execute('''
-                        SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, 
-                               quantidade, preco, data_inicio, vencimento, liquidez_diaria, 
-                               isento_ir, observacao, created_at, updated_at 
-                        FROM rf_catalog 
-                        ORDER BY nome ASC
-                    ''')
+                    c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
                     rows = c.fetchall()
                     print(f"rf_catalog_list: Encontrados {len(rows)} itens para usuário {usuario}")
-                    
-                    def safe_convert(value, convert_func, default=None):
+                    def safe_float(value):
                         try:
-                            if value is None:
-                                return default
-                            return convert_func(value)
-                        except (ValueError, TypeError, AttributeError):
-                            return default
+                            return float(value) if value is not None else None
+                        except (ValueError, TypeError):
+                            return None
                     
-                    result = []
-                    for r in rows:
-                        try:
-                            item = {
-                                'id': r[0], 
-                                'nome': r[1] or '', 
-                                'emissor': r[2] or '', 
-                                'tipo': r[3] or '', 
-                                'indexador': r[4] or '',
-                                'taxa_percentual': safe_convert(r[5], float),
-                                'taxa_fixa': safe_convert(r[6], float),
-                                'quantidade': safe_convert(r[7], float),
-                                'preco': safe_convert(r[8], float),
-                                'data_inicio': r[9] or '', 
-                                'vencimento': r[10] or '',
-                                'liquidez_diaria': safe_convert(r[11], bool, False),
-                                'isento_ir': safe_convert(r[12], bool, False),
-                                'observacao': r[13] or '',
-                                'created_at': r[14] or '',
-                                'updated_at': r[15] or ''
-                            }
-                            result.append(item)
-                        except Exception as item_error:
-                            print(f"Erro ao processar item {r[0]}: {item_error}")
-                            continue
-                    
-                    print(f"rf_catalog_list: Retornando {len(result)} itens processados")
+                    result = [
+                        {
+                            'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
+                            'taxa_percentual': safe_float(r[5]),
+                            'taxa_fixa': safe_float(r[6]),
+                            'quantidade': safe_float(r[7]),
+                            'preco': safe_float(r[8]),
+                            'data_inicio': r[9], 'vencimento': r[10],
+                            'liquidez_diaria': bool(r[11]) if r[11] is not None else False,
+                            'isento_ir': bool(r[12]) if r[12] is not None else False,
+                            'observacao': r[13]
+                        } for r in rows
+                    ]
+                    print(f"rf_catalog_list: Retornando {len(result)} itens")
                     return result
-                    
                 except Exception as e:
-                    print(f"Erro ao executar query rf_catalog: {e}")
+                    print(f"Erro ao listar rf_catalog: {e}")
                     return []
-        except Exception as conn_error:
-            print(f"Erro de conexão PostgreSQL em rf_catalog_list: {conn_error}")
-            return []
         finally:
-            if conn:
-                try:
-                    conn.close()
-                    print("rf_catalog_list: Conexão PostgreSQL fechada")
-                except:
-                    pass
+            conn.close()
     else:
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -649,75 +577,26 @@ def rf_catalog_create(item: dict):
         1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, now
     )
     if _is_postgres():
-        conn = None
+        conn = _pg_conn_for_user(usuario)
         try:
-            conn = _pg_conn_for_user(usuario)
-            print(f"rf_catalog_create: Conexão PostgreSQL estabelecida para usuário {usuario}")
-            
             with conn.cursor() as c:
                 try:
-                    # Verificar se a tabela existe
-                    c.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'rf_catalog' AND table_schema = current_schema())")
-                    table_exists = c.fetchone()[0]
-                    if not table_exists:
-                        return { 'success': False, 'message': 'Tabela rf_catalog não existe' }
-                    
                     print(f"rf_catalog_create: Inserindo item para usuário {usuario}")
-                    
-                    # Preparar dados com tipos corretos para PostgreSQL
-                    insert_data = (
-                        str(item.get('nome', '')),  # VARCHAR
-                        str(item.get('emissor', '')),  # VARCHAR
-                        str(item.get('tipo', '')),  # VARCHAR
-                        str(item.get('indexador', '')),  # VARCHAR
-                        float(taxa_percentual_val),  # DECIMAL
-                        float(taxa_fixa_val),  # DECIMAL
-                        float(quantidade_val),  # DECIMAL
-                        float(preco_val),  # DECIMAL
-                        str(item.get('data_inicio', '')),  # VARCHAR
-                        str(item.get('vencimento', '')),  # VARCHAR
-                        bool(item.get('liquidez_diaria', False)),  # BOOLEAN
-                        bool(item.get('isento_ir', False)),  # BOOLEAN
-                        str(item.get('observacao', ''))  # TEXT
-                    )
-                    
-                    print(f"rf_catalog_create: Dados preparados: {insert_data}")
-                    
+                    print(f"rf_catalog_create: Fields: {fields}")
                     c.execute('''
-                        INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, 
-                                              quantidade, preco, data_inicio, vencimento, liquidez_diaria, 
-                                              isento_ir, observacao)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         RETURNING id
-                    ''', insert_data)
-                    
+                    ''', fields)
                     new_id = c.fetchone()[0]
-                    
-                    # Commit explícito para PostgreSQL
-                    conn.commit()
-                    
                     print(f"rf_catalog_create: Item criado com ID {new_id}")
                     return { 'success': True, 'id': new_id }
-                    
                 except Exception as e:
                     print(f"Erro ao inserir em rf_catalog: {e}")
-                    print(f"Dados: {insert_data}")
-                    # Rollback em caso de erro
-                    try:
-                        conn.rollback()
-                    except:
-                        pass
+                    print(f"Fields: {fields}")
                     return { 'success': False, 'message': f'Erro ao inserir: {str(e)}' }
-        except Exception as conn_error:
-            print(f"Erro de conexão PostgreSQL em rf_catalog_create: {conn_error}")
-            return { 'success': False, 'message': f'Erro de conexão: {str(conn_error)}' }
         finally:
-            if conn:
-                try:
-                    conn.close()
-                    print("rf_catalog_create: Conexão PostgreSQL fechada")
-                except:
-                    pass
+            conn.close()
     else:
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -742,71 +621,19 @@ def rf_catalog_update(id_: int, item: dict):
         return { 'success': False, 'message': 'Falha ao criar/verificar schema' }
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     if _is_postgres():
-        conn = None
+        conn = _pg_conn_for_user(usuario)
         try:
-            conn = _pg_conn_for_user(usuario)
-            print(f"rf_catalog_update: Conexão PostgreSQL estabelecida para usuário {usuario}")
-            
             with conn.cursor() as c:
                 try:
-                    # Verificar se a tabela existe
-                    c.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'rf_catalog' AND table_schema = current_schema())")
-                    table_exists = c.fetchone()[0]
-                    if not table_exists:
-                        return { 'success': False, 'message': 'Tabela rf_catalog não existe' }
-                    
-                    # Preparar dados com tipos corretos para PostgreSQL
-                    update_data = (
-                        str(item.get('nome', '')),  # VARCHAR
-                        str(item.get('emissor', '')),  # VARCHAR
-                        str(item.get('tipo', '')),  # VARCHAR
-                        str(item.get('indexador', '')),  # VARCHAR
-                        float(item.get('taxa_percentual', 0)) if item.get('taxa_percentual') else 0,  # DECIMAL
-                        float(item.get('taxa_fixa', 0)) if item.get('taxa_fixa') else 0,  # DECIMAL
-                        float(item.get('quantidade', 0)) if item.get('quantidade') else 0,  # DECIMAL
-                        float(item.get('preco', 0)) if item.get('preco') else 0,  # DECIMAL
-                        str(item.get('data_inicio', '')),  # VARCHAR
-                        str(item.get('vencimento', '')),  # VARCHAR
-                        bool(item.get('liquidez_diaria', False)),  # BOOLEAN
-                        bool(item.get('isento_ir', False)),  # BOOLEAN
-                        str(item.get('observacao', '')),  # TEXT
-                        id_
-                    )
-                    
-                    print(f"rf_catalog_update: Atualizando item ID {id_} para usuário {usuario}")
-                    
                     c.execute('''
-                        UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, 
-                                              taxa_percentual=%s, taxa_fixa=%s, quantidade=%s, preco=%s, 
-                                              data_inicio=%s, vencimento=%s, liquidez_diaria=%s, 
-                                              isento_ir=%s, observacao=%s, updated_at=CURRENT_TIMESTAMP 
-                        WHERE id=%s
-                    ''', update_data)
-                    
-                    # Commit explícito para PostgreSQL
-                    conn.commit()
-                    
-                    print(f"rf_catalog_update: Item ID {id_} atualizado com sucesso")
+                        UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
+                    ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('quantidade'), item.get('preco'), item.get('data_inicio'), item.get('vencimento'), 1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, id_))
                     return { 'success': True }
-                    
                 except Exception as e:
                     print(f"Erro ao atualizar rf_catalog: {e}")
-                    # Rollback em caso de erro
-                    try:
-                        conn.rollback()
-                    except:
-                        pass
                     return { 'success': False, 'message': f'Erro ao atualizar: {str(e)}' }
-        except Exception as conn_error:
-            print(f"Erro de conexão PostgreSQL em rf_catalog_update: {conn_error}")
-            return { 'success': False, 'message': f'Erro de conexão: {str(conn_error)}' }
         finally:
-            if conn:
-                try:
-                    conn.close()
-                    print("rf_catalog_update: Conexão PostgreSQL fechada")
-                except:
-                    pass
+            conn.close()
     else:
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -829,47 +656,17 @@ def rf_catalog_delete(id_: int):
     if not schema_created:
         return { 'success': False, 'message': 'Falha ao criar/verificar schema' }
     if _is_postgres():
-        conn = None
+        conn = _pg_conn_for_user(usuario)
         try:
-            conn = _pg_conn_for_user(usuario)
-            print(f"rf_catalog_delete: Conexão PostgreSQL estabelecida para usuário {usuario}")
-            
             with conn.cursor() as c:
                 try:
-                    # Verificar se a tabela existe
-                    c.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'rf_catalog' AND table_schema = current_schema())")
-                    table_exists = c.fetchone()[0]
-                    if not table_exists:
-                        return { 'success': False, 'message': 'Tabela rf_catalog não existe' }
-                    
-                    print(f"rf_catalog_delete: Deletando item ID {id_} para usuário {usuario}")
-                    
                     c.execute('DELETE FROM rf_catalog WHERE id=%s', (id_,))
-                    
-                    # Commit explícito para PostgreSQL
-                    conn.commit()
-                    
-                    print(f"rf_catalog_delete: Item ID {id_} deletado com sucesso")
                     return { 'success': True }
-                    
                 except Exception as e:
                     print(f"Erro ao deletar rf_catalog: {e}")
-                    # Rollback em caso de erro
-                    try:
-                        conn.rollback()
-                    except:
-                        pass
                     return { 'success': False, 'message': f'Erro ao deletar: {str(e)}' }
-        except Exception as conn_error:
-            print(f"Erro de conexão PostgreSQL em rf_catalog_delete: {conn_error}")
-            return { 'success': False, 'message': f'Erro de conexão: {str(conn_error)}' }
         finally:
-            if conn:
-                try:
-                    conn.close()
-                    print("rf_catalog_delete: Conexão PostgreSQL fechada")
-                except:
-                    pass
+            conn.close()
     else:
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -5236,7 +5033,7 @@ def desmarcar_cartao_como_pago(cartao_id):
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as cursor:
-          
+                # Buscar dados do cartão
                 cursor.execute("SELECT nome FROM cartoes_cadastrados WHERE id = %s", [cartao_id])
                 cartao = cursor.fetchone()
                 if not cartao:
@@ -5244,14 +5041,14 @@ def desmarcar_cartao_como_pago(cartao_id):
                 
                 nome_cartao = cartao[0]
                 
-                
+                # Desmarcar cartão como pago
                 cursor.execute("""
                     UPDATE cartoes_cadastrados 
                     SET pago = FALSE, mes_pagamento = NULL, ano_pagamento = NULL, data_pagamento = NULL
                     WHERE id = %s
                 """, [cartao_id])
                 
-        
+                # Remover despesa correspondente
                 cursor.execute("""
                     DELETE FROM outros_gastos 
                     WHERE nome = %s AND categoria = 'cartao'
@@ -5267,7 +5064,7 @@ def desmarcar_cartao_como_pago(cartao_id):
         try:
             cursor = conn.cursor()
             
-           
+            # Buscar dados do cartão
             cursor.execute("SELECT nome FROM cartoes_cadastrados WHERE id = ?", [cartao_id])
             cartao = cursor.fetchone()
             if not cartao:
@@ -5275,14 +5072,14 @@ def desmarcar_cartao_como_pago(cartao_id):
             
             nome_cartao = cartao[0]
             
-
+            # Desmarcar cartão como pago
             cursor.execute("""
                 UPDATE cartoes_cadastrados 
                 SET pago = 0, mes_pagamento = NULL, ano_pagamento = NULL, data_pagamento = NULL
                 WHERE id = ?
             """, [cartao_id])
             
-           
+            # Remover despesa correspondente
             cursor.execute("""
                 DELETE FROM outros_gastos 
                 WHERE nome = ? AND categoria = 'cartao'
@@ -5292,3 +5089,186 @@ def desmarcar_cartao_como_pago(cartao_id):
             return True
         finally:
             conn.close()
+
+# ==================== FUNÇÕES DE SIMULAÇÃO DE CHOQUES ====================
+
+def simular_choques_indexadores(choques_cdi=0, choques_ipca=0, choques_selic=0):
+    """
+    Simula choques nos indexadores e calcula o impacto na carteira
+    """
+    try:
+        usuario = get_usuario_atual()
+        if not usuario:
+            return {"error": "Usuário não autenticado"}
+        
+        carteira = obter_carteira()
+        if not carteira:
+            return {"carteira_simulada": [], "totais": {"valor_atual": 0, "valor_simulado": 0, "variacao": 0, "variacao_percentual": 0}}
+        
+        carteira_simulada = []
+        valor_atual_total = 0
+        valor_simulado_total = 0
+        
+        for ativo in carteira:
+            # Calcular novo preço baseado no indexador
+            novo_preco = ativo['preco_atual']
+            impacto = 0
+            
+            # Aplicar choque baseado no indexador
+            if ativo.get('indexador') == 'CDI':
+                impacto = choques_cdi
+            elif ativo.get('indexador') == 'IPCA':
+                impacto = choques_ipca
+            elif ativo.get('indexador') == 'SELIC':
+                impacto = choques_selic
+            
+            # Calcular novo preço (simplificado: 1% de choque = 1% no preço)
+            if impacto != 0:
+                novo_preco = ativo['preco_atual'] * (1 + impacto / 100)
+            
+            # Calcular novos valores
+            novo_valor_total = novo_preco * ativo['quantidade']
+            variacao = novo_valor_total - ativo['valor_total']
+            variacao_percentual = (variacao / ativo['valor_total']) * 100 if ativo['valor_total'] > 0 else 0
+            
+            # Adicionar à carteira simulada
+            ativo_simulado = {
+                **ativo,
+                'preco_simulado': novo_preco,
+                'valor_total_simulado': novo_valor_total,
+                'variacao': variacao,
+                'variacao_percentual': variacao_percentual
+            }
+            carteira_simulada.append(ativo_simulado)
+            
+            # Somar totais
+            valor_atual_total += ativo['valor_total']
+            valor_simulado_total += novo_valor_total
+        
+        # Calcular totais
+        variacao_total = valor_simulado_total - valor_atual_total
+        variacao_percentual_total = (variacao_total / valor_atual_total) * 100 if valor_atual_total > 0 else 0
+        
+        return {
+            "carteira_simulada": carteira_simulada,
+            "totais": {
+                "valor_atual": valor_atual_total,
+                "valor_simulado": valor_simulado_total,
+                "variacao": variacao_total,
+                "variacao_percentual": variacao_percentual_total
+            }
+        }
+        
+    except Exception as e:
+        print(f"Erro na simulação de choques: {e}")
+        return {"error": str(e)}
+
+def obter_cenarios_predefinidos():
+
+    return [
+        {
+            "nome": "Otimista",
+            "descricao": "Economia em crescimento",
+            "choques": {"cdi": 2, "ipca": -1, "selic": 2},
+            "cor": "text-green-600"
+        },
+        {
+            "nome": "Pessimista", 
+            "descricao": "Crise econômica",
+            "choques": {"cdi": -3, "ipca": 3, "selic": -3},
+            "cor": "text-red-600"
+        },
+        {
+            "nome": "Crise",
+            "descricao": "Crise severa",
+            "choques": {"cdi": -5, "ipca": 5, "selic": -5},
+            "cor": "text-red-800"
+        },
+        {
+            "nome": "Inflação Alta",
+            "descricao": "Inflação descontrolada",
+            "choques": {"cdi": 1, "ipca": 4, "selic": 1},
+            "cor": "text-orange-600"
+        }
+    ]
+
+def executar_monte_carlo(n_simulacoes=10000, periodo_anos=5, confianca=95):
+    """
+    Executa simulação Monte Carlo para a carteira
+    """
+    try:
+        import numpy as np
+        import random
+        
+        print(f"Iniciando Monte Carlo: {n_simulacoes} simulações, {periodo_anos} anos")
+        
+        usuario = get_usuario_atual()
+        if not usuario:
+            return {"error": "Usuário não autenticado"}
+        
+        carteira = obter_carteira()
+        if not carteira:
+            return {"error": "Carteira vazia"}
+        
+        print(f"Carteira encontrada: {len(carteira)} ativos")
+        
+        # Calcular valor atual total
+        valor_atual_total = sum(ativo['valor_total'] for ativo in carteira)
+        print(f"Valor atual total: R$ {valor_atual_total:,.2f}")
+        
+        # Parâmetros para simulação (baseados em dados históricos médios)
+        retorno_medio_anual = 0.12  # 12% ao ano (média histórica do mercado brasileiro)
+        volatilidade_anual = 0.20   # 20% de volatilidade anual
+        
+     
+        cenarios = []
+        
+        for _ in range(n_simulacoes):
+           
+            retorno_anual = np.random.normal(retorno_medio_anual, volatilidade_anual)
+            
+           
+            valor_final = valor_atual_total * ((1 + retorno_anual) ** periodo_anos)
+            cenarios.append(valor_final)
+        
+  
+        cenarios_ordenados = sorted(cenarios)
+        n_cenarios = len(cenarios_ordenados)
+        
+      
+        percentis = {
+            "p5": cenarios_ordenados[int(0.05 * n_cenarios)],
+            "p25": cenarios_ordenados[int(0.25 * n_cenarios)],
+            "p50": cenarios_ordenados[int(0.50 * n_cenarios)],
+            "p75": cenarios_ordenados[int(0.75 * n_cenarios)],
+            "p95": cenarios_ordenados[int(0.95 * n_cenarios)]
+        }
+        
+    
+        valor_esperado = np.mean(cenarios)
+        
+   
+        volatilidade = np.std(cenarios) / valor_esperado
+        
+    
+        cenarios_perda = [c for c in cenarios if c < valor_atual_total]
+        probabilidade_perda = len(cenarios_perda) / n_cenarios * 100
+        
+
+        sharpe = (valor_esperado - valor_atual_total) / (np.std(cenarios) * np.sqrt(periodo_anos))
+        
+        resultado = {
+            "percentis": percentis,
+            "probabilidade_perda": probabilidade_perda,
+            "valor_esperado": valor_esperado,
+            "volatilidade": volatilidade,
+            "sharpe": sharpe,
+            "cenarios": cenarios[:1000]  
+        }
+        
+        print(f"Monte Carlo concluído: Valor esperado R$ {valor_esperado:,.2f}")
+        return resultado
+        
+    except Exception as e:
+        print(f"Erro na simulação Monte Carlo: {e}")
+        return {"error": str(e)}

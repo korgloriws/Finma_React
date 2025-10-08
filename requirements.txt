@@ -9,3 +9,4 @@ psycopg[binary]
 flask-compress
 cloudscraper
 reportlab
+numpy

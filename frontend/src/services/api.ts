@@ -712,4 +712,27 @@ export const cartaoService = {
   },
 }
 
+// ==================== SERVIÇOS DE SIMULAÇÃO ====================
+
+export const simuladorService = {
+  simularChoques: async (choques: { cdi: number; ipca: number; selic: number }): Promise<any> => {
+    const response = await api.post('/simulador/choques', {
+      choques_cdi: choques.cdi,
+      choques_ipca: choques.ipca,
+      choques_selic: choques.selic
+    })
+    return response.data
+  },
+
+  obterCenarios: async (): Promise<any> => {
+    const response = await api.get('/simulador/cenarios')
+    return response.data
+  },
+
+  executarMonteCarlo: async (config: { nSimulacoes: number; periodoAnos: number; confianca: number }): Promise<any> => {
+    const response = await api.post('/simulador/monte-carlo', config)
+    return response.data
+  },
+}
+
 export default api 

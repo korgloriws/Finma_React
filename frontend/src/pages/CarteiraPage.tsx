@@ -19,6 +19,7 @@ import {
   ArrowDownRight,
   Calculator,
   PlusCircle,
+  Zap,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { carteiraService } from '../services/api'
@@ -26,17 +27,22 @@ import { AtivoCarteira, Movimentacao } from '../types'
 import { formatCurrency } from '../utils/formatters'
 import HelpTips from '../components/HelpTips'
 import { normalizeTicker, getDisplayTicker } from '../utils/tickerUtils'
-import CarteiraAtivosTab from '../components/carteira/CarteiraAtivosTab'
-import CarteiraGraficosTab from '../components/carteira/CarteiraGraficosTab'
-import CarteiraRankingTab from '../components/carteira/CarteiraRankingTab'
-import CarteiraProventosTab from '../components/carteira/CarteiraProventosTab'
-import CarteiraInsightsTab from '../components/carteira/CarteiraInsightsTab'
-import CarteiraRebalanceamentoTab from '../components/carteira/CarteiraRebalanceamentoTab'
-import CarteiraMovimentacoesTab from '../components/carteira/CarteiraMovimentacoesTab'
-import CarteiraProjecaoTab from '../components/carteira/CarteiraProjecaoTab'
-import CarteiraRelatoriosTab from '../components/carteira/CarteiraRelatoriosTab'
-import AddAtivoModal from '../components/carteira/AddAtivoModal'
-import EditAtivoModal from '../components/carteira/EditAtivoModal'
+// Lazy loading dos componentes da carteira
+import { lazy, Suspense } from 'react'
+import LoadingSpinner from '../components/LoadingSpinner'
+
+const CarteiraAtivosTab = lazy(() => import('../components/carteira/CarteiraAtivosTab'))
+const CarteiraGraficosTab = lazy(() => import('../components/carteira/CarteiraGraficosTab'))
+const CarteiraRankingTab = lazy(() => import('../components/carteira/CarteiraRankingTab'))
+const CarteiraProventosTab = lazy(() => import('../components/carteira/CarteiraProventosTab'))
+const CarteiraInsightsTab = lazy(() => import('../components/carteira/CarteiraInsightsTab'))
+const CarteiraRebalanceamentoTab = lazy(() => import('../components/carteira/CarteiraRebalanceamentoTab'))
+const CarteiraMovimentacoesTab = lazy(() => import('../components/carteira/CarteiraMovimentacoesTab'))
+const CarteiraProjecaoTab = lazy(() => import('../components/carteira/CarteiraProjecaoTab'))
+const CarteiraRelatoriosTab = lazy(() => import('../components/carteira/CarteiraRelatoriosTab'))
+const CarteiraSimuladorTab = lazy(() => import('../components/carteira/CarteiraSimuladorTab'))
+const AddAtivoModal = lazy(() => import('../components/carteira/AddAtivoModal'))
+const EditAtivoModal = lazy(() => import('../components/carteira/EditAtivoModal'))
 
 export default function CarteiraPage() {
   const { user } = useAuth()
@@ -60,7 +66,7 @@ export default function CarteiraPage() {
   const [filtroAno, setFiltroAno] = useState<number>(new Date().getFullYear())
   const [activeTab, setActiveTab] = useState(() => {
     const tabFromUrl = searchParams.get('tab')
-    const validTabs = ['ativos', 'graficos', 'ranking', 'proventos', 'insights', 'rebalance', 'movimentacoes', 'relatorios', 'projecao']
+    const validTabs = ['ativos', 'graficos', 'ranking', 'proventos', 'insights', 'rebalance', 'movimentacoes', 'relatorios', 'projecao', 'simulador']
     return validTabs.includes(tabFromUrl || '') ? tabFromUrl! : 'ativos'
   })
   const [manageTipoOpen, setManageTipoOpen] = useState<{open: boolean; tipo?: string}>({open: false})
@@ -586,6 +592,7 @@ export default function CarteiraPage() {
         <TabButton id="movimentacoes" label="Movimentações" icon={History} isActive={activeTab === 'movimentacoes'} />
         <TabButton id="relatorios" label="Relatórios" icon={FileText} isActive={activeTab === 'relatorios'} />
         <TabButton id="projecao" label="Projeção" icon={Calculator} isActive={activeTab === 'projecao'} />
+        <TabButton id="simulador" label="Simulador" icon={Zap} isActive={activeTab === 'simulador'} />
       </div>
 
       {/* Conteúdo das Abas */}
@@ -700,15 +707,17 @@ export default function CarteiraPage() {
         )}
 
         {activeTab === 'graficos' && (
-          <CarteiraGraficosTab
-            carteira={carteira || []}
-            loadingHistorico={loadingHistorico}
-            historicoCarteira={historicoCarteira as any || null}
-            filtroPeriodo={filtroPeriodo}
-            setFiltroPeriodo={(value: string) => setFiltroPeriodo(value as "mensal" | "trimestral" | "semestral" | "anual" | "maximo")}
-            ativosPorTipo={ativosPorTipo as unknown as Record<string, number>}
-            topAtivos={topAtivos}
-          />
+          <Suspense fallback={<LoadingSpinner text="Carregando gráficos..." />}>
+            <CarteiraGraficosTab
+              carteira={carteira || []}
+              loadingHistorico={loadingHistorico}
+              historicoCarteira={historicoCarteira as any || null}
+              filtroPeriodo={filtroPeriodo}
+              setFiltroPeriodo={(value: string) => setFiltroPeriodo(value as "mensal" | "trimestral" | "semestral" | "anual" | "maximo")}
+              ativosPorTipo={ativosPorTipo as unknown as Record<string, number>}
+              topAtivos={topAtivos}
+            />
+          </Suspense>
         )}
 
 
@@ -734,11 +743,13 @@ export default function CarteiraPage() {
 
 
         {activeTab === 'insights' && (
-          <CarteiraInsightsTab
-            carteira={carteira || []}
-            loadingInsights={loadingInsights}
-            insights={insights}
-          />
+          <Suspense fallback={<LoadingSpinner text="Carregando insights..." />}>
+            <CarteiraInsightsTab
+              carteira={carteira || []}
+              loadingInsights={loadingInsights}
+              insights={insights}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'rebalance' && (
@@ -786,6 +797,12 @@ export default function CarteiraPage() {
             setFiltroPeriodo={(value: string) => setFiltroPeriodo(value as "mensal" | "trimestral" | "semestral" | "anual" | "maximo")}
           />
         )}
+
+        {activeTab === 'simulador' && (
+          <Suspense fallback={<LoadingSpinner text="Carregando simulador..." />}>
+            <CarteiraSimuladorTab carteira={carteira || []} />
+          </Suspense>
+        )}
       </div>
       {/* FAB mobile para adicionar ativo rapidamente (somente na aba Ativos) */}
       {activeTab === 'ativos' && (
@@ -801,18 +818,24 @@ export default function CarteiraPage() {
         </div>
       )}
       {activeTab === 'ativos' && addModalOpen && (
-        <AddAtivoModal open={addModalOpen} onClose={()=>setAddModalOpen(false)} />
+        <Suspense fallback={<LoadingSpinner text="Carregando modal..." />}>
+          <AddAtivoModal open={addModalOpen} onClose={()=>setAddModalOpen(false)} />
+        </Suspense>
       )}
       
       {/* Modal de editar ativo */}
-      <EditAtivoModal
-        open={editModalOpen}
-        onClose={() => {
-          setEditModalOpen(false)
-          setAtivoParaEditar(null)
-        }}
-        ativo={ativoParaEditar}
-      />
+      {editModalOpen && (
+        <Suspense fallback={<LoadingSpinner text="Carregando modal..." />}>
+          <EditAtivoModal
+            open={editModalOpen}
+            onClose={() => {
+              setEditModalOpen(false)
+              setAtivoParaEditar(null)
+            }}
+            ativo={ativoParaEditar}
+          />
+        </Suspense>
+      )}
     </div>
   )
 } 

@@ -1,16 +1,109 @@
-services:
-  - type: web
-    name: finma
-    env: docker
-    plan: free
-    region: oregon
-    dockerfilePath: ./Dockerfile
-    envVars:
-      - key: ENVIRONMENT
-        value: production
-      - key: FRONTEND_ORIGIN
-        value: ""
-      - key: USUARIOS_DB_URL
-        sync: false
-    # Nenhum disco necessário quando usando Postgres Neon persistente
+# ==================== CONFIGURAÇÃO RENDER ====================
 
+services:
+  # Backend Flask
+  - type: web
+    name: finma-backend
+    env: python
+    plan: starter
+    buildCommand: |
+      cd backend
+      pip install -r requirements.txt
+    startCommand: |
+      cd backend
+      python app.py
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: finma-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: finma-redis
+          property: connectionString
+    healthCheckPath: /health
+    autoDeploy: true
+    
+  # Frontend React
+  - type: web
+    name: finma-frontend
+    env: static
+    buildCommand: |
+      cd frontend
+      npm ci
+      npm run build
+    staticPublishPath: ./frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    autoDeploy: true
+
+databases:
+  - name: finma-db
+    plan: starter
+    databaseName: finma
+    user: finma_user
+
+# ==================== OTIMIZAÇÕES DE PERFORMANCE ====================
+
+# Configurações de cache
+cache:
+  redis:
+    maxMemory: 256mb
+    maxMemoryPolicy: allkeys-lru
+    ttl: 300  # 5 minutos
+
+# Configurações de CDN
+cdn:
+  enabled: true
+  cacheControl: "public, max-age=31536000"  # 1 ano para assets estáticos
+  compression: true
+
+# Configurações de monitoramento
+monitoring:
+  enabled: true
+  metrics:
+    - response_time
+    - error_rate
+    - throughput
+    - database_connections
+  alerts:
+    - type: error_rate
+      threshold: 5%
+    - type: response_time
+      threshold: 2000ms
+    - type: database_connections
+      threshold: 80%
+
+# ==================== VARIÁVEIS DE AMBIENTE ====================
+
+envVars:
+  # Performance
+  - key: NODE_ENV
+    value: production
+  - key: REACT_APP_API_URL
+    value: https://finma-backend.onrender.com
+  
+  # Database
+  - key: DB_POOL_SIZE
+    value: "10"
+  - key: DB_MAX_CONNECTIONS
+    value: "20"
+  - key: DB_QUERY_TIMEOUT
+    value: "30"
+  
+  # Cache
+  - key: CACHE_TTL
+    value: "300"
+  - key: CACHE_MAX_SIZE
+    value: "1000"
+  
+  # Security
+  - key: JWT_SECRET
+    generateValue: true
+  - key: ENCRYPTION_KEY
+    generateValue: true

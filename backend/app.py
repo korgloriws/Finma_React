@@ -55,6 +55,9 @@ from models import (
     compute_goals_projection,
     obter_preco_historico,
     obter_preco_atual,
+    simular_choques_indexadores,
+    obter_cenarios_predefinidos,
+    executar_monte_carlo,
 )
 from models import cache
 import requests
@@ -369,7 +372,7 @@ def api_obter_pergunta():
 
 @server.route("/api/auth/verificar-resposta", methods=["POST"])
 def api_verificar_resposta():
-    """Verificar resposta de segurança"""
+   
     try:
         data = request.get_json()
         username = data.get('username')
@@ -378,7 +381,7 @@ def api_verificar_resposta():
         if not username or not resposta:
             return jsonify({"error": "Username e resposta são obrigatórios"}), 400
         
-        # Verificar resposta
+     
         if verificar_resposta_seguranca(username, resposta):
             return jsonify({"message": "Resposta correta"}), 200
         else:
@@ -389,7 +392,7 @@ def api_verificar_resposta():
 
 @server.route("/api/auth/redefinir-senha", methods=["POST"])
 def api_redefinir_senha():
-    """Redefinir senha após verificação de segurança"""
+   
     try:
         data = request.get_json()
         username = data.get('username')
@@ -401,7 +404,7 @@ def api_redefinir_senha():
         if len(nova_senha) < 6:
             return jsonify({"error": "A senha deve ter pelo menos 6 caracteres"}), 400
         
-        # Alterar senha
+        
         if alterar_senha_direta(username, nova_senha):
             return jsonify({"message": "Senha alterada com sucesso"}), 200
         else:
@@ -412,7 +415,7 @@ def api_redefinir_senha():
 
 @server.route("/api/auth/atualizar-pergunta", methods=["POST"])
 def api_atualizar_pergunta():
-    """Atualizar pergunta de segurança de um usuário"""
+    
     try:
         data = request.get_json()
         username = data.get('username')
@@ -433,7 +436,7 @@ def api_atualizar_pergunta():
 
 @server.route("/api/auth/verificar-pergunta", methods=["POST"])
 def api_verificar_pergunta():
-    """Verificar se o usuário tem pergunta de segurança configurada"""
+   
     try:
         data = request.get_json()
         username = data.get('username')
@@ -441,12 +444,12 @@ def api_verificar_pergunta():
         if not username:
             return jsonify({"error": "Username é obrigatório"}), 400
         
-        # Buscar usuário
+
         usuario = buscar_usuario_por_username(username)
         if not usuario:
             return jsonify({"error": "Usuário não encontrado"}), 404
         
-        # Verificar se tem pergunta configurada
+       
         tem_pergunta = bool(usuario.get('pergunta_seguranca'))
         
         return jsonify({
@@ -511,7 +514,7 @@ def api_listas_ativos():
             return jsonify({"tipo":"fiis","tickers": LISTA_FIIS})
         if tipo in ('bdr','bdrs'):
             return jsonify({"tipo":"bdrs","tickers": LISTA_BDRS})
-        # Sem filtro: retorna todos (cuidado com tamanho)
+      
         return jsonify({
             "acoes": LISTA_ACOES,
             "fiis": LISTA_FIIS,
@@ -543,7 +546,7 @@ def api_rf_catalog():
 
 @server.route("/api/analise/resumo", methods=["GET"])
 def api_analise_resumo():
-    """API para obter resumo dos ativos"""
+    
     try:
         df_ativos = carregar_ativos()
         
@@ -561,18 +564,18 @@ def api_analise_resumo():
                 "ativo_melhor_roe": "-"
             })
         
-        # Calcular estatísticas
+
         total_ativos = len(df_ativos)
         media_dy = df_ativos['dividend_yield'].mean() if 'dividend_yield' in df_ativos.columns else 0
         media_pl = df_ativos['pl'].mean() if 'pl' in df_ativos.columns else 0
         media_roe = df_ativos['roe'].mean() if 'roe' in df_ativos.columns else 0
         
-        # Encontrar melhores
+      
         maior_dy = df_ativos['dividend_yield'].max() if 'dividend_yield' in df_ativos.columns else 0
         menor_pl = df_ativos['pl'].min() if 'pl' in df_ativos.columns else 0
         melhor_roe = df_ativos['roe'].max() if 'roe' in df_ativos.columns else 0
         
-        # Encontrar ativos com melhores indicadores
+
         ativo_maior_dy = df_ativos.loc[df_ativos['dividend_yield'].idxmax(), 'ticker'] if 'dividend_yield' in df_ativos.columns and not df_ativos['dividend_yield'].isnull().all() else '-'
         ativo_menor_pl = df_ativos.loc[df_ativos['pl'].idxmin(), 'ticker'] if 'pl' in df_ativos.columns and not df_ativos['pl'].isnull().all() else '-'
         ativo_melhor_roe = df_ativos.loc[df_ativos['roe'].idxmax(), 'ticker'] if 'roe' in df_ativos.columns and not df_ativos['roe'].isnull().all() else '-'
@@ -606,7 +609,7 @@ def api_get_data():
 def api_get_ativo_details(ticker):
     try:
         ticker = ticker.strip().upper()
-        # Se contiver hifen (criptos ex: BTC-USD), não acrescentar .SA
+        
         if '-' not in ticker and '.' not in ticker and len(ticker) <= 6:
             ticker += '.SA'
         
@@ -637,14 +640,14 @@ def api_get_ativo_details(ticker):
             for index, value in dividends.items():
                 dividends_json[index.isoformat()] = float(value)
 
-        # Enriquecimento específico para FII
+
         fii_extra = None
         try:
-            # Heurística simples para identificar FII brasileiro (ex.: VISC11.SA)
+            
             is_brazilian_fii = ticker.endswith('11.SA') or ticker.endswith('11')
             if is_brazilian_fii:
                 current_price = info.get('currentPrice') or info.get('regularMarketPrice') or info.get('previousClose')
-                # DY 12 meses a partir da série de dividendos
+
                 dy_12m = None
                 dividendo_medio_12m = None
                 ultimo_rendimento_valor = None
@@ -652,21 +655,21 @@ def api_get_ativo_details(ticker):
                 if dividends is not None and not dividends.empty and current_price:
                     from datetime import datetime, timedelta
                     cutoff = datetime.utcnow() - timedelta(days=365)
-                    # Índice é DatetimeIndex
+                   
                     last_12m = dividends[dividends.index >= cutoff]
                     soma_12m = float(last_12m.sum()) if last_12m is not None else 0.0
                     dy_12m = (soma_12m / float(current_price) * 100.0) if current_price and soma_12m is not None else None
-                    # Média por evento (não mensal) nos últimos 12 meses
+                
                     if last_12m is not None and len(last_12m) > 0:
                         dividendo_medio_12m = float(soma_12m / len(last_12m))
-                    # Último rendimento
+                 
                     try:
                         ultimo_rendimento_valor = float(dividends.iloc[-1])
                         ultimo_rendimento_data = dividends.index[-1].isoformat()
                     except Exception:
                         pass
 
-                # Classificação por palavras-chave (resumo do negócio)
+
                 summary = (info.get('longBusinessSummary') or '').lower()
                 fii_tipo = None
                 segmento = None
@@ -755,13 +758,13 @@ def api_get_ativo_historico(ticker):
 
 @server.route("/api/ativo/<ticker>/preco-historico", methods=["GET"])
 def api_get_preco_historico(ticker):
-    """Endpoint para obter preço histórico de um ativo em data específica"""
+   
     try:
         data = request.args.get('data')
         if not data:
             return jsonify({"error": "Parâmetro 'data' é obrigatório (formato: YYYY-MM-DD)"}), 400
         
-        # Validar formato da data
+        
         try:
             datetime.strptime(data, '%Y-%m-%d')
         except ValueError:
@@ -779,7 +782,7 @@ def api_get_preco_historico(ticker):
 
 @server.route("/api/ativo/<ticker>/preco-atual", methods=["GET"])
 def api_get_preco_atual(ticker):
-    """Endpoint para obter preço atual de um ativo"""
+   
     try:
         resultado = obter_preco_atual(ticker)
         
@@ -896,19 +899,19 @@ def api_get_logos_batch():
 @server.route('/', defaults={'path': ''})
 @server.route('/<path:path>')
 def serve_frontend(path):
-    # Evitar capturar rotas de API
+    
     if path.startswith('api/'):
         return jsonify({"error": "Not Found"}), 404
 
-    # Servir arquivos estáticos gerados pelo Vite e service worker/manifest
+ 
     requested_path = os.path.join(server.static_folder, path) if path else None
     if path and os.path.exists(requested_path):
         return send_from_directory(server.static_folder, path)
-    # Service worker e manifest que ficam na raiz do build do Vite
+    
     if path in ('sw.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'):
         return send_from_directory(server.static_folder, path)
 
-    # Fallback para index.html (React Router)
+
     index_path = os.path.join(server.static_folder, 'index.html')
     if os.path.exists(index_path):
         return send_from_directory(server.static_folder, 'index.html')
@@ -918,13 +921,13 @@ def serve_frontend(path):
 
 @server.route("/api/carteira", methods=["GET"])
 def api_get_carteira():
-    """API para obter todos os ativos da carteira"""
+    
     try:
         refresh = request.args.get('refresh') in ('1', 'true', 'True')
-        # Debug: verificar qual usuário está sendo usado
+   
         usuario_atual = get_usuario_atual()
         print(f"DEBUG - Carteira: Usuário atual = {usuario_atual}")
-        # Refresh solicitado: atualiza preços/indicadores e ignora cache
+       
         if refresh:
             try:
                 atualizar_precos_indicadores_carteira()
@@ -933,7 +936,7 @@ def api_get_carteira():
                     cache.delete(f"carteira_insights:{usuario_atual}")
             except Exception as _:
                 pass
-        # Cache por usuário (30s)
+
         cache_key = f"carteira:{usuario_atual}" if (usuario_atual and not refresh) else None
         if cache_key and cache:
             cached = cache.get(cache_key)
@@ -956,7 +959,7 @@ def api_refresh_carteira():
         result = atualizar_precos_indicadores_carteira()
         print(f"DEBUG: Resultado do refresh: {result}")
         
-        # Invalida caches relacionados
+        
         try:
             usuario_atual = get_usuario_atual()
             if usuario_atual and cache:
@@ -974,13 +977,12 @@ def api_refresh_carteira():
 
 @server.route("/api/carteira/refresh-indexadores", methods=["POST"])
 def api_refresh_indexadores():
-    """Endpoint específico para atualizar apenas ativos com indexadores"""
+  
     try:
         print("DEBUG: Iniciando refresh específico de indexadores...")
         result = atualizar_precos_indicadores_carteira()
         print(f"DEBUG: Resultado do refresh de indexadores: {result}")
-        
-        # Invalida caches relacionados
+ 
         try:
             usuario_atual = get_usuario_atual()
             if usuario_atual and cache:
@@ -1015,7 +1017,7 @@ def api_carteira_insights():
         for it in itens:
             tipos_map[it.get('tipo') or 'Desconhecido'] = tipos_map.get(it.get('tipo') or 'Desconhecido', 0) + (it.get('valor_total') or 0.0)
 
-        # Percentuais por ativo
+        
         enriched = []
         for it in itens:
             valor = float(it.get('valor_total') or 0.0)
@@ -1050,7 +1052,7 @@ def api_carteira_insights():
         weighted_dy = (soma_valor_dy / total_investido) if total_investido > 0 else None
         weighted_dy_pct = (round(weighted_dy * 100.0, 2) if weighted_dy is not None else None)
 
-        # Médias/contagens de métricas
+    
         def _safe_vals(key):
             vals = [float(it.get(key)) for it in itens if it.get(key) is not None]
             return vals
@@ -1068,7 +1070,7 @@ def api_carteira_insights():
         over_pvp = len([v for v in vals_pvp if v is not None and v >= 3.0])
         negative_roe = len([v for v in vals_roe if v is not None and v < 0.0])
 
-        # Top DY (até 5)
+       
         top_dy = sorted(
             [it for it in itens if it.get('dy') is not None],
             key=lambda x: x.get('dy') or 0.0,
@@ -1084,7 +1086,7 @@ def api_carteira_insights():
             } for it in top_dy
         ]
 
-        # Diversificação (HHI simples)
+  
         shares = [(v / total_investido) for v in tipos_map.values()] if total_investido > 0 else []
         hhi = sum([s*s for s in shares]) if shares else None
 
@@ -1093,11 +1095,11 @@ def api_carteira_insights():
                 'total_investido': total_investido,
                 'num_ativos': num_ativos,
                 'tipos': {k: {'valor': float(v), 'percentual': (float(v)/total_investido*100.0 if total_investido>0 else 0.0)} for k, v in tipos_map.items()},
-                'weighted_dy': weighted_dy,  # fração (compat)
+                'weighted_dy': weighted_dy,  
                 'weighted_dy_pct': weighted_dy_pct,
                 'avg_pl': avg_pl,
                 'avg_pvp': avg_pvp,
-                'avg_roe': avg_roe,  # fração
+                'avg_roe': avg_roe,  
                 'hhi': hhi,
             },
             'concentracao': {
@@ -2295,11 +2297,10 @@ def api_receitas():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ROTA REMOVIDA - Cartões antigos migrados para outros_gastos
+
 @server.route("/api/controle/cartoes", methods=["GET", "POST", "PUT", "DELETE"])
 def api_cartoes():
-    # Esta rota foi removida pois os cartões antigos foram migrados para outros_gastos
-    # Use /api/controle/cartoes-cadastrados para o novo sistema de cartões
+    
     return jsonify({"error": "Rota removida - use /api/controle/cartoes-cadastrados"}), 410
 
 @server.route("/api/controle/outros", methods=["GET", "POST", "PUT", "DELETE"])
@@ -2481,7 +2482,7 @@ def api_evolucao_receitas():
     try:
         periodo = request.args.get('periodo', '6m')
         
-        # Calcular período baseado no filtro
+       
         if periodo == '3m':
             meses = 3
         elif periodo == '6m':
@@ -2491,21 +2492,21 @@ def api_evolucao_receitas():
         else:
             meses = 6
         
-        # Data atual
+      
         hoje = datetime.now()
         evolucao = []
         
         for i in range(meses):
-            # Calcular mês e ano
+
             data_mes = hoje - timedelta(days=30 * i)
             mes = data_mes.month
             ano = data_mes.year
             
-            # Buscar receitas do mês
+          
             df_receitas = carregar_receitas_mes_ano(str(mes).zfill(2), str(ano))
             total_receitas = df_receitas['valor'].sum() if not df_receitas.empty else 0
             
-            # Nome do mês
+
             nome_mes = data_mes.strftime('%b/%Y')
             
             evolucao.append({
@@ -2513,7 +2514,7 @@ def api_evolucao_receitas():
                 "receitas": float(total_receitas)
             })
         
-        # Inverter para mostrar do mais antigo para o mais recente
+       
         evolucao.reverse()
         
         return jsonify(evolucao)
@@ -2597,7 +2598,7 @@ def api_home_resumo():
         total_receitas = df_receitas['valor'].sum() if not df_receitas.empty else 0
         
   
-        # Cartões antigos migrados para outros_gastos
+    
         total_cartoes = 0
         
    
@@ -2689,7 +2690,7 @@ def api_home_resumo():
                 'total': total_receitas,
                 'quantidade': len(receitas)
             },
-            # Cartões antigos migrados para outros_gastos
+            
             'outros': {
                 'registros': outros,
                 'total': total_outros,
@@ -2723,12 +2724,12 @@ def api_home_resumo():
 @server.route("/api/exchange-rate/<symbol>", methods=["GET"])
 def api_get_exchange_rate(symbol):
     try:
-        # Buscar dados de taxa de câmbio usando yfinance
+      
         ticker = yf.Ticker(symbol)
         historico = ticker.history(period='1d')
         
         if historico is not None and not historico.empty:
-            # Pegar o último valor de fechamento
+
             latest_data = historico.iloc[-1]
             return jsonify({
                 "symbol": symbol,
@@ -2925,7 +2926,7 @@ def api_marcar_cartao_pago():
         success = marcar_cartao_como_pago(cartao_id, mes_pagamento, ano_pagamento)
         
         if success:
-            # Invalidar cache para recalcular saldo
+          
             try:
                 if cache:
                     cache.clear()
@@ -2949,7 +2950,7 @@ def api_desmarcar_cartao_pago():
         success = desmarcar_cartao_como_pago(cartao_id)
         
         if success:
-            # Invalidar cache para recalcular saldo
+       
             try:
                 if cache:
                     cache.clear()
@@ -2958,6 +2959,56 @@ def api_desmarcar_cartao_pago():
             return jsonify({"success": True, "message": "Cartão desmarcado como pago e despesa removida"})
         else:
             return jsonify({"error": "Erro ao desmarcar cartão como pago"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ==================== ENDPOINTS DE SIMULAÇÃO ====================
+
+@server.route("/api/simulador/choques", methods=["POST"])
+def api_simulador_choques():
+    
+    try:
+        data = request.get_json()
+        choques_cdi = data.get('choques_cdi', 0)
+        choques_ipca = data.get('choques_ipca', 0)
+        choques_selic = data.get('choques_selic', 0)
+        
+        resultado = simular_choques_indexadores(choques_cdi, choques_ipca, choques_selic)
+        
+        if "error" in resultado:
+            return jsonify(resultado), 400
+            
+        return jsonify(resultado)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/simulador/cenarios", methods=["GET"])
+def api_simulador_cenarios():
+
+    try:
+        cenarios = obter_cenarios_predefinidos()
+        return jsonify({"cenarios": cenarios})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/simulador/monte-carlo", methods=["POST"])
+def api_simulador_monte_carlo():
+    """Endpoint para executar simulação Monte Carlo"""
+    try:
+        data = request.get_json()
+        n_simulacoes = data.get('nSimulacoes', 10000)
+        periodo_anos = data.get('periodoAnos', 5)
+        confianca = data.get('confianca', 95)
+        
+        resultado = executar_monte_carlo(n_simulacoes, periodo_anos, confianca)
+        
+        if "error" in resultado:
+            return jsonify(resultado), 400
+            
+        return jsonify(resultado)
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
