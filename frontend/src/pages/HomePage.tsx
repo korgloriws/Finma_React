@@ -101,33 +101,31 @@ export default function HomePage() {
     return { mes: 12, ano: anoAtual - 1 }
   }, [mesAtual, anoAtual])
 
-  // Carregamento secundário - dados de comparação
+
   const { data: resumoAnterior } = useQuery({
     queryKey: ['home-resumo', user, prev.mes, prev.ano],
     queryFn: () => homeService.getResumo(prev.mes.toString(), prev.ano.toString()),
     retry: 3,
     refetchOnWindowFocus: false,
-    enabled: !!user && !!resumoHome, // Só carrega após resumo principal
-    staleTime: 5 * 60 * 1000, // 5 minutos
+    enabled: !!user && !!resumoHome, 
+    staleTime: 5 * 60 * 1000, 
   })
 
-  // Carregamento sob demanda - histórico da carteira
+  
   const { data: historicoCarteira } = useQuery({
     queryKey: ['carteira-historico', user, filtroPeriodo],
     queryFn: () => carteiraService.getHistorico(filtroPeriodo),
     retry: 3,
     refetchOnWindowFocus: false,
-    enabled: !!user && !!carteira, // Só carrega após carteira principal
-    staleTime: 10 * 60 * 1000, // 10 minutos
+    enabled: !!user && !!carteira, 
+    staleTime: 10 * 60 * 1000, 
   })
 
 
   const receitas = resumoHome?.receitas?.registros || []
   const cartoes = resumoHome?.cartoes?.registros || []
   const outros = resumoHome?.outros?.registros || []
-  // Removido: marmitas não são mais exibidas no gráfico de gastos por categoria
-  // const marmitas = resumoHome?.marmitas?.registros || []
-
+ 
   
   
 
@@ -135,7 +133,7 @@ export default function HomePage() {
 
   const totalInvestido = carteira?.reduce((total: number, ativo: any) => total + (ativo?.valor_total || 0), 0) || 0
   
-  // Debug logs
+  
   console.log('DEBUG HomePage:', {
     loadingCarteira,
     loadingResumo,
@@ -236,11 +234,11 @@ export default function HomePage() {
     return { value, isPositive: change >= 0 }
   }
 
-  // Tendência Carteira (via histórico mensal)
+
   const carteiraTrend = useMemo(() => {
     const arr = historicoCarteira?.carteira_valor as Array<number | null> | undefined
     if (!arr || arr.length < 2) return undefined
-    // pegar os dois últimos valores não-nulos
+ 
     let cur: number | undefined
     let prevVal: number | undefined
     for (let i = arr.length - 1; i >= 0; i--) {
@@ -254,7 +252,7 @@ export default function HomePage() {
     return calcTrend(cur, prevVal)
   }, [historicoCarteira])
 
-  // Totais anteriores para Receitas/Despesas/Saldo
+  
   const totalReceitasAnterior = useMemo(() => {
     const rec = resumoAnterior?.receitas
     if (!rec) return undefined
@@ -292,7 +290,7 @@ export default function HomePage() {
     setAbrirConfigMeta(false)
   }
 
-  // Funções auxiliares para insights brasileiros
+
   const getExposicaoInternacional = () => {
     if (!carteira || carteira.length === 0) return 0
     
@@ -350,7 +348,7 @@ export default function HomePage() {
       })
     }
     
-    // Concentração
+
     const concentracao = getConcentracaoAtivos()
     if (concentracao.maxAtivo > 20) {
       insights.push({
@@ -370,7 +368,7 @@ export default function HomePage() {
       })
     }
     
-    // Exposição internacional
+
     const exposicaoInt = getExposicaoInternacional()
     if (exposicaoInt > 30) {
       insights.push({
@@ -381,7 +379,7 @@ export default function HomePage() {
       })
     }
     
-    // Ativos com indexadores
+
     const ativosIndexados = getAtivosComIndexadores()
     if (ativosIndexados > 0) {
       insights.push({

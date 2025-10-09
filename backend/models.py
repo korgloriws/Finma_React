@@ -373,17 +373,80 @@ def rename_asset_type(old: str, new: str):
     finally:
         conn.close()
 
+def _validate_rf_catalog_item(item: dict):
+    """
+    Valida e converte dados do item de renda fixa
+    Funciona igual em SQLite e PostgreSQL
+    """
+    # Validar campos obrigatórios
+    if not item.get('nome') or not str(item.get('nome')).strip():
+        return { 'valid': False, 'message': 'Nome é obrigatório' }
+    if not item.get('emissor') or not str(item.get('emissor')).strip():
+        return { 'valid': False, 'message': 'Emissor é obrigatório' }
+    if not item.get('tipo') or not str(item.get('tipo')).strip():
+        return { 'valid': False, 'message': 'Tipo é obrigatório' }
+    if not item.get('indexador') or not str(item.get('indexador')).strip():
+        return { 'valid': False, 'message': 'Indexador é obrigatório' }
+    
+    # Validar e converter números
+    try:
+        quantidade_val = float(item.get('quantidade', 0)) if item.get('quantidade') else 0
+        preco_val = float(item.get('preco', 0)) if item.get('preco') else 0
+        taxa_percentual_val = float(item.get('taxa_percentual', 100)) if item.get('taxa_percentual') else 100
+        taxa_fixa_val = float(item.get('taxa_fixa', 0)) if item.get('taxa_fixa') else 0
+    except (ValueError, TypeError):
+        return { 'valid': False, 'message': 'Quantidade, preço e taxas devem ser números válidos' }
+    
+    if quantidade_val <= 0:
+        return { 'valid': False, 'message': 'Quantidade deve ser maior que zero' }
+    if preco_val <= 0:
+        return { 'valid': False, 'message': 'Preço deve ser maior que zero' }
+    if taxa_percentual_val < 0 or taxa_percentual_val > 1000:
+        return { 'valid': False, 'message': 'Taxa percentual deve estar entre 0 e 1000' }
+    if taxa_fixa_val < 0 or taxa_fixa_val > 50:
+        return { 'valid': False, 'message': 'Taxa fixa deve estar entre 0 e 50%' }
+    
+    # Converter booleanos
+    liquidez_diaria = bool(item.get('liquidez_diaria', False))
+    isento_ir = bool(item.get('isento_ir', False))
+    
+    # Preparar dados finais
+    data = {
+        'nome': str(item.get('nome')).strip(),
+        'emissor': str(item.get('emissor')).strip(),
+        'tipo': str(item.get('tipo')).strip(),
+        'indexador': str(item.get('indexador')).strip(),
+        'taxa_percentual': taxa_percentual_val,
+        'taxa_fixa': taxa_fixa_val,
+        'quantidade': quantidade_val,
+        'preco': preco_val,
+        'data_inicio': item.get('data_inicio') or None,
+        'vencimento': item.get('vencimento') or None,
+        'liquidez_diaria': liquidez_diaria,
+        'isento_ir': isento_ir,
+        'observacao': str(item.get('observacao', '')).strip() or None
+    }
+    
+    return { 'valid': True, 'data': data }
+
 def _ensure_rf_catalog_schema():
+    """
+    Cria/verifica schema da tabela rf_catalog com abstração completa
+    Funciona igual em SQLite e PostgreSQL
+    """
     usuario = get_usuario_atual()
     if not usuario:
         print("_ensure_rf_catalog_schema: Usuário não autenticado")
         return False
+    
+    # Schema unificado - funciona em ambos os bancos
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
                 try:
                     print(f"_ensure_rf_catalog_schema: Criando tabela para usuário {usuario}")
+                    # PostgreSQL - usar tipos nativos otimizados
                     c.execute('''
                     CREATE TABLE IF NOT EXISTS rf_catalog (
                         id SERIAL PRIMARY KEY,
@@ -391,26 +454,26 @@ def _ensure_rf_catalog_schema():
                         emissor TEXT,
                         tipo TEXT,
                         indexador TEXT,
-                        taxa_percentual DOUBLE PRECISION,
-                        taxa_fixa DOUBLE PRECISION,
-                        quantidade DOUBLE PRECISION,
-                        preco DOUBLE PRECISION,
-                        data_inicio TEXT,
-                        vencimento TEXT,
-                        liquidez_diaria INTEGER,
-                        isento_ir INTEGER,
+                        taxa_percentual NUMERIC(10,4),
+                        taxa_fixa NUMERIC(10,4),
+                        quantidade NUMERIC(15,2),
+                        preco NUMERIC(15,2),
+                        data_inicio DATE,
+                        vencimento DATE,
+                        liquidez_diaria BOOLEAN DEFAULT FALSE,
+                        isento_ir BOOLEAN DEFAULT FALSE,
                         observacao TEXT,
-                        created_at TEXT,
-                        updated_at TEXT
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
-                    print(f"_ensure_rf_catalog_schema: Tabela criada/verificada com sucesso")
+                    print(f"_ensure_rf_catalog_schema: Tabela PostgreSQL criada/verificada com sucesso")
                     return True
                 except Exception as e:
-                    print(f"Erro ao criar tabela rf_catalog: {e}")
-                    # Tentar dropar e recriar se necessário
+                    print(f"Erro ao criar tabela rf_catalog PostgreSQL: {e}")
+                    # Tentar recriar com fallback
                     try:
-                        print(f"_ensure_rf_catalog_schema: Tentando recriar tabela")
+                        print(f"_ensure_rf_catalog_schema: Tentando recriar tabela PostgreSQL")
                         c.execute('DROP TABLE IF EXISTS rf_catalog')
                         c.execute('''
                             CREATE TABLE rf_catalog (
@@ -419,23 +482,23 @@ def _ensure_rf_catalog_schema():
                                 emissor TEXT,
                                 tipo TEXT,
                                 indexador TEXT,
-                                taxa_percentual DOUBLE PRECISION,
-                                taxa_fixa DOUBLE PRECISION,
-                                quantidade DOUBLE PRECISION,
-                                preco DOUBLE PRECISION,
-                                data_inicio TEXT,
-                                vencimento TEXT,
-                                liquidez_diaria INTEGER,
-                                isento_ir INTEGER,
+                                taxa_percentual NUMERIC(10,4),
+                                taxa_fixa NUMERIC(10,4),
+                                quantidade NUMERIC(15,2),
+                                preco NUMERIC(15,2),
+                                data_inicio DATE,
+                                vencimento DATE,
+                                liquidez_diaria BOOLEAN DEFAULT FALSE,
+                                isento_ir BOOLEAN DEFAULT FALSE,
                                 observacao TEXT,
-                                created_at TEXT,
-                                updated_at TEXT
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                             )
                         ''')
-                        print(f"_ensure_rf_catalog_schema: Tabela recriada com sucesso")
+                        print(f"_ensure_rf_catalog_schema: Tabela PostgreSQL recriada com sucesso")
                         return True
                     except Exception as e2:
-                        print(f"Erro ao recriar tabela rf_catalog: {e2}")
+                        print(f"Erro ao recriar tabela rf_catalog PostgreSQL: {e2}")
                         return False
         finally:
             conn.close()
@@ -444,6 +507,7 @@ def _ensure_rf_catalog_schema():
         conn = sqlite3.connect(db_path, check_same_thread=False)
         try:
             cur = conn.cursor()
+            # SQLite - usar tipos compatíveis com PostgreSQL
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS rf_catalog (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -451,25 +515,30 @@ def _ensure_rf_catalog_schema():
                     emissor TEXT,
                     tipo TEXT,
                     indexador TEXT,
-                    taxa_percentual REAL,
-                    taxa_fixa REAL,
-                    quantidade REAL,
-                    preco REAL,
+                    taxa_percentual NUMERIC,
+                    taxa_fixa NUMERIC,
+                    quantidade NUMERIC,
+                    preco NUMERIC,
                     data_inicio TEXT,
                     vencimento TEXT,
-                    liquidez_diaria INTEGER,
-                    isento_ir INTEGER,
+                    liquidez_diaria INTEGER DEFAULT 0,
+                    isento_ir INTEGER DEFAULT 0,
                     observacao TEXT,
                     created_at TEXT,
                     updated_at TEXT
                 )
             ''')
             conn.commit()
+            print(f"_ensure_rf_catalog_schema: Tabela SQLite criada/verificada com sucesso")
             return True
         finally:
             conn.close()
 
 def rf_catalog_list():
+    """
+    Lista itens do catálogo de renda fixa com abstração completa
+    Funciona igual em SQLite e PostgreSQL
+    """
     usuario = get_usuario_atual()
     if not usuario:
         print("rf_catalog_list: Usuário não autenticado")
@@ -479,28 +548,42 @@ def rf_catalog_list():
     if not schema_created:
         print("rf_catalog_list: Falha ao criar/verificar schema")
         return []
+    
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
                 try:
-                    c.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
+                    # PostgreSQL - usar tipos nativos
+                    c.execute('''
+                        SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, 
+                               quantidade, preco, data_inicio, vencimento, liquidez_diaria, 
+                               isento_ir, observacao 
+                        FROM rf_catalog 
+                        ORDER BY nome ASC
+                    ''')
                     rows = c.fetchall()
                     print(f"rf_catalog_list: Encontrados {len(rows)} itens para usuário {usuario}")
-                    def safe_float(value):
+                    
+                    def safe_convert(value, convert_func):
                         try:
-                            return float(value) if value is not None else None
+                            return convert_func(value) if value is not None else None
                         except (ValueError, TypeError):
                             return None
                     
                     result = [
                         {
-                            'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
-                            'taxa_percentual': safe_float(r[5]),
-                            'taxa_fixa': safe_float(r[6]),
-                            'quantidade': safe_float(r[7]),
-                            'preco': safe_float(r[8]),
-                            'data_inicio': r[9], 'vencimento': r[10],
+                            'id': r[0], 
+                            'nome': r[1], 
+                            'emissor': r[2], 
+                            'tipo': r[3], 
+                            'indexador': r[4],
+                            'taxa_percentual': safe_convert(r[5], float),
+                            'taxa_fixa': safe_convert(r[6], float),
+                            'quantidade': safe_convert(r[7], float),
+                            'preco': safe_convert(r[8], float),
+                            'data_inicio': str(r[9]) if r[9] else None,
+                            'vencimento': str(r[10]) if r[10] else None,
                             'liquidez_diaria': bool(r[11]) if r[11] is not None else False,
                             'isento_ir': bool(r[12]) if r[12] is not None else False,
                             'observacao': r[13]
@@ -509,7 +592,7 @@ def rf_catalog_list():
                     print(f"rf_catalog_list: Retornando {len(result)} itens")
                     return result
                 except Exception as e:
-                    print(f"Erro ao listar rf_catalog: {e}")
+                    print(f"Erro ao listar rf_catalog PostgreSQL: {e}")
                     return []
         finally:
             conn.close()
@@ -518,25 +601,46 @@ def rf_catalog_list():
         conn = sqlite3.connect(db_path, check_same_thread=False)
         try:
             cur = conn.cursor()
-            cur.execute('SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao FROM rf_catalog ORDER BY nome ASC')
+            cur.execute('''
+                SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, 
+                       quantidade, preco, data_inicio, vencimento, liquidez_diaria, 
+                       isento_ir, observacao 
+                FROM rf_catalog 
+                ORDER BY nome ASC
+            ''')
             rows = cur.fetchall()
-            return [
+            
+            def safe_float(value):
+                try:
+                    return float(value) if value is not None else None
+                except (ValueError, TypeError):
+                    return None
+            
+            result = [
                 {
-                    'id': r[0], 'nome': r[1], 'emissor': r[2], 'tipo': r[3], 'indexador': r[4],
-                    'taxa_percentual': float(r[5]) if r[5] is not None else None,
-                    'taxa_fixa': float(r[6]) if r[6] is not None else None,
-                    'quantidade': float(r[7]) if r[7] is not None else None,
-                    'preco': float(r[8]) if r[8] is not None else None,
-                    'data_inicio': r[9], 'vencimento': r[10],
+                    'id': r[0], 
+                    'nome': r[1], 
+                    'emissor': r[2], 
+                    'tipo': r[3], 
+                    'indexador': r[4],
+                    'taxa_percentual': safe_float(r[5]),
+                    'taxa_fixa': safe_float(r[6]),
+                    'quantidade': safe_float(r[7]),
+                    'preco': safe_float(r[8]),
+                    'data_inicio': r[9], 
+                    'vencimento': r[10],
                     'liquidez_diaria': bool(r[11]) if r[11] else False,
                     'isento_ir': bool(r[12]) if r[12] else False,
                     'observacao': r[13]
                 } for r in rows
             ]
+            print(f"rf_catalog_list: Retornando {len(result)} itens SQLite")
+            return result
         finally:
             conn.close()
 
 def rf_catalog_create(item: dict):
+
     usuario = get_usuario_atual()
     if not usuario:
         return { 'success': False, 'message': 'Não autenticado' }
@@ -544,56 +648,38 @@ def rf_catalog_create(item: dict):
     schema_created = _ensure_rf_catalog_schema()
     if not schema_created:
         return { 'success': False, 'message': 'Falha ao criar/verificar schema' }
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
-    # Validar campos obrigatórios
-    if not item.get('nome'):
-        return { 'success': False, 'message': 'Nome é obrigatório' }
-    if not item.get('emissor'):
-        return { 'success': False, 'message': 'Emissor é obrigatório' }
-    if not item.get('tipo'):
-        return { 'success': False, 'message': 'Tipo é obrigatório' }
-    if not item.get('indexador'):
-        return { 'success': False, 'message': 'Indexador é obrigatório' }
-    try:
-        quantidade_val = float(item.get('quantidade', 0)) if item.get('quantidade') else 0
-        preco_val = float(item.get('preco', 0)) if item.get('preco') else 0
-    except (ValueError, TypeError):
-        return { 'success': False, 'message': 'Quantidade e preço devem ser números válidos' }
+
+    validation_result = _validate_rf_catalog_item(item)
+    if not validation_result['valid']:
+        return { 'success': False, 'message': validation_result['message'] }
     
-    if not item.get('quantidade') or item.get('quantidade') == '' or quantidade_val <= 0:
-        return { 'success': False, 'message': 'Quantidade é obrigatória e deve ser maior que zero' }
-    if not item.get('preco') or item.get('preco') == '' or preco_val <= 0:
-        return { 'success': False, 'message': 'Preço é obrigatório e deve ser maior que zero' }
+
+    data = validation_result['data']
     
-    # Converter taxas para números
-    taxa_percentual_val = float(item.get('taxa_percentual', 100)) if item.get('taxa_percentual') else 100
-    taxa_fixa_val = float(item.get('taxa_fixa', 0)) if item.get('taxa_fixa') else 0
-    
-    fields = (
-        item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'),
-        taxa_percentual_val, taxa_fixa_val, quantidade_val, preco_val,
-        item.get('data_inicio'), item.get('vencimento'),
-        1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, now
-    )
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
                 try:
-                    print(f"rf_catalog_create: Inserindo item para usuário {usuario}")
-                    print(f"rf_catalog_create: Fields: {fields}")
+
                     c.execute('''
-                        INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, 
+                                               quantidade, preco, data_inicio, vencimento, liquidez_diaria, 
+                                               isento_ir, observacao)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id
-                    ''', fields)
+                    ''', (
+                        data['nome'], data['emissor'], data['tipo'], data['indexador'],
+                        data['taxa_percentual'], data['taxa_fixa'], data['quantidade'], data['preco'],
+                        data['data_inicio'], data['vencimento'], data['liquidez_diaria'], 
+                        data['isento_ir'], data['observacao']
+                    ))
                     new_id = c.fetchone()[0]
-                    print(f"rf_catalog_create: Item criado com ID {new_id}")
+                    print(f"rf_catalog_create: Item PostgreSQL criado com ID {new_id}")
                     return { 'success': True, 'id': new_id }
                 except Exception as e:
-                    print(f"Erro ao inserir em rf_catalog: {e}")
-                    print(f"Fields: {fields}")
+                    print(f"Erro ao inserir em rf_catalog PostgreSQL: {e}")
                     return { 'success': False, 'message': f'Erro ao inserir: {str(e)}' }
         finally:
             conn.close()
@@ -602,16 +688,31 @@ def rf_catalog_create(item: dict):
         conn = sqlite3.connect(db_path, check_same_thread=False)
         try:
             cur = conn.cursor()
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # SQLite - usar tipos compatíveis
             cur.execute('''
-                INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, quantidade, preco, data_inicio, vencimento, liquidez_diaria, isento_ir, observacao, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            ''', fields)
+                INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, 
+                                       quantidade, preco, data_inicio, vencimento, liquidez_diaria, 
+                                       isento_ir, observacao, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                data['nome'], data['emissor'], data['tipo'], data['indexador'],
+                data['taxa_percentual'], data['taxa_fixa'], data['quantidade'], data['preco'],
+                data['data_inicio'], data['vencimento'], data['liquidez_diaria'], 
+                data['isento_ir'], data['observacao'], now, now
+            ))
             conn.commit()
-            return { 'success': True, 'id': cur.lastrowid }
+            new_id = cur.lastrowid
+            print(f"rf_catalog_create: Item SQLite criado com ID {new_id}")
+            return { 'success': True, 'id': new_id }
         finally:
             conn.close()
 
 def rf_catalog_update(id_: int, item: dict):
+    """
+    Atualiza item no catálogo de renda fixa com abstração completa
+    Funciona igual em SQLite e PostgreSQL
+    """
     usuario = get_usuario_atual()
     if not usuario:
         return { 'success': False, 'message': 'Não autenticado' }
@@ -619,18 +720,37 @@ def rf_catalog_update(id_: int, item: dict):
     schema_created = _ensure_rf_catalog_schema()
     if not schema_created:
         return { 'success': False, 'message': 'Falha ao criar/verificar schema' }
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Validação unificada
+    validation_result = _validate_rf_catalog_item(item)
+    if not validation_result['valid']:
+        return { 'success': False, 'message': validation_result['message'] }
+    
+    # Preparar dados com conversão segura
+    data = validation_result['data']
+    
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
                 try:
+                    print(f"rf_catalog_update: Atualizando item {id_} PostgreSQL para usuário {usuario}")
+                    # PostgreSQL - usar tipos nativos
                     c.execute('''
-                        UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s WHERE id=%s
-                    ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('quantidade'), item.get('preco'), item.get('data_inicio'), item.get('vencimento'), 1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, id_))
+                        UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, 
+                                             taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, 
+                                             liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=CURRENT_TIMESTAMP
+                        WHERE id=%s
+                    ''', (
+                        data['nome'], data['emissor'], data['tipo'], data['indexador'],
+                        data['taxa_percentual'], data['taxa_fixa'], data['quantidade'], data['preco'],
+                        data['data_inicio'], data['vencimento'], data['liquidez_diaria'], 
+                        data['isento_ir'], data['observacao'], id_
+                    ))
+                    print(f"rf_catalog_update: Item {id_} PostgreSQL atualizado com sucesso")
                     return { 'success': True }
                 except Exception as e:
-                    print(f"Erro ao atualizar rf_catalog: {e}")
+                    print(f"Erro ao atualizar rf_catalog PostgreSQL: {e}")
                     return { 'success': False, 'message': f'Erro ao atualizar: {str(e)}' }
         finally:
             conn.close()
@@ -639,15 +759,27 @@ def rf_catalog_update(id_: int, item: dict):
         conn = sqlite3.connect(db_path, check_same_thread=False)
         try:
             cur = conn.cursor()
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # SQLite - usar tipos compatíveis
             cur.execute('''
-                UPDATE rf_catalog SET nome=?, emissor=?, tipo=?, indexador=?, taxa_percentual=?, taxa_fixa=?, quantidade=?, preco=?, data_inicio=?, vencimento=?, liquidez_diaria=?, isento_ir=?, observacao=?, updated_at=? WHERE id=?
-            ''', (item.get('nome'), item.get('emissor'), item.get('tipo'), item.get('indexador'), item.get('taxa_percentual'), item.get('taxa_fixa'), item.get('quantidade'), item.get('preco'), item.get('data_inicio'), item.get('vencimento'), 1 if item.get('liquidez_diaria') else 0, 1 if item.get('isento_ir') else 0, item.get('observacao'), now, id_))
+                UPDATE rf_catalog SET nome=?, emissor=?, tipo=?, indexador=?, taxa_percentual=?, 
+                                     taxa_fixa=?, quantidade=?, preco=?, data_inicio=?, vencimento=?, 
+                                     liquidez_diaria=?, isento_ir=?, observacao=?, updated_at=?
+                WHERE id=?
+            ''', (
+                data['nome'], data['emissor'], data['tipo'], data['indexador'],
+                data['taxa_percentual'], data['taxa_fixa'], data['quantidade'], data['preco'],
+                data['data_inicio'], data['vencimento'], data['liquidez_diaria'], 
+                data['isento_ir'], data['observacao'], now, id_
+            ))
             conn.commit()
+            print(f"rf_catalog_update: Item {id_} SQLite atualizado com sucesso")
             return { 'success': True }
         finally:
             conn.close()
 
 def rf_catalog_delete(id_: int):
+
     usuario = get_usuario_atual()
     if not usuario:
         return { 'success': False, 'message': 'Não autenticado' }
@@ -655,15 +787,18 @@ def rf_catalog_delete(id_: int):
     schema_created = _ensure_rf_catalog_schema()
     if not schema_created:
         return { 'success': False, 'message': 'Falha ao criar/verificar schema' }
+    
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
                 try:
+                    print(f"rf_catalog_delete: Removendo item {id_} PostgreSQL para usuário {usuario}")
                     c.execute('DELETE FROM rf_catalog WHERE id=%s', (id_,))
+                    print(f"rf_catalog_delete: Item {id_} PostgreSQL removido com sucesso")
                     return { 'success': True }
                 except Exception as e:
-                    print(f"Erro ao deletar rf_catalog: {e}")
+                    print(f"Erro ao deletar rf_catalog PostgreSQL: {e}")
                     return { 'success': False, 'message': f'Erro ao deletar: {str(e)}' }
         finally:
             conn.close()
@@ -672,8 +807,10 @@ def rf_catalog_delete(id_: int):
         conn = sqlite3.connect(db_path, check_same_thread=False)
         try:
             cur = conn.cursor()
+            print(f"rf_catalog_delete: Removendo item {id_} SQLite para usuário {usuario}")
             cur.execute('DELETE FROM rf_catalog WHERE id=?', (id_,))
             conn.commit()
+            print(f"rf_catalog_delete: Item {id_} SQLite removido com sucesso")
             return { 'success': True }
         finally:
             conn.close()
