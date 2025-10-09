@@ -760,7 +760,7 @@ def rf_catalog_update(id_: int, item: dict):
         try:
             cur = conn.cursor()
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            # SQLite - usar tipos compatíveis
+
             cur.execute('''
                 UPDATE rf_catalog SET nome=?, emissor=?, tipo=?, indexador=?, taxa_percentual=?, 
                                      taxa_fixa=?, quantidade=?, preco=?, data_inicio=?, vencimento=?, 
@@ -1954,6 +1954,19 @@ def obter_taxas_indexadores():
             selic = selic * 100  # Converter para percentual
             print(f"DEBUG: SELIC convertido de {selic/100}% para {selic}%")
         
+        # FALLBACK: Se não conseguir obter taxas, usar valores padrão
+        if not cdi or cdi < 5.0:  # CDI muito baixo, usar padrão
+            cdi = 13.65
+            print(f"DEBUG: CDI não obtido ou muito baixo, usando padrão: {cdi}%")
+        
+        if not selic or selic < 5.0:  # SELIC muito baixo, usar padrão
+            selic = 13.75
+            print(f"DEBUG: SELIC não obtido ou muito baixo, usando padrão: {selic}%")
+        
+        if not ipca or ipca < 0.1:  # IPCA muito baixo, usar padrão
+            ipca = 0.5  # IPCA mensal padrão
+            print(f"DEBUG: IPCA não obtido ou muito baixo, usando padrão: {ipca}%")
+        
         return {
             "SELIC": selic,
             "CDI": cdi,
@@ -1963,29 +1976,182 @@ def obter_taxas_indexadores():
         print(f"Erro ao obter taxas dos indexadores: {e}")
         return {"SELIC": None, "CDI": None, "IPCA": None}
 
+def _obter_taxa_media_historica(indexador, data_inicio):
+    """Obtém a taxa média histórica de um indexador desde uma data específica"""
+    try:
+        import requests
+        from datetime import datetime, timedelta
+        
+        # Determinar série do indexador
+        if indexador == "CDI":
+            serie_id = 12
+        elif indexador == "SELIC":
+            serie_id = 432
+        else:
+            return 13.0  # Taxa padrão se não reconhecer
+        
+        # Calcular período desde a data de início
+        data_fim = datetime.now()
+        dias_periodo = (data_fim - data_inicio).days
+        
+        if dias_periodo <= 0:
+            return 13.0
+        
+        # Buscar dados históricos do Banco Central
+        try:
+            url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{serie_id}/dados"
+            params = {
+                'formato': 'json',
+                'dataInicial': data_inicio.strftime('%d/%m/%Y'),
+                'dataFinal': data_fim.strftime('%d/%m/%Y')
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            dados = response.json()
+            
+            if not dados:
+                print(f"DEBUG: Nenhum dado histórico encontrado para {indexador}")
+                return 13.0
+            
+            # Calcular média das taxas
+            taxas = []
+            for item in dados:
+                try:
+                    taxa = float(item['valor'])
+                    if taxa > 0:
+                        taxas.append(taxa)
+                except (ValueError, KeyError):
+                    continue
+            
+            if not taxas:
+                print(f"DEBUG: Nenhuma taxa válida encontrada para {indexador}")
+                return 13.0
+            
+            # Calcular média ponderada (mais recente tem mais peso)
+            if len(taxas) == 1:
+                taxa_media = taxas[0]
+            else:
+                # Peso decrescente para dados mais recentes
+                pesos = [i + 1 for i in range(len(taxas))]
+                taxa_media = sum(t * p for t, p in zip(taxas, pesos)) / sum(pesos)
+            
+            print(f"DEBUG: Taxa média histórica {indexador} desde {data_inicio.strftime('%Y-%m-%d')}: {taxa_media:.2f}%")
+            return taxa_media
+            
+        except Exception as e:
+            print(f"DEBUG: Erro ao buscar dados históricos para {indexador}: {e}")
+            return 13.0
+            
+    except Exception as e:
+        print(f"DEBUG: Erro geral ao obter taxa média histórica: {e}")
+        return 13.0
+
+def _obter_ipca_medio_historico(data_inicio):
+    """Obtém o IPCA médio mensal histórico desde uma data específica"""
+    try:
+        import requests
+        from datetime import datetime
+        
+        # Buscar IPCA mensal (série 433)
+        try:
+            url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados"
+            params = {
+                'formato': 'json',
+                'dataInicial': data_inicio.strftime('%d/%m/%Y'),
+                'dataFinal': datetime.now().strftime('%d/%m/%Y')
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            dados = response.json()
+            
+            if not dados:
+                print("DEBUG: Nenhum dado histórico de IPCA encontrado")
+                return 0.5  # IPCA mensal padrão
+            
+            # Calcular média do IPCA mensal
+            ipcas = []
+            for item in dados:
+                try:
+                    ipca = float(item['valor'])
+                    if ipca > 0:
+                        ipcas.append(ipca)
+                except (ValueError, KeyError):
+                    continue
+            
+            if not ipcas:
+                print("DEBUG: Nenhum IPCA válido encontrado")
+                return 0.5
+            
+            ipca_medio = sum(ipcas) / len(ipcas)
+            print(f"DEBUG: IPCA médio mensal desde {data_inicio.strftime('%Y-%m-%d')}: {ipca_medio:.2f}%")
+            return ipca_medio
+            
+        except Exception as e:
+            print(f"DEBUG: Erro ao buscar IPCA histórico: {e}")
+            return 0.5
+            
+    except Exception as e:
+        print(f"DEBUG: Erro geral ao obter IPCA médio: {e}")
+        return 0.5
+
+def _obter_taxa_atual_indexador(indexador):
+    """Obtém a taxa atual de um indexador usando a mesma abordagem que já funciona"""
+    try:
+        import requests
+        from datetime import datetime, timedelta
+        
+        # Determinar série do indexador
+        if indexador == "CDI":
+            serie_id = 12
+        elif indexador == "SELIC":
+            serie_id = 432
+        elif indexador == "IPCA":
+            serie_id = 433
+        else:
+            return 13.0  # Taxa padrão se não reconhecer
+        
+        # Buscar dados atuais do Banco Central
+        try:
+            url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{serie_id}/dados/ultimos/1?formato=json"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            dados = response.json()
+            
+            if not dados:
+                print(f"DEBUG: Nenhum dado atual encontrado para {indexador}")
+                return 13.0 if indexador in ["CDI", "SELIC"] else 0.5
+            
+            # Obter a taxa mais recente
+            taxa = float(dados[0]['valor'])
+            
+            # Para IPCA, já vem em percentual mensal
+            if indexador == "IPCA":
+                print(f"DEBUG: IPCA atual: {taxa}% mensal")
+                return taxa
+            
+            # Para CDI/SELIC, verificar se está em decimal
+            if taxa < 1.0:  # Se está em decimal, converter para percentual
+                taxa = taxa * 100
+                print(f"DEBUG: {indexador} convertido de decimal para percentual: {taxa}%")
+            
+            print(f"DEBUG: {indexador} atual: {taxa}% a.a.")
+            return taxa
+            
+        except Exception as e:
+            print(f"DEBUG: Erro ao buscar taxa atual para {indexador}: {e}")
+            return 13.0 if indexador in ["CDI", "SELIC"] else 0.5
+            
+    except Exception as e:
+        print(f"DEBUG: Erro geral ao obter taxa atual: {e}")
+        return 13.0 if indexador in ["CDI", "SELIC"] else 0.5
+
 def calcular_preco_com_indexador(preco_inicial, indexador, indexador_pct, data_adicao):
-    """Calcula o preço atual baseado no indexador e percentual"""
+    """Calcula o preço atual baseado no indexador e percentual - USANDO ABORDAGEM QUE JÁ FUNCIONA"""
     try:
         if not preco_inicial or not indexador or not indexador_pct:
             return preco_inicial
-        
-        taxas = obter_taxas_indexadores()
-        taxa_atual = taxas.get(indexador)
-        
-        if not taxa_atual:
-            print(f"DEBUG: Taxa não encontrada para {indexador}")
-            return preco_inicial
-        
-        # CORREÇÃO: Se a taxa está muito baixa, usar valores padrão
-        if taxa_atual < 1.0:
-            print(f"DEBUG: Taxa {indexador} muito baixa ({taxa_atual}%), usando valor padrão")
-            if indexador == "CDI":
-                taxa_atual = 13.65  # CDI típico atual
-            elif indexador == "SELIC":
-                taxa_atual = 13.75  # SELIC típico atual
-            print(f"DEBUG: Taxa {indexador} ajustada para {taxa_atual}%")
-        
-        print(f"DEBUG: Calculando para {indexador} com taxa {taxa_atual}% e percentual {indexador_pct}%")
         
         # Converter data de adição para datetime
         from datetime import datetime
@@ -2001,59 +2167,64 @@ def calcular_preco_com_indexador(preco_inicial, indexador, indexador_pct, data_a
         if dias_desde_adicao <= 0:
             return preco_inicial
         
-        print(f"DEBUG: Dias desde adição: {dias_desde_adicao}")
+        print(f"DEBUG: Calculando valorização para {indexador} desde {data_adicao} ({dias_desde_adicao} dias)")
         
         # Aplicar percentual do indexador (ex: 110% = 1.1)
         fator_percentual = indexador_pct / 100
         if fator_percentual <= 0:
             return preco_inicial
 
-        # Calcular fator de correção
+        # USAR A MESMA ABORDAGEM QUE JÁ FUNCIONA NA TELA DE DETALHES
         if indexador in ["SELIC", "CDI"]:
-            # CDI ou SELIC: taxa anual aplicada diariamente
-            taxa_anual_decimal = taxa_atual / 100
-            taxa_diaria = (1 + taxa_anual_decimal) ** (1/252) - 1
-            taxa_diaria_indexada = taxa_diaria * fator_percentual
-            fator_correcao = (1 + taxa_diaria_indexada) ** dias_desde_adicao
-            print(
-                f"DEBUG: {indexador} anual={taxa_atual}% | diaria252={taxa_diaria:.8f} | diaria_indexada={taxa_diaria_indexada:.8f} | fator={fator_correcao:.6f}"
-            )
-        elif indexador == "CDI+":
-            # CDI+: CDI + taxa fixa prefixada
-            taxa_anual_decimal = taxa_atual / 100
-            taxa_fixa_decimal = (indexador_pct or 0) / 100.0
-            taxa_anual_total = taxa_anual_decimal + taxa_fixa_decimal
-            taxa_diaria = (1 + taxa_anual_total) ** (1/252) - 1
+            # Usar a mesma lógica da função obter_historico_carteira_comparado
+            taxa_anual = _obter_taxa_atual_indexador(indexador)
+            print(f"DEBUG: Taxa atual {indexador}: {taxa_anual}% a.a.")
+            
+            # Aplicar taxa anual com percentual do indexador
+            taxa_anual_indexada = taxa_anual * fator_percentual
+            taxa_diaria = (1 + taxa_anual_indexada / 100) ** (1/252) - 1
             fator_correcao = (1 + taxa_diaria) ** dias_desde_adicao
-            print(
-                f"DEBUG: CDI+ CDI={taxa_atual}% + fixa={indexador_pct}% = {taxa_anual_total*100:.4f}% | diaria={taxa_diaria:.8f} | fator={fator_correcao:.6f}"
-            )
+            
+            print(f"DEBUG: {indexador} taxa={taxa_anual}% | indexada={taxa_anual_indexada}% | diaria={taxa_diaria:.8f} | fator={fator_correcao:.6f}")
+            
+        elif indexador == "CDI+":
+            # CDI+: CDI atual + taxa fixa prefixada
+            taxa_cdi_atual = _obter_taxa_atual_indexador("CDI")
+            taxa_fixa_anual = (indexador_pct or 0)
+            taxa_total_anual = taxa_cdi_atual + taxa_fixa_anual
+            
+            taxa_diaria = (1 + taxa_total_anual / 100) ** (1/252) - 1
+            fator_correcao = (1 + taxa_diaria) ** dias_desde_adicao
+            
+            print(f"DEBUG: CDI+ CDI={taxa_cdi_atual}% + fixa={taxa_fixa_anual}% = {taxa_total_anual}% | diaria={taxa_diaria:.8f} | fator={fator_correcao:.6f}")
+            
         elif indexador == "IPCA":
-            # Para IPCA: usar taxa mensal acumulada (série 433 é mensal)
-            meses_desde_adicao = dias_desde_adicao / 30.44  # média de dias por mês
-            taxa_mensal_decimal = (taxa_atual / 100) * fator_percentual
-            fator_correcao = (1 + taxa_mensal_decimal) ** meses_desde_adicao
-            print(
-                f"DEBUG: IPCA mensal={taxa_atual}% | mensal_indexada={taxa_mensal_decimal*100:.4f}% | meses={meses_desde_adicao:.2f} | fator={fator_correcao:.6f}"
-            )
+            # Para IPCA: usar IPCA atual mensal
+            ipca_atual_mensal = _obter_taxa_atual_indexador("IPCA")
+            meses_desde_adicao = dias_desde_adicao / 30.44
+            taxa_mensal_indexada = ipca_atual_mensal * fator_percentual
+            fator_correcao = (1 + taxa_mensal_indexada / 100) ** meses_desde_adicao
+            
+            print(f"DEBUG: IPCA mensal={ipca_atual_mensal}% | indexada={taxa_mensal_indexada}% | meses={meses_desde_adicao:.2f} | fator={fator_correcao:.6f}")
+            
         elif indexador == "IPCA+":
-            # IPCA+: IPCA + taxa fixa prefixada
-            meses_desde_adicao = dias_desde_adicao / 30.44  # média de dias por mês
-            taxa_mensal_decimal = taxa_atual / 100
-            taxa_fixa_mensal_decimal = (indexador_pct or 0) / 100.0 / 12  # converter taxa anual para mensal
-            taxa_mensal_total = taxa_mensal_decimal + taxa_fixa_mensal_decimal
-            fator_correcao = (1 + taxa_mensal_total) ** meses_desde_adicao
-            print(
-                f"DEBUG: IPCA+ IPCA={taxa_atual}% + fixa={indexador_pct}%a.a. = {taxa_mensal_total*100:.4f}%a.m. | meses={meses_desde_adicao:.2f} | fator={fator_correcao:.6f}"
-            )
+            # IPCA+: IPCA atual + taxa fixa prefixada
+            ipca_atual_mensal = _obter_taxa_atual_indexador("IPCA")
+            taxa_fixa_mensal = (indexador_pct or 0) / 12  # converter anual para mensal
+            taxa_mensal_total = ipca_atual_mensal + taxa_fixa_mensal
+            meses_desde_adicao = dias_desde_adicao / 30.44
+            fator_correcao = (1 + taxa_mensal_total / 100) ** meses_desde_adicao
+            
+            print(f"DEBUG: IPCA+ IPCA={ipca_atual_mensal}% + fixa_mensal={taxa_fixa_mensal}% = {taxa_mensal_total}% | meses={meses_desde_adicao:.2f} | fator={fator_correcao:.6f}")
+            
         elif indexador == "PREFIXADO":
-            # Para PREFIXADO: usar taxa anual fixa (% a.a.) informada em indexador_pct
+
             taxa_anual_decimal = (indexador_pct or 0) / 100.0
             taxa_diaria = (1 + taxa_anual_decimal) ** (1/365) - 1
             fator_correcao = (1 + taxa_diaria) ** dias_desde_adicao
-            print(
-                f"DEBUG: PREFIXADO anual={indexador_pct}% | diaria365={taxa_diaria:.8f} | fator={fator_correcao:.6f}"
-            )
+            
+            print(f"DEBUG: PREFIXADO anual={indexador_pct}% | diaria={taxa_diaria:.8f} | fator={fator_correcao:.6f}")
+            
         else:
             print(f"DEBUG: Indexador não reconhecido: {indexador}")
             return preco_inicial
@@ -2069,7 +2240,7 @@ def calcular_preco_com_indexador(preco_inicial, indexador, indexador_pct, data_a
         return preco_inicial
 
 def atualizar_precos_indicadores_carteira():
-    """Atualiza preços de ativos com indexadores e busca dados via yfinance para outros"""
+  
     try:
         usuario = get_usuario_atual()
         if not usuario:
@@ -2393,6 +2564,14 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
             
             conn.commit()
             conn.close()
+        
+        # Se o ativo tem indexador, forçar atualização dos preços
+        if indexador and indexador_pct:
+            print(f"DEBUG: Ativo com indexador adicionado, forçando atualização de preços")
+            try:
+                atualizar_precos_indicadores_carteira()
+            except Exception as e:
+                print(f"DEBUG: Erro ao atualizar preços após adicionar ativo: {e}")
         
         return {"success": True, "message": mensagem}
     except Exception as e:

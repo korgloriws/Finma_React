@@ -230,16 +230,29 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
       let precoFinal: number | undefined
       let dataCompraFinal: string | undefined
       
+      console.log('DEBUG: Determinação do preço:', {
+        tipoPreco,
+        preco,
+        precoAtual,
+        precoHistorico,
+        dataCompra
+      })
+      
       if (tipoPreco === 'atual' && precoAtual) {
         precoFinal = precoAtual.preco
         dataCompraFinal = undefined // Não usar data_aplicacao para preço atual
+        console.log('DEBUG: Usando preço atual:', precoFinal)
       } else if (tipoPreco === 'historico' && precoHistorico) {
         precoFinal = precoHistorico.preco
         dataCompraFinal = dataCompra // Usar data da compra para preço histórico
+        console.log('DEBUG: Usando preço histórico:', precoFinal)
       } else if (tipoPreco === 'manual' && preco) {
         precoFinal = parseFloat(preco.replace(',', '.'))
         dataCompraFinal = undefined // Não usar data_aplicacao para preço manual
+        console.log('DEBUG: Usando preço manual:', precoFinal)
       }
+      
+      console.log('DEBUG: Preço final determinado:', precoFinal)
       
       const idxPct = indexadorPct ? parseFloat(indexadorPct.replace(',', '.')) : undefined
       
@@ -481,11 +494,13 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
                                     setQuantidade(it.quantidade ? String(it.quantidade) : '')
                                     setPreco(it.preco ? String(it.preco) : '')
                                     setIndexador((it.indexador || '') as any)
-                                    setIndexadorPct(it.taxa_percentual != null ? String(it.taxa_percentual) : '')
+                                    setIndexadorPct(it.taxa_fixa != null ? String(it.taxa_fixa) : '')
                                     setVencimento(it.vencimento || '')
                                     setLiquidezDiaria(!!it.liquidez_diaria)
                                     setIsentoIr(!!it.isento_ir)
                                     setDataAplicacao(it.data_inicio || '')
+                                    // Definir tipo de preço como manual para usar o valor da modal
+                                    setTipoPreco('manual')
                                     
                                 
                                     setStep(7)
