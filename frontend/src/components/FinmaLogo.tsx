@@ -19,9 +19,9 @@ export default function FinmaLogo({
   
 
   const sizeClasses = {
-    sm: 'h-20 sm:h-24 md:h-28 lg:h-32 xl:h-36', // Reduzido verticalmente para logo wide
-    md: 'h-24 sm:h-28 md:h-32 lg:h-36 xl:h-40 2xl:h-44', // Reduzido verticalmente para logo wide
-    lg: 'h-28 sm:h-32 md:h-36 lg:h-40 xl:h-44 2xl:h-48' // Reduzido verticalmente para logo wide
+    sm: 'h-20 sm:h-24 md:h-28 lg:h-32 xl:h-36', 
+    md: 'h-24 sm:h-28 md:h-32 lg:h-36 xl:h-40 2xl:h-44', 
+    lg: 'h-28 sm:h-32 md:h-36 lg:h-40 xl:h-44 2xl:h-48' 
   }
   
   const textSizes = {
@@ -34,13 +34,13 @@ export default function FinmaLogo({
   const getImageDimensions = () => {
     switch (size) {
       case 'sm':
-        return { width: '160px', height: '80px', minHeight: '80px' } // Wide: mais larga, menos alta
+        return { width: '160px', height: '80px', minHeight: '80px' } 
       case 'md':
-        return { width: '200px', height: '100px', minHeight: '100px' } // Wide: mais larga, menos alta
+        return { width: '200px', height: '100px', minHeight: '100px' } 
       case 'lg':
-        return { width: '240px', height: '120px', minHeight: '120px' } // Wide: mais larga, menos alta
+        return { width: '240px', height: '120px', minHeight: '120px' } 
       default:
-        return { width: '200px', height: '100px', minHeight: '100px' } // Wide: mais larga, menos alta
+        return { width: '200px', height: '100px', minHeight: '100px' } 
     }
   }
 

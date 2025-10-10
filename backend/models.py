@@ -2582,7 +2582,7 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                 
                 cursor.execute(
                     'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-                    (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], preco_compra, valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, bool(isento_ir) if isento_ir is not None else None, bool(liquidez_diaria) if liquidez_diaria is not None else None) 
+                    (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], preco_compra, valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, (1 if isento_ir else 0) if isento_ir is not None else None, (1 if liquidez_diaria else 0) if liquidez_diaria is not None else None) 
                 )
                 mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
                 try:
