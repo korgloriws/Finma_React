@@ -2544,7 +2544,7 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
 
               
                     resultado_movimentacao = registrar_movimentacao(data_adicao, info["ticker"], info["nome_completo"], 
-                                     quantidade_val, info["preco_atual"], "compra")
+                                     quantidade_val, info["preco_atual"], "compra", conn)
                     if not resultado_movimentacao["success"]:
                         return resultado_movimentacao
 
@@ -2679,7 +2679,7 @@ def remover_ativo_carteira(id):
                     if not ativo:
                         return {"success": False, "message": "Ativo não encontrado"}
                     data = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    resultado_movimentacao = registrar_movimentacao(data, ativo[0], ativo[1], ativo[2], ativo[3], "venda")
+                    resultado_movimentacao = registrar_movimentacao(data, ativo[0], ativo[1], ativo[2], ativo[3], "venda", conn)
                     if not resultado_movimentacao["success"]:
                         return resultado_movimentacao
                     cursor.execute('DELETE FROM carteira WHERE id = %s', (id,))
@@ -2758,7 +2758,7 @@ def atualizar_ativo_carteira(id, quantidade=None, preco_atual=None, preco_compra
                         data_mov = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         preco_mov = float(preco_atual) if preco_atual is not None else current_price
                         try:
-                            registrar_movimentacao(data_mov, str(ativo[0] or ''), str(ativo[1] or ''), abs(qty_diff), preco_mov, tipo_mov)
+                            registrar_movimentacao(data_mov, str(ativo[0] or ''), str(ativo[1] or ''), abs(qty_diff), preco_mov, tipo_mov, conn)
                         except Exception as _:
                             pass
                 conn.commit()
@@ -3411,10 +3411,9 @@ def registrar_movimentacao(data, ticker, nome_completo, quantidade, preco, tipo,
         should_close = False
         local_conn = None
         if _is_postgres():
-           
-            pg_conn = _pg_conn_for_user(usuario)
-            try:
-                with pg_conn.cursor() as cursor:
+            # Se uma conexão foi passada, usar ela; senão criar nova
+            if conn is not None:
+                with conn.cursor() as cursor:
                     cursor.execute('''
                         CREATE TABLE IF NOT EXISTS movimentacoes (
                             id SERIAL PRIMARY KEY,
@@ -3430,8 +3429,27 @@ def registrar_movimentacao(data, ticker, nome_completo, quantidade, preco, tipo,
                         'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
                         (data, ticker, nome_completo, quantidade, preco, tipo)
                     )
-            finally:
-                pg_conn.close()
+            else:
+                pg_conn = _pg_conn_for_user(usuario)
+                try:
+                    with pg_conn.cursor() as cursor:
+                        cursor.execute('''
+                            CREATE TABLE IF NOT EXISTS movimentacoes (
+                                id SERIAL PRIMARY KEY,
+                                data TEXT NOT NULL,
+                                ticker TEXT NOT NULL,
+                                nome_completo TEXT,
+                                quantidade NUMERIC NOT NULL,
+                                preco NUMERIC NOT NULL,
+                                tipo TEXT NOT NULL
+                            )
+                        ''')
+                        cursor.execute(
+                            'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
+                            (data, ticker, nome_completo, quantidade, preco, tipo)
+                        )
+                finally:
+                    pg_conn.close()
         else:
             if conn is None:
                 db_path = get_db_path(usuario, "carteira")
