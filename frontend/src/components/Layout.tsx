@@ -1,4 +1,4 @@
-import React, { ReactNode, useState } from 'react'
+import React, { ReactNode, useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -28,6 +28,7 @@ export default function Layout({ children }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [isScrolled, setIsScrolled] = useState(false)
 
   const handleLogout = async () => {
     try {
@@ -36,6 +37,17 @@ export default function Layout({ children }: LayoutProps) {
       console.error('Erro ao fazer logout:', error)
     }
   }
+
+  // Detectar scroll para esconder barra superior mobile
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+      setIsScrolled(scrollTop > 50)
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   const searchItems: Array<{ label: string; path: string; keywords: string; params?: Record<string, string> }> = [
     // Páginas principais
@@ -228,9 +240,9 @@ export default function Layout({ children }: LayoutProps) {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         {/* Mobile top bar */}
-        <div className={`md:hidden sticky top-0 z-30 border-b border-border px-4 py-3 flex items-center justify-between shadow-sm ${
-          isDark ? 'bg-black' : 'bg-card'
-        }`}>
+        <div className={`md:hidden sticky top-0 z-30 border-b border-border px-4 py-3 flex items-center justify-between shadow-sm transition-transform duration-300 ${
+          isScrolled ? '-translate-y-full' : 'translate-y-0'
+        } ${isDark ? 'bg-black' : 'bg-card'}`}>
           <button
             onClick={() => setMobileMenuOpen(true)}
             className="p-2 rounded hover:bg-accent text-muted-foreground"

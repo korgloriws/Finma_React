@@ -17,11 +17,11 @@ export default function FinmaLogo({
 }: FinmaLogoProps) {
   const { isDark } = useTheme()
   
-  // Tamanhos padronizados e bem maiores (triplicados)
+  // Tamanhos otimizados para preencher melhor o espaço
   const sizeClasses = {
-    sm: 'h-48 sm:h-60 md:h-72 lg:h-84 xl:h-96',
-    md: 'h-60 sm:h-72 md:h-84 lg:h-96 xl:h-108 2xl:h-120', 
-    lg: 'h-72 sm:h-84 md:h-96 lg:h-108 xl:h-120 2xl:h-132'
+    sm: 'h-32 sm:h-36 md:h-40 lg:h-44 xl:h-48', // Mobile: maior para preencher
+    md: 'h-36 sm:h-40 md:h-44 lg:h-48 xl:h-52 2xl:h-56', // Mobile: maior para preencher
+    lg: 'h-40 sm:h-44 md:h-48 lg:h-52 xl:h-56 2xl:h-60' // Mobile: maior para preencher
   }
   
   const textSizes = {
@@ -30,17 +30,17 @@ export default function FinmaLogo({
     lg: 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl'
   }
 
-  // Dimensões fixas para garantir consistência (triplicadas)
+  // Dimensões otimizadas para preencher melhor o espaço
   const getImageDimensions = () => {
     switch (size) {
       case 'sm':
-        return { width: '192px', height: '192px', minHeight: '192px' }
+        return { width: '128px', height: '128px', minHeight: '128px' } // Mobile: maior para preencher
       case 'md':
-        return { width: '240px', height: '240px', minHeight: '240px' }
+        return { width: '144px', height: '144px', minHeight: '144px' } // Mobile: maior para preencher
       case 'lg':
-        return { width: '288px', height: '288px', minHeight: '288px' }
+        return { width: '160px', height: '160px', minHeight: '160px' } // Mobile: maior para preencher
       default:
-        return { width: '240px', height: '240px', minHeight: '240px' }
+        return { width: '144px', height: '144px', minHeight: '144px' } // Mobile: maior para preencher
     }
   }
 
