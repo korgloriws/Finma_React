@@ -56,6 +56,11 @@ export interface AtivoCarteira {
   roe: number | null
   indexador?: 'CDI' | 'IPCA' | 'SELIC' | 'PREFIXADO' | 'CDI+' | 'IPCA+' | null
   indexador_pct?: number | null
+  vencimento?: string | null
+  status_vencimento?: {
+    status: 'vence_em_dias' | 'vence_em_poucos_dias' | 'vence_hoje' | 'vencido' | 'sem_vencimento' | 'erro_calculo'
+    dias: number | null
+  } | null
 }
 
 export interface Movimentacao {

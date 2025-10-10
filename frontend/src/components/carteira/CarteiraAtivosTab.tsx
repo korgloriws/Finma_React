@@ -12,6 +12,7 @@ import {
 import { useState } from 'react'
 import { formatCurrency, formatDividendYield, formatPercentage, formatNumber } from '../../utils/formatters'
 import TickerWithLogo from '../TickerWithLogo'
+import VencimentoStatus from '../VencimentoStatus'
 import B3ImportModal from './B3ImportModal'
 import { B3Ativo } from '../../utils/excelParser'
 
@@ -190,6 +191,9 @@ function TabelaAtivosPorTipo({
                     <th className="px-3 py-2 text-left font-medium text-sm">ROE</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">P/L</th>
                     <th className="px-3 py-2 text-left font-medium text-sm">P/VP</th>
+                    {tipo.toLowerCase().includes('renda fixa') && (
+                      <th className="px-3 py-2 text-left font-medium text-sm">Vencimento</th>
+                    )}
                     <th className="px-3 py-2 text-left font-medium text-sm">Ações</th>
                   </tr>
                 </thead>
@@ -309,6 +313,14 @@ function TabelaAtivosPorTipo({
                         </td>
                         <td className="px-3 py-2 text-sm">{formatNumber(ativo?.pl)}</td>
                         <td className="px-3 py-2 text-sm">{formatNumber(ativo?.pvp)}</td>
+                        {tipo.toLowerCase().includes('renda fixa') && (
+                          <td className="px-3 py-2 text-sm">
+                            <VencimentoStatus 
+                              status_vencimento={ativo?.status_vencimento} 
+                              vencimento={ativo?.vencimento} 
+                            />
+                          </td>
+                        )}
                         <td className="px-3 py-2">
                           <div className="flex gap-1">
                             {editingId === ativo?.id ? (
@@ -497,6 +509,19 @@ function TabelaAtivosPorTipo({
                           </div>
                         </div>
                       </div>
+
+                      {/* Status de Vencimento para Renda Fixa */}
+                      {tipo.toLowerCase().includes('renda fixa') && ativo?.status_vencimento && (
+                        <div className="pt-2 sm:pt-3 border-t border-border">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-muted-foreground">Vencimento</span>
+                            <VencimentoStatus 
+                              status_vencimento={ativo?.status_vencimento} 
+                              vencimento={ativo?.vencimento} 
+                            />
+                          </div>
+                        </div>
+                      )}
 
                       {/* Informações Adicionais (se houver) */}
                       {(ativo?.indexador || precoMedio != null || valorizacaoAbs != null || rendimentoPct != null) && (

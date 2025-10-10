@@ -2379,14 +2379,42 @@ def atualizar_precos_indicadores_carteira():
     except Exception as e:
         return {"success": False, "message": f"Erro ao atualizar carteira: {str(e)}"}
 
+def _calcular_status_vencimento(vencimento):
+    """
+    Calcula o status de vencimento para títulos de renda fixa
+    Retorna: {'status': 'vence_em_X_dias' ou 'vencido', 'dias': X}
+    """
+    if not vencimento:
+        return {'status': 'sem_vencimento', 'dias': None}
+    
+    try:
+        from datetime import datetime, date
+        hoje = date.today()
+        
+        # Converter vencimento para date se for string
+        if isinstance(vencimento, str):
+            vencimento_date = datetime.strptime(vencimento[:10], '%Y-%m-%d').date()
+        else:
+            vencimento_date = vencimento
+        
+        # Calcular diferença em dias
+        dias_restantes = (vencimento_date - hoje).days
+        
+        if dias_restantes < 0:
+            return {'status': 'vencido', 'dias': abs(dias_restantes)}
+        elif dias_restantes == 0:
+            return {'status': 'vence_hoje', 'dias': 0}
+        elif dias_restantes <= 30:
+            return {'status': 'vence_em_poucos_dias', 'dias': dias_restantes}
+        else:
+            return {'status': 'vence_em_dias', 'dias': dias_restantes}
+            
+    except Exception as e:
+        print(f"DEBUG: Erro ao calcular vencimento: {e}")
+        return {'status': 'erro_calculo', 'dias': None}
+
 def _determinar_preco_compra(ticker, preco_inicial, data_aplicacao, tipo):
-    """
-    Determina o preço de compra baseado em 3 opções:
-    1. Preço manual (preco_inicial fornecido)
-    2. Preço histórico (data_aplicacao + yfinance)
-    3. Preço atual (yfinance atual)
-    """
-    # 1. Se preço manual fornecido, usar ele
+
     if preco_inicial is not None and float(preco_inicial) > 0:
         print(f"DEBUG: Usando preço manual para {ticker}: {preco_inicial}")
         return float(preco_inicial)
@@ -2507,27 +2535,27 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
             conn = _pg_conn_for_user(usuario)
             try:
                 with conn.cursor() as cursor:
-                    # Verificar se o ativo já existe na carteira
+                    
                     cursor.execute(
                         'SELECT id, quantidade FROM carteira WHERE ticker = %s',
                         (info["ticker"],)
                     )
                     ativo_existente = cursor.fetchone()
 
-                    # Registrar movimentação usando a função dedicada
+              
                     resultado_movimentacao = registrar_movimentacao(data_adicao, info["ticker"], info["nome_completo"], 
                                      quantidade_val, info["preco_atual"], "compra")
                     if not resultado_movimentacao["success"]:
                         return resultado_movimentacao
 
                     if ativo_existente:
-                        # Ativo já existe - somar quantidades (PM ponderado)
+                        
                         id_existente, quantidade_existente = ativo_existente
                         try:
                             quantidade_existente = float(quantidade_existente)
                         except Exception:
                             quantidade_existente = float(quantidade_existente or 0)
-                        # Obter preço_medio atual se existir
+ 
                         try:
                             cursor.execute('SELECT preco_medio FROM carteira WHERE id = %s', (id_existente,))
                             pm_row = cursor.fetchone()
@@ -2543,14 +2571,13 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                         )
                         mensagem = f"Quantidade do ativo {info['ticker']} atualizada: {quantidade_existente} + {quantidade} = {nova_quantidade}"
                     else:
-                        # Ativo não existe - criar novo registro
-                        # Adicionar coluna preco_compra se não existir
+
                         try:
                             cursor.execute('ALTER TABLE carteira ADD COLUMN preco_compra DECIMAL(10,2)')
                         except Exception:
-                            pass  # Coluna já existe
+                            pass  
                         
-                # Usar o preço de compra definitivo (já determinado pela função _determinar_preco_compra)
+
                 preco_compra = preco_compra_definitivo
                 
                 cursor.execute(
@@ -2569,11 +2596,11 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
             conn = sqlite3.connect(db_path, check_same_thread=False)
             cursor = conn.cursor()
             
-            # Verificar se o ativo já existe na carteira
+          
             cursor.execute('SELECT id, quantidade FROM carteira WHERE ticker = ?', (info["ticker"],))
             ativo_existente = cursor.fetchone()
             
-            # Registrar movimentação
+
             resultado_movimentacao = registrar_movimentacao(data_adicao, info["ticker"], info["nome_completo"], 
                                  quantidade_val, info["preco_atual"], "compra", conn)
             if not resultado_movimentacao["success"]:
@@ -2581,7 +2608,7 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                 return resultado_movimentacao
             
             if ativo_existente:
-                # Ativo já existe - somar quantidades (PM ponderado)
+               
                 id_existente, quantidade_existente = ativo_existente
                 try:
                     quantidade_existente = float(quantidade_existente)
@@ -2603,13 +2630,13 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                 mensagem = f"Quantidade do ativo {info['ticker']} atualizada: {quantidade_existente} + {quantidade} = {nova_quantidade}"
             else:
                
-                # Adicionar coluna preco_compra se não existir
+ 
                 try:
                     cursor.execute('ALTER TABLE carteira ADD COLUMN preco_compra REAL')
                 except Exception:
-                    pass  # Coluna já existe
+                    pass  
                 
-                # Usar o preço de compra definitivo (já determinado pela função _determinar_preco_compra)
+
                 preco_compra = preco_compra_definitivo
                 
                 cursor.execute('''
@@ -3063,7 +3090,7 @@ def obter_carteira():
                 with conn.cursor() as cursor:
                     cursor.execute('''
                         SELECT id, ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total,
-                               data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct
+                               data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria
                         FROM carteira
                         ORDER BY valor_total DESC
                     ''')
@@ -3073,6 +3100,14 @@ def obter_carteira():
             ativos = []
             for row in rows:
                 preco_compra = float(row[5]) if row[5] is not None else None
+                vencimento = row[16] if len(row) > 16 else None
+                tipo = row[8] if len(row) > 8 else "Desconhecido"
+                
+
+                status_vencimento = None
+                if tipo and "renda fixa" in tipo.lower() and vencimento:
+                    status_vencimento = _calcular_status_vencimento(vencimento)
+                
                 ativos.append({
                     "id": row[0],
                     "ticker": row[1],
@@ -3082,13 +3117,15 @@ def obter_carteira():
                     "preco_compra": preco_compra,
                     "valor_total": float(row[6]) if row[6] is not None else 0,
                     "data_adicao": row[7],
-                    "tipo": row[8],
+                    "tipo": tipo,
                     "dy": float(row[9]) if row[9] is not None else None,
                     "pl": float(row[10]) if row[10] is not None else None,
                     "pvp": float(row[11]) if row[11] is not None else None,
                     "roe": float(row[12]) if row[12] is not None else None,
                     "indexador": row[13],
                     "indexador_pct": float(row[14]) if (len(row) > 14 and row[14] is not None) else None,
+                    "vencimento": vencimento,
+                    "status_vencimento": status_vencimento,
                 })
             return ativos
         db_path = get_db_path(usuario, "carteira")
@@ -3096,7 +3133,7 @@ def obter_carteira():
         cursor = conn.cursor()
         cursor.execute('''
             SELECT id, ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total,
-                   data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct
+                   data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria
             FROM carteira
             ORDER BY valor_total DESC
         ''')
@@ -3105,6 +3142,14 @@ def obter_carteira():
         for row in cursor.fetchall():
             row_len = len(row)
             preco_compra = row[5] if row_len > 5 else None
+            vencimento = row[16] if row_len > 16 else None
+            tipo = row[8] if row_len > 8 else "Desconhecido"
+            
+            # Calcular status de vencimento para renda fixa
+            status_vencimento = None
+            if tipo and "renda fixa" in tipo.lower() and vencimento:
+                status_vencimento = _calcular_status_vencimento(vencimento)
+            
             ativos.append({
                 "id": row[0],
                 "ticker": row[1],
@@ -3114,13 +3159,15 @@ def obter_carteira():
                 "preco_compra": preco_compra,
                 "valor_total": row[6] if row_len > 6 else row[5],
                 "data_adicao": row[7] if row_len > 7 else row[6],
-                "tipo": row[8] if row_len > 8 else row[7],
+                "tipo": tipo,
                 "dy": row[9] if row_len > 9 else row[8],
                 "pl": row[10] if row_len > 10 else row[9],
                 "pvp": row[11] if row_len > 11 else row[10],
                 "roe": row[12] if row_len > 12 else row[11],
                 "indexador": row[13] if row_len > 13 else row[12],
                 "indexador_pct": row[14] if row_len > 14 else row[13],
+                "vencimento": vencimento,
+                "status_vencimento": status_vencimento,
             })
         
         conn.close()
