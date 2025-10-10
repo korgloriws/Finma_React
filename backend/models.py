@@ -2535,6 +2535,18 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
             conn = _pg_conn_for_user(usuario)
             try:
                 with conn.cursor() as cursor:
+                    # Garantir que todas as colunas existam no PostgreSQL
+                    try:
+                        cursor.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS preco_compra NUMERIC')
+                        cursor.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS indexador TEXT')
+                        cursor.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS indexador_pct NUMERIC')
+                        cursor.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS data_aplicacao TEXT')
+                        cursor.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS vencimento TEXT')
+                        cursor.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS isento_ir BOOLEAN')
+                        cursor.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS liquidez_diaria BOOLEAN')
+                        cursor.execute('ALTER TABLE carteira ADD COLUMN IF NOT EXISTS preco_medio NUMERIC')
+                    except Exception as e:
+                        print(f"DEBUG: Erro ao adicionar colunas (pode ser normal se já existirem): {e}")
                     
                     cursor.execute(
                         'SELECT id, quantidade FROM carteira WHERE ticker = %s',
@@ -2542,14 +2554,14 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                     )
                     ativo_existente = cursor.fetchone()
 
-              
+                    # Registrar movimentação
                     resultado_movimentacao = registrar_movimentacao(data_adicao, info["ticker"], info["nome_completo"], 
                                      quantidade_val, info["preco_atual"], "compra", conn)
                     if not resultado_movimentacao["success"]:
                         return resultado_movimentacao
 
                     if ativo_existente:
-                        
+                        # Ativo já existe, atualizar quantidade
                         id_existente, quantidade_existente = ativo_existente
                         try:
                             quantidade_existente = float(quantidade_existente)
@@ -2571,24 +2583,17 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                         )
                         mensagem = f"Quantidade do ativo {info['ticker']} atualizada: {quantidade_existente} + {quantidade} = {nova_quantidade}"
                     else:
-
-                        try:
-                            cursor.execute('ALTER TABLE carteira ADD COLUMN preco_compra DECIMAL(10,2)')
-                        except Exception:
-                            pass  
+                        # Novo ativo - adicionar todas as colunas necessárias
+                        preco_compra = preco_compra_definitivo
                         
-
-                preco_compra = preco_compra_definitivo
-                
-                cursor.execute(
-                    'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-                    (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], preco_compra, valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, (1 if isento_ir else 0) if isento_ir is not None else None, (1 if liquidez_diaria else 0) if liquidez_diaria is not None else None) 
-                )
-                mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
-                try:
+                        cursor.execute(
+                            'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                            (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], preco_compra, valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) 
+                        )
+                        mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
+                    
+                    # CRÍTICO: Fazer commit da transação no PostgreSQL
                     conn.commit()
-                except Exception:
-                    pass
             finally:
                 conn.close()
         else:
@@ -3429,6 +3434,8 @@ def registrar_movimentacao(data, ticker, nome_completo, quantidade, preco, tipo,
                         'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
                         (data, ticker, nome_completo, quantidade, preco, tipo)
                     )
+                    # CRÍTICO: Commit da movimentação no PostgreSQL
+                    conn.commit()
             else:
                 pg_conn = _pg_conn_for_user(usuario)
                 try:
@@ -3448,6 +3455,8 @@ def registrar_movimentacao(data, ticker, nome_completo, quantidade, preco, tipo,
                             'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
                             (data, ticker, nome_completo, quantidade, preco, tipo)
                         )
+                        # CRÍTICO: Commit da movimentação no PostgreSQL
+                        pg_conn.commit()
                 finally:
                     pg_conn.close()
         else:
