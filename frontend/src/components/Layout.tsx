@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Moon, Sun, BarChart3, Wallet, Calculator, Home, Search, LogOut, User, Menu, X, TrendingUp, BookOpen, DollarSign } from 'lucide-react'
+import FinmaLogo from './FinmaLogo'
 
 interface LayoutProps {
   children: ReactNode
@@ -90,9 +91,11 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar desktop */}
-      <div className="hidden md:flex w-64 bg-card border-r border-border shadow-lg flex-col h-screen sticky top-0 overflow-hidden">
+      <div className={`hidden md:flex w-64 border-r border-border shadow-lg flex-col h-screen sticky top-0 overflow-hidden ${
+        isDark ? 'bg-black' : 'bg-card'
+      }`}>
         <div className="p-6">
-          <h1 className="text-2xl font-bold text-foreground">Finma</h1>
+          <FinmaLogo size="md" showText={false} className="mb-4 justify-center" />
           <hr className="my-4 border-border" />
           {/* User Info */}
           <div className="flex items-center gap-2 mb-4 p-2 bg-accent/50 rounded-lg">
@@ -156,9 +159,11 @@ export default function Layout({ children }: LayoutProps) {
             className="absolute inset-0 bg-black/50"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 w-72 max-w-[85%] bg-card border-r border-border shadow-xl p-4 flex flex-col overflow-y-auto">
+          <div className={`absolute inset-y-0 left-0 w-72 max-w-[85%] border-r border-border shadow-xl p-4 flex flex-col overflow-y-auto ${
+            isDark ? 'bg-black' : 'bg-card'
+          }`}>
             <div className="flex items-center justify-between mb-4">
-              <h1 className="text-xl font-bold text-foreground">FinMa</h1>
+              <FinmaLogo size="sm" showText={false} />
               <button
                 onClick={() => setMobileMenuOpen(false)}
                 className="p-2 rounded hover:bg-accent text-muted-foreground"
@@ -223,7 +228,9 @@ export default function Layout({ children }: LayoutProps) {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         {/* Mobile top bar */}
-        <div className="md:hidden sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
+        <div className={`md:hidden sticky top-0 z-30 border-b border-border px-4 py-3 flex items-center justify-between shadow-sm ${
+          isDark ? 'bg-black' : 'bg-card'
+        }`}>
           <button
             onClick={() => setMobileMenuOpen(true)}
             className="p-2 rounded hover:bg-accent text-muted-foreground"
@@ -231,7 +238,7 @@ export default function Layout({ children }: LayoutProps) {
           >
             <Menu size={18} />
           </button>
-          <h1 className="text-lg font-bold text-foreground">Finma</h1>
+          <FinmaLogo size="sm" showText={false} />
           <button
             onClick={toggleTheme}
             className="p-2 rounded hover:bg-accent text-muted-foreground"
