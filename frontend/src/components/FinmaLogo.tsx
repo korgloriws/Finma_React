@@ -1,8 +1,8 @@
 import { useTheme } from '../contexts/ThemeContext'
 
 // Importar as logos
-import logoClaro from '../assets/1760098125752.jpg'
-import logoEscuro from '../assets/1760098250909.jpg'
+import logoClaro from '../assets/1760101826967.jpg'
+import logoEscuro from '../assets/1760101899780.jpg'
 
 interface FinmaLogoProps {
   size?: 'sm' | 'md' | 'lg'
@@ -17,11 +17,11 @@ export default function FinmaLogo({
 }: FinmaLogoProps) {
   const { isDark } = useTheme()
   
-  // Tamanhos otimizados para preencher melhor o espaço
+
   const sizeClasses = {
-    sm: 'h-32 sm:h-36 md:h-40 lg:h-44 xl:h-48', // Mobile: maior para preencher
-    md: 'h-36 sm:h-40 md:h-44 lg:h-48 xl:h-52 2xl:h-56', // Mobile: maior para preencher
-    lg: 'h-40 sm:h-44 md:h-48 lg:h-52 xl:h-56 2xl:h-60' // Mobile: maior para preencher
+    sm: 'h-20 sm:h-24 md:h-28 lg:h-32 xl:h-36', // Reduzido verticalmente para logo wide
+    md: 'h-24 sm:h-28 md:h-32 lg:h-36 xl:h-40 2xl:h-44', // Reduzido verticalmente para logo wide
+    lg: 'h-28 sm:h-32 md:h-36 lg:h-40 xl:h-44 2xl:h-48' // Reduzido verticalmente para logo wide
   }
   
   const textSizes = {
@@ -30,17 +30,17 @@ export default function FinmaLogo({
     lg: 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl'
   }
 
-  // Dimensões otimizadas para preencher melhor o espaço
+
   const getImageDimensions = () => {
     switch (size) {
       case 'sm':
-        return { width: '128px', height: '128px', minHeight: '128px' } // Mobile: maior para preencher
+        return { width: '160px', height: '80px', minHeight: '80px' } // Wide: mais larga, menos alta
       case 'md':
-        return { width: '144px', height: '144px', minHeight: '144px' } // Mobile: maior para preencher
+        return { width: '200px', height: '100px', minHeight: '100px' } // Wide: mais larga, menos alta
       case 'lg':
-        return { width: '160px', height: '160px', minHeight: '160px' } // Mobile: maior para preencher
+        return { width: '240px', height: '120px', minHeight: '120px' } // Wide: mais larga, menos alta
       default:
-        return { width: '144px', height: '144px', minHeight: '144px' } // Mobile: maior para preencher
+        return { width: '200px', height: '100px', minHeight: '100px' } // Wide: mais larga, menos alta
     }
   }
 
@@ -56,15 +56,16 @@ export default function FinmaLogo({
           minHeight: dimensions.minHeight
         }}
       >
-        <img 
-          src={isDark ? logoEscuro : logoClaro} 
-          alt="Finma" 
-          className="w-full h-full object-contain object-center finma-logo"
-          style={{
-            maxWidth: '100%',
-            maxHeight: '100%'
-          }}
-        />
+           <img
+             src={isDark ? logoEscuro : logoClaro}
+             alt="Finma"
+             className="w-full h-full object-contain object-center finma-logo"
+             style={{
+               maxWidth: '100%',
+               maxHeight: '100%',
+               objectFit: 'contain'
+             }}
+           />
       </div>
       {showText && (
         <h1 className={`${textSizes[size]} font-bold text-foreground`}>
