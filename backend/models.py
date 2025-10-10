@@ -2552,12 +2552,12 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                         
                 # Usar o preço de compra definitivo (já determinado pela função _determinar_preco_compra)
                 preco_compra = preco_compra_definitivo
-                        
-                        cursor.execute(
-                            'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-                        (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], preco_compra, valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, bool(isento_ir) if isento_ir is not None else None, bool(liquidez_diaria) if liquidez_diaria is not None else None) 
-                        )
-                        mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
+                
+                cursor.execute(
+                    'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                    (info["ticker"], info["nome_completo"], quantidade_val, info["preco_atual"], preco_compra, valor_total, data_adicao, info["tipo"], info.get("dy"), info.get("pl"), info.get("pvp"), info.get("roe"), indexador, indexador_pct, data_aplicacao, vencimento, bool(isento_ir) if isento_ir is not None else None, bool(liquidez_diaria) if liquidez_diaria is not None else None) 
+                )
+                mensagem = f"Ativo {info['ticker']} adicionado com sucesso"
                 try:
                     conn.commit()
                 except Exception:
