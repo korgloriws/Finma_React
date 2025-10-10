@@ -952,6 +952,19 @@ def api_get_carteira():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@server.route("/api/carteira/migrar-precos", methods=["POST"])
+def api_migrar_precos_compra():
+    """API para executar migração única de preços de compra (executar apenas uma vez)"""
+    try:
+        from models import migrar_preco_compra_existente
+        resultado = migrar_preco_compra_existente()
+        if resultado["success"]:
+            return jsonify({"message": f"Migração concluída. {resultado['migrados']} ativos migrados."}), 200
+        else:
+            return jsonify({"error": resultado["message"]}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @server.route("/api/carteira/refresh", methods=["POST"])
 def api_refresh_carteira():
     try:

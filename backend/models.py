@@ -2210,7 +2210,7 @@ def calcular_preco_com_indexador(preco_inicial, indexador, indexador_pct, data_a
         elif indexador == "IPCA+":
             # IPCA+: IPCA atual + taxa fixa prefixada
             ipca_atual_mensal = _obter_taxa_atual_indexador("IPCA")
-            taxa_fixa_mensal = (indexador_pct or 0) / 12  # converter anual para mensal
+            taxa_fixa_mensal = (indexador_pct or 0) / 12  
             taxa_mensal_total = ipca_atual_mensal + taxa_fixa_mensal
             meses_desde_adicao = dias_desde_adicao / 30.44
             fator_correcao = (1 + taxa_mensal_total / 100) ** meses_desde_adicao
@@ -2379,17 +2379,76 @@ def atualizar_precos_indicadores_carteira():
     except Exception as e:
         return {"success": False, "message": f"Erro ao atualizar carteira: {str(e)}"}
 
+def _determinar_preco_compra(ticker, preco_inicial, data_aplicacao, tipo):
+    """
+    Determina o preço de compra baseado em 3 opções:
+    1. Preço manual (preco_inicial fornecido)
+    2. Preço histórico (data_aplicacao + yfinance)
+    3. Preço atual (yfinance atual)
+    """
+    # 1. Se preço manual fornecido, usar ele
+    if preco_inicial is not None and float(preco_inicial) > 0:
+        print(f"DEBUG: Usando preço manual para {ticker}: {preco_inicial}")
+        return float(preco_inicial)
+    
+    # 2. Se data de aplicação fornecida, buscar preço histórico
+    if data_aplicacao:
+        try:
+            from datetime import datetime, timedelta
+            base_date = datetime.strptime(str(data_aplicacao)[:10], '%Y-%m-%d').date()
+            start = base_date - timedelta(days=14)
+            end = base_date + timedelta(days=1)
+            
+            # Normalizar ticker para yfinance
+            t = ticker.strip().upper()
+            t_yf = t + '.SA' if ('-' not in t and '.' not in t and len(t) <= 6) else t
+            
+            hist = yf.Ticker(t_yf).history(start=start.isoformat(), end=end.isoformat())
+            if hist is not None and not hist.empty:
+                close_val = None
+                for idx, row in hist[::-1].iterrows():
+                    d = idx.date()
+                    if d <= base_date:
+                        close_val = float(row.get('Close') or row.get('Adj Close') or 0)
+                        break
+                if close_val and close_val > 0:
+                    print(f"DEBUG: Usando preço histórico para {ticker} em {data_aplicacao}: {close_val}")
+                    return close_val
+        except Exception as e:
+            print(f"DEBUG: Erro ao buscar preço histórico para {ticker}: {e}")
+    
+    # 3. Buscar preço atual do yfinance
+    try:
+        info = obter_informacoes_ativo(ticker)
+        if info and info.get('preco_atual'):
+            preco_atual = float(info['preco_atual'])
+            if preco_atual > 0:
+                print(f"DEBUG: Usando preço atual para {ticker}: {preco_atual}")
+                return preco_atual
+    except Exception as e:
+        print(f"DEBUG: Erro ao buscar preço atual para {ticker}: {e}")
+    
+    # 4. Fallback: 0.0 (será tratado como erro)
+    print(f"DEBUG: Não foi possível determinar preço para {ticker}, usando 0.0")
+    return 0.0
+
 def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, nome_personalizado=None, indexador=None, indexador_pct=None, data_aplicacao=None, vencimento=None, isento_ir=None, liquidez_diaria=None):
 
     try:
+        # Determinar preço de compra usando a nova lógica
+        preco_compra_definitivo = _determinar_preco_compra(ticker, preco_inicial, data_aplicacao, tipo)
+        
+        # Se não conseguiu determinar preço, retornar erro
+        if preco_compra_definitivo <= 0:
+            return {"success": False, "message": f"Não foi possível determinar o preço de compra para {ticker}. Verifique se o ticker existe ou forneça um preço manual."}
+        
         info = obter_informacoes_ativo(ticker)
         if not info:
             # Fallback: criar ativo manual
-            preco_base = float(preco_inicial) if preco_inicial is not None else 0.0
             info = {
                 "ticker": (ticker or "").upper(),
                 "nome_completo": nome_personalizado or (ticker or "Personalizado").upper(),
-                "preco_atual": preco_base,
+                "preco_atual": preco_compra_definitivo,  # Usar preço de compra como atual inicialmente
                 "tipo": tipo or "Personalizado",
                 "dy": None,
                 "pl": None,
@@ -2491,8 +2550,8 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                         except Exception:
                             pass  # Coluna já existe
                         
-                        # Usar preco_inicial como preco_compra se fornecido
-                        preco_compra = preco_inicial if preco_inicial is not None else info["preco_atual"]
+                # Usar o preço de compra definitivo (já determinado pela função _determinar_preco_compra)
+                preco_compra = preco_compra_definitivo
                         
                         cursor.execute(
                             'INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total, data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
@@ -2550,8 +2609,8 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
                 except Exception:
                     pass  # Coluna já existe
                 
-                # Usar preco_inicial como preco_compra se fornecido
-                preco_compra = preco_inicial if preco_inicial is not None else info["preco_atual"]
+                # Usar o preço de compra definitivo (já determinado pela função _determinar_preco_compra)
+                preco_compra = preco_compra_definitivo
                 
                 cursor.execute('''
                     INSERT INTO carteira (ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total, 
@@ -2908,12 +2967,18 @@ def compute_goals_projection(goal: dict):
         'roadmap': roadmap,
     }
 def migrar_preco_compra_existente():
-    
+    """
+    MIGRAÇÃO ÚNICA: Executa apenas uma vez para corrigir ativos existentes
+    NÃO deve ser chamada automaticamente - apenas manualmente quando necessário
+    """
     try:
         usuario = get_usuario_atual()
         if not usuario:
-            return
+            return {"success": False, "message": "Usuário não autenticado"}
 
+        print(f"DEBUG: Iniciando migração única de preco_compra para usuário {usuario}")
+        migrados = 0
+        
         if _is_postgres():
             conn = _pg_conn_for_user(usuario)
             try:
@@ -2937,6 +3002,7 @@ def migrar_preco_compra_existente():
                                 UPDATE carteira SET preco_compra = %s WHERE id = %s
                             ''', (preco_compra, ativo_id))
                             print(f"DEBUG: Migrado preco_compra para {ticker}: {preco_compra}")
+                            migrados += 1
                     
                     conn.commit()
             finally:
@@ -2965,12 +3031,17 @@ def migrar_preco_compra_existente():
                             UPDATE carteira SET preco_compra = ? WHERE id = ?
                         ''', (preco_compra, ativo_id))
                         print(f"DEBUG: Migrado preco_compra para {ticker}: {preco_compra}")
+                        migrados += 1
                 
                 conn.commit()
             finally:
                 conn.close()
+        
+        print(f"DEBUG: Migração concluída. {migrados} ativos migrados.")
+        return {"success": True, "migrados": migrados}
     except Exception as e:
         print(f"Erro na migração de preco_compra: {e}")
+        return {"success": False, "message": str(e)}
 
 def obter_carteira():
 
@@ -2982,8 +3053,7 @@ def obter_carteira():
         
         try:
             _ensure_indexador_schema()
-            # Migrar preco_compra para ativos existentes
-            migrar_preco_compra_existente()
+            # REMOVIDO: migrar_preco_compra_existente() - causava reescrita de preços
         except Exception:
             pass
 

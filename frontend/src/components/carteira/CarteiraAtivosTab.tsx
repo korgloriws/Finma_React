@@ -654,18 +654,17 @@ export default function CarteiraAtivosTab({
 
   const handleB3Import = async (ativos: B3Ativo[]) => {
     try {
-      // Converter ativos B3 para formato de compras da carteira
+     
       const compras = ativos.map(ativo => {
-        // Para renda fixa e tesouro, usar valor total como preço unitário
-        // Para ações e FIIs, usar preço médio da B3 (valor histórico)
+
         const precoUnitario = ativo.tipo.includes('Renda Fixa') || ativo.tipo === 'Tesouro Direto' 
-          ? ativo.valorTotal  // Para renda fixa, valor total = preço unitário
-          : ativo.precoMedio // Para ações/FIIs, usar preço histórico da B3
+          ? ativo.valorTotal  
+          : ativo.precoMedio 
 
         return {
           ticker: ativo.ticker,
           quantidade: ativo.quantidade,
-          preco: precoUnitario, // Usar valor histórico da B3, não valor atual do yfinance
+          preco: precoUnitario, 
           tipo: ativo.tipo,
           data_aplicacao: ativo.dataAplicacao || new Date().toISOString().split('T')[0],
           vencimento: ativo.vencimento || '',
@@ -675,7 +674,7 @@ export default function CarteiraAtivosTab({
         }
       })
 
-      // Adicionar cada ativo como uma compra
+
       for (const compra of compras) {
         console.log('Adicionando compra:', compra)
         await adicionarMutation.mutateAsync({
