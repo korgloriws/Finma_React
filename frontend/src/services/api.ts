@@ -106,6 +106,25 @@ export const ativoService = {
     const response = await api.get(`/exchange-rate/${symbol}`)
     return response.data
   },
+
+  getFiiMetadata: async (ticker: string): Promise<{
+    ticker: string
+    tipo?: string
+    segmento?: string
+    vacancia?: number
+    num_cotistas?: number
+    gestora?: string
+    fonte?: string
+  } | null> => {
+    try {
+      const normalizedTicker = normalizeTicker(ticker)
+      const response = await api.get(`/fii-metadata/${normalizedTicker}`)
+      return response.data
+    } catch (error) {
+      console.error('Erro ao buscar metadados de FII:', error)
+      return null
+    }
+  },
 }
 
 export const carteiraService = {

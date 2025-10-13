@@ -260,7 +260,7 @@ export default function DetalhesVisaoGeralTab({
                   {fiiInfo?.tipo && (
                     <span
                       className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full border bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/10 dark:text-purple-300 dark:border-purple-800 text-xs"
-                      title={`Tipo de FII: ${fiiInfo?.tipo}`}
+                      title={`Tipo de FII: ${fiiInfo?.tipo}${fiiInfo?.fonte_metadata ? ` (Fonte: ${fiiInfo.fonte_metadata})` : ''}`}
                     >
                       <PieChart className="w-3 h-3" />
                       <span className="max-w-[100px] sm:max-w-[140px] truncate">{fiiInfo?.tipo}</span>
@@ -269,7 +269,7 @@ export default function DetalhesVisaoGeralTab({
                   {fiiInfo?.segmento && (
                     <span
                       className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/10 dark:text-indigo-300 dark:border-indigo-800 text-xs"
-                      title={`Segmento: ${fiiInfo?.segmento}`}
+                      title={`Segmento: ${fiiInfo?.segmento}${fiiInfo?.fonte_metadata ? ` (Fonte: ${fiiInfo.fonte_metadata})` : ''}`}
                     >
                       <Building2 className="w-3 h-3" />
                       <span className="max-w-[120px] sm:max-w-[160px] truncate">{fiiInfo?.segmento}</span>

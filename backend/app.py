@@ -59,6 +59,7 @@ from models import (
     obter_cenarios_predefinidos,
     executar_monte_carlo,
 )
+from fii_scraper import obter_metadata_fii
 from models import cache
 import requests
 try:
@@ -719,6 +720,32 @@ def api_get_ativo_details(ticker):
         }
         
         return jsonify(dados)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/fii-metadata/<ticker>", methods=["GET"])
+@cache.cached(timeout=3600, query_string=True)  # Cache de 1 hora
+def api_get_fii_metadata(ticker):
+
+    try:
+        ticker = ticker.strip().upper()
+        
+        # Verificar se é FII brasileiro
+        is_fii = ticker.endswith('11') or ticker.endswith('11.SA')
+        if not is_fii:
+            return jsonify({"error": "Ticker não parece ser um FII brasileiro"}), 400
+        
+        # Buscar metadados via scraping
+        metadata = obter_metadata_fii(ticker)
+        
+        if metadata:
+            return jsonify(metadata), 200
+        else:
+            return jsonify({
+                "error": "Não foi possível obter metadados do FII",
+                "ticker": ticker
+            }), 404
+            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

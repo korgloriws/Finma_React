@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
-import { analiseService, carteiraService } from '../../services/api'
+import { analiseService, carteiraService, ativoService } from '../../services/api'
 import { AtivoAnalise, FiltrosAnalise } from '../../types'
 import { useAnalise } from '../../contexts/AnaliseContext'
 import TickerWithLogo from '../TickerWithLogo'
@@ -361,13 +361,15 @@ function TabelaAtivos({
   loading, 
   error, 
   tipo,
-  isAtivoNaCarteira
+  isAtivoNaCarteira,
+  fiiMetadataMap
 }: {
   ativos: AtivoAnalise[]
   loading: boolean
   error: string | null
   tipo: string
   isAtivoNaCarteira: (ticker: string) => boolean
+  fiiMetadataMap?: Record<string, { tipo?: string; segmento?: string }>
 }) {
   if (loading) {
     return (
@@ -417,6 +419,8 @@ function TabelaAtivos({
     )
   }
 
+  const isFiiTable = tipo === 'FIIs'
+
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
       <div className="overflow-x-auto">
@@ -426,19 +430,32 @@ function TabelaAtivos({
               <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Ticker</th>
               <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Nome</th>
               <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Tipo</th>
+              {isFiiTable && (
+                <>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Tipo FII</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Segmento</th>
+                </>
+              )}
               <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Preço</th>
               <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">DY</th>
               <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">P/L</th>
               <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">P/VP</th>
               <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">ROE</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Indústria</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">País</th>
+              {!isFiiTable && (
+                <>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Indústria</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">País</th>
+                </>
+              )}
               <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Liquidez</th>
               <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {ativos.map((ativo) => (
+            {ativos.map((ativo) => {
+              const fiiMeta = fiiMetadataMap?.[ativo.ticker]
+              
+              return (
               <tr key={ativo.ticker} className="hover:bg-muted/30 transition-colors duration-200">
                 <td className="px-6 py-4">
                   <TickerWithLogo ticker={ativo.ticker} />
@@ -458,6 +475,28 @@ function TabelaAtivos({
                     {ativo.tipo}
                   </span>
                 </td>
+                {isFiiTable && (
+                  <>
+                    <td className="px-6 py-4">
+                      {fiiMeta?.tipo ? (
+                        <span className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
+                          fiiMeta.tipo === 'Tijolo' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' :
+                          fiiMeta.tipo === 'Papel' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300' :
+                          'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300'
+                        }`}>
+                          {fiiMeta.tipo}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Carregando...</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-foreground">
+                        {fiiMeta?.segmento || '-'}
+                      </span>
+                    </td>
+                  </>
+                )}
                 <td className="px-6 py-4">
                   <span className="font-bold text-foreground text-sm">
                     {formatCurrency(Number.isFinite(Number(ativo.preco_atual)) ? Number(ativo.preco_atual) : 0)}
@@ -499,16 +538,20 @@ function TabelaAtivos({
                     {Number.isFinite(Number(ativo.roe)) ? Number(ativo.roe).toFixed(2) : '0.00'}%
                   </span>
                 </td>
-                <td className="px-6 py-4">
-                  <span className="text-sm text-muted-foreground">
-                    {ativo.industria || 'N/A'}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="text-sm text-muted-foreground">
-                    {ativo.pais || 'N/A'}
-                  </span>
-                </td>
+                {!isFiiTable && (
+                  <>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-muted-foreground">
+                        {ativo.industria || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-muted-foreground">
+                        {ativo.pais || 'N/A'}
+                      </span>
+                    </td>
+                  </>
+                )}
                 <td className="px-6 py-4">
                   <div className="space-y-1">
                     <div className="font-semibold text-sm text-foreground">
@@ -531,7 +574,8 @@ function TabelaAtivos({
                   )}
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -558,7 +602,7 @@ export default function AnaliseListaTab() {
     roe_min: 15,
     dy_min: 12,
     pl_min: 1,
-    pl_max: 10,
+    pl_max: 15,
     pvp_max: 2
   })
   
@@ -591,6 +635,8 @@ export default function AnaliseListaTab() {
   const [autoSearchBdrs, setAutoSearchBdrs] = useState(false)
   const [autoSearchFiis, setAutoSearchFiis] = useState(false)
 
+  // Estado para metadados de FIIs
+  const [fiiMetadataMap, setFiiMetadataMap] = useState<Record<string, { tipo?: string; segmento?: string }>>({})
 
   const { data: carteira } = useQuery({
     queryKey: ['carteira'],
@@ -604,6 +650,47 @@ export default function AnaliseListaTab() {
   const isAtivoNaCarteira = (ticker: string) => {
     return tickersNaCarteira.has(ticker.toUpperCase())
   }
+
+  // Buscar metadados de FIIs quando a lista mudar
+  useEffect(() => {
+    if (!ativosFiis || ativosFiis.length === 0) return
+
+    const buscarMetadados = async () => {
+      const newMetadataMap: Record<string, { tipo?: string; segmento?: string }> = {}
+      
+      // Buscar metadados em paralelo (máximo 5 por vez para não sobrecarregar)
+      const batchSize = 5
+      for (let i = 0; i < ativosFiis.length; i += batchSize) {
+        const batch = ativosFiis.slice(i, i + batchSize)
+        
+        const promises = batch.map(async (fii) => {
+          try {
+            const metadata = await ativoService.getFiiMetadata(fii.ticker)
+            if (metadata) {
+              newMetadataMap[fii.ticker] = {
+                tipo: metadata.tipo,
+                segmento: metadata.segmento
+              }
+            }
+          } catch (error) {
+            console.error(`Erro ao buscar metadata de ${fii.ticker}:`, error)
+          }
+        })
+        
+        await Promise.all(promises)
+        
+        // Atualizar o estado após cada batch para mostrar progressivamente
+        setFiiMetadataMap(prev => ({ ...prev, ...newMetadataMap }))
+        
+        // Delay entre batches para não sobrecarregar o servidor
+        if (i + batchSize < ativosFiis.length) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+    }
+
+    buscarMetadados()
+  }, [ativosFiis])
 
 
   const handleFiltroAcoesChange = useCallback((key: keyof FiltrosAnalise, value: number) => {
@@ -796,6 +883,7 @@ export default function AnaliseListaTab() {
               error={errorFiis} 
               tipo="FIIs"
               isAtivoNaCarteira={isAtivoNaCarteira}
+              fiiMetadataMap={fiiMetadataMap}
             />
           </motion.div>
         )}

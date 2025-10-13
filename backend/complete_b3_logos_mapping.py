@@ -1,6 +1,4 @@
-# Mapeamento completo de tickers B3 para URLs do logo.dev
-# Token público de demonstração: pk_Dhx4NNGHRFe5mo7gEtJaWA
-# Gerado automaticamente a partir da lista em models.py
+
 
 COMPLETE_B3_LOGOS_MAPPING = {
 
@@ -273,7 +271,7 @@ COMPLETE_B3_LOGOS_MAPPING = {
     "INTU34.sa": "https://img.logo.dev/intuit.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "I1VZ34.sa": "https://img.logo.dev/itv.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "I1RM34.sa": "https://img.logo.dev/ironmountain.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
-    "IZAE4.sa": "https://img.logo.dev/isaenergiabrasil.com.br?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
+   
 
     "J1KH34.sa": "https://img.logo.dev/johnsoncontrols.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "J1EG34.sa": "https://img.logo.dev/jacobs.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
@@ -742,8 +740,8 @@ COMPLETE_B3_LOGOS_MAPPING = {
     "INEP4.sa": "https://img.logo.dev/ticker/INEP4.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "INTB3.sa": "https://img.logo.dev/ticker/INTB3.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "IRBR3.sa": "https://img.logo.dev/ticker/IRBR3.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
-    "ISAE3.sa": "https://img.logo.dev/ticker/ISAE3.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
-    "ISAE4.sa": "https://img.logo.dev/ticker/ISAE4.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
+    "ISAE3.sa": "https://img.logo.dev/isaenergia.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
+    "ISAE4.sa": "https://img.logo.dev/isaenergia.com?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "ITSA3.sa": "https://img.logo.dev/ticker/ITSA3.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "ITSA4.sa": "https://img.logo.dev/ticker/ITSA4.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
     "ITUB3.sa": "https://img.logo.dev/ticker/ITUB3.SA?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true",
@@ -980,6 +978,24 @@ def get_logo_url(ticker):
    
     if not ticker:
         return None
+    
+    # Verificar se é criptomoeda (formato: XXX-USD ou XXX-USDT)
+    ticker_upper = ticker.upper()
+    if '-USD' in ticker_upper or '-USDT' in ticker_upper:
+        # Extrair o símbolo da cripto (ex: BTC-USD -> btc)
+        crypto_symbol = ticker_upper.split('-')[0].lower()
+        
+   
+        crypto_symbols_supported = [
+            'btc', 'eth', 'usdc', 'usdt', 'xrp', 'sol', 'doge', 
+            'ada', 'matic', 'dot', 'link', 'bnb', 'avax', 'ltc',
+            'atom', 'uni', 'xlm', 'algo', 'vet', 'icp', 'fil',
+            'aave', 'mkr', 'comp', 'yfi', 'snx', 'crv', 'sushi',
+            'trx', 'etc', 'bch', 'xmr', 'dash', 'zec', 'xtz'
+        ]
+        
+        if crypto_symbol in crypto_symbols_supported:
+            return f"https://img.logo.dev/crypto/{crypto_symbol}?token=pk_Dhx4NNGHRFe5mo7gEtJaWA&retina=true"
     
 
     ticker_normalized = ticker.lower()

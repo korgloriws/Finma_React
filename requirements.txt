@@ -10,3 +10,4 @@ flask-compress
 cloudscraper
 reportlab
 numpy
+beautifulsoup4

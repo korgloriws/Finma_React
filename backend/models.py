@@ -1370,7 +1370,7 @@ def aplicar_filtros_acoes(dados):
         ativo for ativo in dados if (
             ativo['roe'] >= 15 and
             ativo['dividend_yield'] > 12 and
-            1 <= ativo['pl'] <= 10 and
+            1 <= ativo['pl'] <= 15 and
             ativo['pvp'] <= 2
         )
     ], key=lambda x: x['dividend_yield'], reverse=True)[:10]
@@ -3455,7 +3455,7 @@ def registrar_movimentacao(data, ticker, nome_completo, quantidade, preco, tipo,
                             'INSERT INTO movimentacoes (data, ticker, nome_completo, quantidade, preco, tipo) VALUES (%s, %s, %s, %s, %s, %s)',
                             (data, ticker, nome_completo, quantidade, preco, tipo)
                         )
-                        # CRÍTICO: Commit da movimentação no PostgreSQL
+                      
                         pg_conn.commit()
                 finally:
                     pg_conn.close()
