@@ -1,11 +1,14 @@
 {
-  "name": "Finma",
+  "name": "Finma - Gestão Financeira",
   "short_name": "Finma",
+  "description": "Sistema completo de gestão financeira pessoal e análise de investimentos",
   "start_url": "/",
   "display": "standalone",
   "scope": "/",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "categories": ["finance", "business", "productivity"],
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -18,6 +21,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
