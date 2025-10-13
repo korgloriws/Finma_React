@@ -1,5 +1,6 @@
 import  { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+// import { useLazyData } from '../hooks/useLazyData' // Para uso futuro
 import { Link } from 'react-router-dom'
 // @ts-ignore
 import { motion } from 'framer-motion'
@@ -55,6 +56,7 @@ import {
 } from 'recharts'
 import { carteiraService, homeService } from '../services/api'
 import { formatCurrency, } from '../utils/formatters'
+import AtivosDetalhesModal from '../components/carteira/AtivosDetalhesModal'
 
 export default function HomePage() {
   const { user } = useAuth()
@@ -68,6 +70,41 @@ export default function HomePage() {
   })
   const [abrirConfigMeta, setAbrirConfigMeta] = useState(false)
 
+  // Estados para modal de distribuição da carteira
+  const [modalAberto, setModalAberto] = useState(false)
+  const [modalTitulo, setModalTitulo] = useState('')
+  const [modalAtivos, setModalAtivos] = useState<any[]>([])
+  const [modalTipo, setModalTipo] = useState<'tipo' | 'ativo' | 'top'>('tipo')
+
+  // Função para abrir modal com dados específicos
+  const abrirModalPorTipo = async (tipo: string) => {
+    // Se for FII, buscar dados com metadados
+    if (tipo.toLowerCase().includes('fii')) {
+      try {
+        const response = await fetch('/api/carteira/com-metadados-fii')
+        const carteiraComMetadados = await response.json()
+        const ativosDoTipo = carteiraComMetadados.filter((ativo: any) => ativo.tipo === tipo)
+        setModalTitulo(`Ativos - ${tipo}`)
+        setModalAtivos(ativosDoTipo)
+        setModalTipo('tipo')
+        setModalAberto(true)
+      } catch (error) {
+        console.error('Erro ao buscar metadados de FIIs:', error)
+        // Fallback para dados normais
+        const ativosDoTipo = carteira?.filter(ativo => ativo.tipo === tipo) || []
+        setModalTitulo(`Ativos - ${tipo}`)
+        setModalAtivos(ativosDoTipo)
+        setModalTipo('tipo')
+        setModalAberto(true)
+      }
+    } else {
+      const ativosDoTipo = carteira?.filter(ativo => ativo.tipo === tipo) || []
+      setModalTitulo(`Ativos - ${tipo}`)
+      setModalAtivos(ativosDoTipo)
+      setModalTipo('tipo')
+      setModalAberto(true)
+    }
+  }
 
   // Carregamento prioritário - dados essenciais primeiro
   const { data: carteira, isLoading: loadingCarteira } = useQuery({
@@ -76,16 +113,17 @@ export default function HomePage() {
     retry: 3,
     refetchOnWindowFocus: false,
     enabled: !!user,
-    staleTime: 2 * 60 * 1000, // 2 minutos
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
 
+  // Resumo home - carregamento sob demanda (só quando necessário)
   const { data: resumoHome, isLoading: loadingResumo } = useQuery({
     queryKey: ['home-resumo', user, mesAtual, anoAtual],
     queryFn: () => homeService.getResumo(mesAtual.toString(), anoAtual.toString()),
     retry: 3,
     refetchOnWindowFocus: false,
-    enabled: !!user,
-    staleTime: 1 * 60 * 1000, // 1 minuto
+    enabled: !!user && !!carteira, // Só carrega depois da carteira
+    staleTime: 3 * 60 * 1000, // 3 minutos
   })
 
 
@@ -112,13 +150,14 @@ export default function HomePage() {
   })
 
   
+  // Histórico da carteira - carregamento sob demanda
   const { data: historicoCarteira } = useQuery({
     queryKey: ['carteira-historico', user, filtroPeriodo],
     queryFn: () => carteiraService.getHistorico(filtroPeriodo),
     retry: 3,
     refetchOnWindowFocus: false,
-    enabled: !!user && !!carteira, 
-    staleTime: 10 * 60 * 1000, 
+    enabled: !!user && !!carteira, // Só carrega depois da carteira
+    staleTime: 10 * 60 * 1000, // 10 minutos
   })
 
 
@@ -1712,6 +1751,12 @@ export default function HomePage() {
                     outerRadius={100}
                     paddingAngle={5}
                     dataKey="value"
+                    onClick={(data) => {
+                      if (data && data.name) {
+                        abrirModalPorTipo(data.name)
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
                   >
                     {dadosPizza.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.fill}>
@@ -2054,6 +2099,15 @@ export default function HomePage() {
           </div>
         )}
       </div>
+
+      {/* Modal de Detalhes dos Ativos */}
+      <AtivosDetalhesModal
+        isOpen={modalAberto}
+        onClose={() => setModalAberto(false)}
+        titulo={modalTitulo}
+        ativos={modalAtivos}
+        tipoFiltro={modalTipo}
+      />
     </div>
   )
 } 

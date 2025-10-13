@@ -14,11 +14,14 @@ function AnalisePageContent() {
   const { ativosAcoes, ativosBdrs, ativosFiis } = useAnalise()
 
 
+  // Carregamento sob demanda - só carrega carteira quando necessário
   const { isLoading: loadingCarteira } = useQuery({
     queryKey: ['carteira'],
     queryFn: carteiraService.getCarteira,
     retry: 3,
-    refetchOnWindowFocus: false
+    refetchOnWindowFocus: false,
+    enabled: activeTab === 'graficos', // Só carrega na aba gráficos
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
 
   return (
