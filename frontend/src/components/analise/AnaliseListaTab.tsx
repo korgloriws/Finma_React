@@ -259,6 +259,7 @@ function FiltrosBdrs({
 function FiltrosFiis({ 
   filtros, 
   onFiltroChange, 
+  onFiltroStringChange,
   onBuscar, 
   loading, 
   autoSearch, 
@@ -266,6 +267,7 @@ function FiltrosFiis({
 }: {
   filtros: FiltrosAnalise
   onFiltroChange: (key: keyof FiltrosAnalise, value: number) => void
+  onFiltroStringChange: (key: keyof FiltrosAnalise, value: string) => void
   onBuscar: () => void
   loading: boolean
   autoSearch: boolean
@@ -327,6 +329,43 @@ function FiltrosFiis({
             placeholder="1000000"
             aria-label="Liquidez mínima em reais"
           />
+        </div>
+        
+        <div className="space-y-2">
+          <label className="block text-sm font-semibold text-foreground">Tipo de FII</label>
+          <select
+            value={filtros.tipo_fii || ''}
+            onChange={(e) => onFiltroStringChange('tipo_fii', e.target.value)}
+            className="w-full px-4 py-3 border border-border rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200"
+            aria-label="Tipo de FII"
+          >
+            <option value="">Todos os tipos</option>
+            <option value="Tijolo">Tijolo</option>
+            <option value="Papel">Papel</option>
+            <option value="Híbrido">Híbrido</option>
+          </select>
+        </div>
+        
+        <div className="space-y-2">
+          <label className="block text-sm font-semibold text-foreground">Segmento</label>
+          <select
+            value={filtros.segmento_fii || ''}
+            onChange={(e) => onFiltroStringChange('segmento_fii', e.target.value)}
+            className="w-full px-4 py-3 border border-border rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200"
+            aria-label="Segmento do FII"
+          >
+            <option value="">Todos os segmentos</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Logística">Logística</option>
+            <option value="Lajes corporativas">Lajes corporativas</option>
+            <option value="Escritórios">Escritórios</option>
+            <option value="Residencial">Residencial</option>
+            <option value="Industrial">Industrial</option>
+            <option value="Hospitalar">Hospitalar</option>
+            <option value="Educacional">Educacional</option>
+            <option value="Galpões">Galpões</option>
+            <option value="Recebíveis/CRI">Recebíveis/CRI</option>
+          </select>
         </div>
       </div>
       
@@ -714,6 +753,13 @@ export default function AnaliseListaTab() {
     }
   }, [autoSearchFiis])
 
+  const handleFiltroFiisStringChange = useCallback((key: keyof FiltrosAnalise, value: string) => {
+    setFiltrosFiis(prev => ({ ...prev, [key]: value }))
+    if (autoSearchFiis) {
+      setTimeout(() => handleBuscarFiis(), 500)
+    }
+  }, [autoSearchFiis])
+
 
   const handleBuscarAcoes = useCallback(async () => {
     setLoadingAcoes(true)
@@ -872,6 +918,7 @@ export default function AnaliseListaTab() {
             <FiltrosFiis 
               filtros={filtrosFiis}
               onFiltroChange={handleFiltroFiisChange}
+              onFiltroStringChange={handleFiltroFiisStringChange}
               onBuscar={handleBuscarFiis}
               loading={loadingFiis}
               autoSearch={autoSearchFiis}

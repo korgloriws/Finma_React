@@ -23,6 +23,7 @@ import {
   Bar,
   Legend,
 } from 'recharts'
+import AtivosDetalhesModal from './AtivosDetalhesModal'
 
 interface CarteiraGraficosTabProps {
   carteira: any[]
@@ -52,6 +53,107 @@ export default function CarteiraGraficosTab({
   topAtivos
 }: CarteiraGraficosTabProps) {
   const [indiceRef, setIndiceRef] = useState<'ibov' | 'ivvb11' | 'ifix' | 'ipca' | 'cdi'>('ibov')
+  
+  // Estado para modal de detalhes
+  const [modalAberto, setModalAberto] = useState(false)
+  const [modalTitulo, setModalTitulo] = useState('')
+  const [modalAtivos, setModalAtivos] = useState<any[]>([])
+  const [modalTipo, setModalTipo] = useState<'tipo' | 'ativo' | 'top'>('tipo')
+
+  // Funções para abrir modal com dados específicos
+  const abrirModalPorTipo = async (tipo: string) => {
+    // Se for FII, buscar dados com metadados
+    if (tipo.toLowerCase().includes('fii')) {
+      try {
+        const response = await fetch('/api/carteira/com-metadados-fii')
+        const carteiraComMetadados = await response.json()
+        const ativosDoTipo = carteiraComMetadados.filter((ativo: any) => ativo.tipo === tipo)
+        setModalTitulo(`Ativos - ${tipo}`)
+        setModalAtivos(ativosDoTipo)
+        setModalTipo('tipo')
+        setModalAberto(true)
+      } catch (error) {
+        console.error('Erro ao buscar metadados de FIIs:', error)
+        // Fallback para dados normais
+        const ativosDoTipo = carteira.filter(ativo => ativo.tipo === tipo)
+        setModalTitulo(`Ativos - ${tipo}`)
+        setModalAtivos(ativosDoTipo)
+        setModalTipo('tipo')
+        setModalAberto(true)
+      }
+    } else {
+      const ativosDoTipo = carteira.filter(ativo => ativo.tipo === tipo)
+      setModalTitulo(`Ativos - ${tipo}`)
+      setModalAtivos(ativosDoTipo)
+      setModalTipo('tipo')
+      setModalAberto(true)
+    }
+  }
+
+  const abrirModalTopAtivos = async () => {
+    // Verificar se há FIIs nos top ativos
+    const temFIIs = topAtivos.some(ativo => ativo.tipo && ativo.tipo.toLowerCase().includes('fii'))
+    
+    if (temFIIs) {
+      try {
+        const response = await fetch('/api/carteira/com-metadados-fii')
+        const carteiraComMetadados = await response.json()
+        const topAtivosComMetadados = carteiraComMetadados.filter((ativo: any) => 
+          topAtivos.some(top => top.ticker === ativo.ticker)
+        )
+        setModalTitulo('Top Ativos por Valor')
+        setModalAtivos(topAtivosComMetadados)
+        setModalTipo('top')
+        setModalAberto(true)
+      } catch (error) {
+        console.error('Erro ao buscar metadados de FIIs:', error)
+        // Fallback para dados normais
+        setModalTitulo('Top Ativos por Valor')
+        setModalAtivos(topAtivos)
+        setModalTipo('top')
+        setModalAberto(true)
+      }
+    } else {
+      setModalTitulo('Top Ativos por Valor')
+      setModalAtivos(topAtivos)
+      setModalTipo('top')
+      setModalAberto(true)
+    }
+  }
+
+  const abrirModalTodosAtivos = async () => {
+    // Verificar se há FIIs na carteira
+    const temFIIs = carteira.some(ativo => ativo.tipo && ativo.tipo.toLowerCase().includes('fii'))
+    
+    if (temFIIs) {
+      try {
+        const response = await fetch('/api/carteira/com-metadados-fii')
+        const carteiraComMetadados = await response.json()
+        setModalTitulo('Todos os Ativos')
+        setModalAtivos(carteiraComMetadados)
+        setModalTipo('ativo')
+        setModalAberto(true)
+      } catch (error) {
+        console.error('Erro ao buscar metadados de FIIs:', error)
+        // Fallback para dados normais
+        setModalTitulo('Todos os Ativos')
+        setModalAtivos(carteira)
+        setModalTipo('ativo')
+        setModalAberto(true)
+      }
+    } else {
+      setModalTitulo('Todos os Ativos')
+      setModalAtivos(carteira)
+      setModalTipo('ativo')
+      setModalAberto(true)
+    }
+  }
+
+  const fecharModal = () => {
+    setModalAberto(false)
+    setModalTitulo('')
+    setModalAtivos([])
+  }
 
   const initialWealth = useMemo(() => {
     const arr = historicoCarteira?.carteira_valor || []
@@ -329,6 +431,12 @@ export default function CarteiraGraficosTab({
                       outerRadius={80}
                       dataKey="value"
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      onClick={(data) => {
+                        if (data && data.name) {
+                          abrirModalPorTipo(data.name)
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
                     >
                       {Object.entries(ativosPorTipo)
                         .filter(([_, valor]) => valor > 0)
@@ -372,6 +480,8 @@ export default function CarteiraGraficosTab({
                       outerRadius={80}
                       dataKey="value"
                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      onClick={() => abrirModalTodosAtivos()}
+                      style={{ cursor: 'pointer' }}
                     >
                       {carteira
                         .filter(ativo => ativo?.valor_total && ativo.valor_total > 0)
@@ -429,7 +539,13 @@ export default function CarteiraGraficosTab({
                       }}
                       formatter={(value: any) => [formatCurrency(value), 'Valor Total']}
                     />
-                    <Bar dataKey="valor_total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    <Bar 
+                      dataKey="valor_total" 
+                      fill="hsl(var(--primary))" 
+                      radius={[4, 4, 0, 0]}
+                      onClick={() => abrirModalTopAtivos()}
+                      style={{ cursor: 'pointer' }}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
                 </div>
@@ -475,7 +591,13 @@ export default function CarteiraGraficosTab({
                       }}
                       formatter={(value: any) => [formatCurrency(value), 'Valor Total']}
                     />
-                    <Bar dataKey="valor_total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    <Bar 
+                      dataKey="valor_total" 
+                      fill="hsl(var(--primary))" 
+                      radius={[4, 4, 0, 0]}
+                      onClick={() => abrirModalTodosAtivos()}
+                      style={{ cursor: 'pointer' }}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
                 </div>
@@ -488,6 +610,15 @@ export default function CarteiraGraficosTab({
           </div>
         </div>
       )}
+
+      {/* Modal de Detalhes dos Ativos */}
+      <AtivosDetalhesModal
+        isOpen={modalAberto}
+        onClose={fecharModal}
+        titulo={modalTitulo}
+        ativos={modalAtivos}
+        tipoFiltro={modalTipo}
+      />
     </div>
   )
 }
