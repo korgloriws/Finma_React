@@ -4,17 +4,17 @@ import { useTheme } from '../contexts/ThemeContext'
 import logoClaro from '../assets/1760101826967.jpg'
 import logoEscuro from '../assets/1760101899780.jpg'
 
-interface FinmaLogoProps {
+interface FinmasLogoProps {
   size?: 'sm' | 'md' | 'lg'
   showText?: boolean
   className?: string
 }
 
-export default function FinmaLogo({ 
+export default function FinmasLogo({ 
   size = 'md', 
   showText = true, 
   className = '' 
-}: FinmaLogoProps) {
+}: FinmasLogoProps) {
   const { isDark } = useTheme()
   
 
@@ -49,7 +49,7 @@ export default function FinmaLogo({
   return (
     <div className={`flex items-center gap-2 sm:gap-3 md:gap-4 ${className}`}>
       <div 
-        className={`${sizeClasses[size]} flex items-center justify-center finma-logo`}
+        className={`${sizeClasses[size]} flex items-center justify-center finmas-logo`}
         style={{
           width: dimensions.width,
           height: dimensions.height,
@@ -58,8 +58,8 @@ export default function FinmaLogo({
       >
            <img
              src={isDark ? logoEscuro : logoClaro}
-             alt="Finma"
-             className="w-full h-full object-contain object-center finma-logo"
+             alt="Finmas"
+             className="w-full h-full object-contain object-center finmas-logo"
              style={{
                maxWidth: '100%',
                maxHeight: '100%',
@@ -69,7 +69,7 @@ export default function FinmaLogo({
       </div>
       {showText && (
         <h1 className={`${textSizes[size]} font-bold text-foreground`}>
-          Finma
+          Finmas
         </h1>
       )}
     </div>

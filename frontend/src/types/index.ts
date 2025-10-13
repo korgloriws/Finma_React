@@ -1,4 +1,4 @@
-// Tipos para o sistema Finma
+// Tipos para o sistema Finmas
 
 export interface AtivoInfo {
   ticker: string

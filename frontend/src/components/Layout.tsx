@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Moon, Sun, BarChart3, Wallet, Calculator, Home, Search, LogOut, User, Menu, X, TrendingUp, BookOpen, DollarSign } from 'lucide-react'
-import FinmaLogo from './FinmaLogo'
+import FinmasLogo from './FinmasLogo'
 
 interface LayoutProps {
   children: ReactNode
@@ -107,7 +107,7 @@ export default function Layout({ children }: LayoutProps) {
         isDark ? 'bg-black' : 'bg-card'
       }`}>
         <div className="p-6">
-          <FinmaLogo size="md" showText={false} className="mb-4 justify-center" />
+          <FinmasLogo size="md" showText={false} className="mb-4 justify-center" />
           <hr className="my-4 border-border" />
           {/* User Info */}
           <div className="flex items-center gap-2 mb-4 p-2 bg-accent/50 rounded-lg">
@@ -175,7 +175,7 @@ export default function Layout({ children }: LayoutProps) {
             isDark ? 'bg-black' : 'bg-card'
           }`}>
             <div className="flex items-center justify-between mb-4">
-              <FinmaLogo size="sm" showText={false} />
+              <FinmasLogo size="sm" showText={false} />
               <button
                 onClick={() => setMobileMenuOpen(false)}
                 className="p-2 rounded hover:bg-accent text-muted-foreground"
@@ -250,7 +250,7 @@ export default function Layout({ children }: LayoutProps) {
           >
             <Menu size={18} />
           </button>
-          <FinmaLogo size="sm" showText={false} />
+          <FinmasLogo size="sm" showText={false} />
           <button
             onClick={toggleTheme}
             className="p-2 rounded hover:bg-accent text-muted-foreground"

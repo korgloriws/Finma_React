@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 @layer components {
-  .finma-logo {
+  .finmas-logo {
     background: transparent !important;
     background-color: transparent !important;
     border: none !important;
     outline: none !important;
   }
   
-  .finma-logo img {
+  .finmas-logo img {
     background: transparent !important;
     background-color: transparent !important;
     border: none !important;

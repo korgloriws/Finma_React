@@ -1,4 +1,4 @@
-const CACHE_NAME = 'finma-cache-2025-08-20-01'
+const CACHE_NAME = 'finmas-cache-2025-08-20-01'
 const ASSETS = ['/']
 
 self.addEventListener('install', (event) => {

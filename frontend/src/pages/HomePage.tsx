@@ -63,7 +63,7 @@ export default function HomePage() {
   const [anoAtual, setAnoAtual] = useState(new Date().getFullYear())
   const [abrirMesPicker, setAbrirMesPicker] = useState(false)
   const [metaAnual, setMetaAnual] = useState<number>(() => {
-    const saved = localStorage.getItem('finma_meta_anual')
+    const saved = localStorage.getItem('finmas_meta_anual')
     return saved ? parseFloat(saved) : 12
   })
   const [abrirConfigMeta, setAbrirConfigMeta] = useState(false)
@@ -286,7 +286,7 @@ export default function HomePage() {
 
   const salvarMetaAnual = (novaMeta: number) => {
     setMetaAnual(novaMeta)
-    localStorage.setItem('finma_meta_anual', novaMeta.toString())
+    localStorage.setItem('finmas_meta_anual', novaMeta.toString())
     setAbrirConfigMeta(false)
   }
 
