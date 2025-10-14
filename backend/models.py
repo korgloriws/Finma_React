@@ -32,7 +32,7 @@ def _sanitize_db_url(url: str) -> str:
 
         if query_pairs.get("channel_binding", "").lower() == "require":
             query_pairs.pop("channel_binding", None)
-        # Garantir sslmode=require
+
         if not query_pairs.get("sslmode"):
             query_pairs["sslmode"] = "require"
         new_query = urlencode(query_pairs)
@@ -374,11 +374,7 @@ def rename_asset_type(old: str, new: str):
         conn.close()
 
 def _validate_rf_catalog_item(item: dict):
-    """
-    Valida e converte dados do item de renda fixa
-    Funciona igual em SQLite e PostgreSQL
-    """
-    # Validar campos obrigatórios
+
     if not item.get('nome') or not str(item.get('nome')).strip():
         return { 'valid': False, 'message': 'Nome é obrigatório' }
     if not item.get('emissor') or not str(item.get('emissor')).strip():
@@ -388,7 +384,7 @@ def _validate_rf_catalog_item(item: dict):
     if not item.get('indexador') or not str(item.get('indexador')).strip():
         return { 'valid': False, 'message': 'Indexador é obrigatório' }
     
-    # Validar e converter números
+
     try:
         quantidade_val = float(item.get('quantidade', 0)) if item.get('quantidade') else 0
         preco_val = float(item.get('preco', 0)) if item.get('preco') else 0
@@ -406,11 +402,11 @@ def _validate_rf_catalog_item(item: dict):
     if taxa_fixa_val < 0 or taxa_fixa_val > 50:
         return { 'valid': False, 'message': 'Taxa fixa deve estar entre 0 e 50%' }
     
-    # Converter booleanos
+
     liquidez_diaria = bool(item.get('liquidez_diaria', False))
     isento_ir = bool(item.get('isento_ir', False))
     
-    # Preparar dados finais
+
     data = {
         'nome': str(item.get('nome')).strip(),
         'emissor': str(item.get('emissor')).strip(),
@@ -430,23 +426,20 @@ def _validate_rf_catalog_item(item: dict):
     return { 'valid': True, 'data': data }
 
 def _ensure_rf_catalog_schema():
-    """
-    Cria/verifica schema da tabela rf_catalog com abstração completa
-    Funciona igual em SQLite e PostgreSQL
-    """
+
     usuario = get_usuario_atual()
     if not usuario:
         print("_ensure_rf_catalog_schema: Usuário não autenticado")
         return False
     
-    # Schema unificado - funciona em ambos os bancos
+
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
         try:
             with conn.cursor() as c:
                 try:
                     print(f"_ensure_rf_catalog_schema: Criando tabela para usuário {usuario}")
-                    # PostgreSQL - usar tipos nativos otimizados
+                   
                     c.execute('''
                     CREATE TABLE IF NOT EXISTS rf_catalog (
                         id SERIAL PRIMARY KEY,
@@ -471,7 +464,7 @@ def _ensure_rf_catalog_schema():
                     return True
                 except Exception as e:
                     print(f"Erro ao criar tabela rf_catalog PostgreSQL: {e}")
-                    # Tentar recriar com fallback
+          
                     try:
                         print(f"_ensure_rf_catalog_schema: Tentando recriar tabela PostgreSQL")
                         c.execute('DROP TABLE IF EXISTS rf_catalog')
@@ -507,7 +500,7 @@ def _ensure_rf_catalog_schema():
         conn = sqlite3.connect(db_path, check_same_thread=False)
         try:
             cur = conn.cursor()
-            # SQLite - usar tipos compatíveis com PostgreSQL
+          
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS rf_catalog (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -535,10 +528,7 @@ def _ensure_rf_catalog_schema():
             conn.close()
 
 def rf_catalog_list():
-    """
-    Lista itens do catálogo de renda fixa com abstração completa
-    Funciona igual em SQLite e PostgreSQL
-    """
+
     usuario = get_usuario_atual()
     if not usuario:
         print("rf_catalog_list: Usuário não autenticado")
@@ -554,7 +544,7 @@ def rf_catalog_list():
         try:
             with conn.cursor() as c:
                 try:
-                    # PostgreSQL - usar tipos nativos
+                 
                     c.execute('''
                         SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, 
                                quantidade, preco, data_inicio, vencimento, liquidez_diaria, 
@@ -689,7 +679,7 @@ def rf_catalog_create(item: dict):
         try:
             cur = conn.cursor()
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            # SQLite - usar tipos compatíveis
+      
             cur.execute('''
                 INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, 
                                        quantidade, preco, data_inicio, vencimento, liquidez_diaria, 
@@ -709,10 +699,7 @@ def rf_catalog_create(item: dict):
             conn.close()
 
 def rf_catalog_update(id_: int, item: dict):
-    """
-    Atualiza item no catálogo de renda fixa com abstração completa
-    Funciona igual em SQLite e PostgreSQL
-    """
+
     usuario = get_usuario_atual()
     if not usuario:
         return { 'success': False, 'message': 'Não autenticado' }
@@ -721,12 +708,12 @@ def rf_catalog_update(id_: int, item: dict):
     if not schema_created:
         return { 'success': False, 'message': 'Falha ao criar/verificar schema' }
     
-    # Validação unificada
+  
     validation_result = _validate_rf_catalog_item(item)
     if not validation_result['valid']:
         return { 'success': False, 'message': validation_result['message'] }
     
-    # Preparar dados com conversão segura
+
     data = validation_result['data']
     
     if _is_postgres():
@@ -735,7 +722,7 @@ def rf_catalog_update(id_: int, item: dict):
             with conn.cursor() as c:
                 try:
                     print(f"rf_catalog_update: Atualizando item {id_} PostgreSQL para usuário {usuario}")
-                    # PostgreSQL - usar tipos nativos
+
                     c.execute('''
                         UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, 
                                              taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, 
@@ -960,7 +947,7 @@ def get_usuario_atual():
     except Exception:
         request = None
         g = None
-    # Cache por requisição para evitar consultas repetidas ao banco
+   
     if g is not None:
         try:
             cached_user = getattr(g, "_usuario_atual_cached")
@@ -1028,7 +1015,7 @@ def get_usuario_atual():
                     return None
                 username, expira_em = row
                 if expira_em < int(time.time()):
-                    # sessão expirada
+
                     try:
                         c.execute('DELETE FROM sessoes WHERE token = ?', (token,))
                         conn.commit()
@@ -1161,10 +1148,9 @@ def carregar_ativos():
         print(f" Erro no carregamento dos ativos: {e}")
 
 
+@cache.memoize(timeout=1800)  # Cache de 30 minutos para preços históricos
 def obter_preco_historico(ticker, data, max_retentativas=3):
-    """
-    Obtém o preço histórico de um ativo em uma data específica
-    """
+
     def to_float_or_none(valor):
         try:
             result = float(valor)
@@ -1177,20 +1163,20 @@ def obter_preco_historico(ticker, data, max_retentativas=3):
         try:
             print(f"🔍 Buscando preço histórico para {ticker} na data {data}...")
             
-            # Normalizar ticker para yfinance
+        
             ticker_yf = ticker.strip().upper()
             if '-' not in ticker_yf and '.' not in ticker_yf and len(ticker_yf) <= 6:
                 ticker_yf += '.SA'
             
             acao = yf.Ticker(ticker_yf)
             
-            # Converter data para datetime
+         
             if isinstance(data, str):
                 data_obj = datetime.strptime(data[:10], '%Y-%m-%d').date()
             else:
                 data_obj = data
             
-            # Buscar histórico com margem de segurança
+       
             start_date = data_obj - timedelta(days=30)
             end_date = data_obj + timedelta(days=1)
             
@@ -1200,7 +1186,7 @@ def obter_preco_historico(ticker, data, max_retentativas=3):
                 print(f"❌ Nenhum histórico encontrado para {ticker}")
                 return None
             
-            # Buscar o preço mais próximo da data (não posterior)
+           
             preco_encontrado = None
             for idx, row in historico[::-1].iterrows():
                 data_historico = idx.date()
@@ -1229,15 +1215,13 @@ def obter_preco_historico(ticker, data, max_retentativas=3):
     return None
 
 def obter_preco_atual(ticker, max_retentativas=3):
-    """
-    Obtém o preço atual de um ativo
-    """
+
     tentativas = 0
     while tentativas < max_retentativas:
         try:
             print(f"🔍 Buscando preço atual para {ticker}...")
             
-            # Normalizar ticker para yfinance
+         
             ticker_yf = ticker.strip().upper()
             if '-' not in ticker_yf and '.' not in ticker_yf and len(ticker_yf) <= 6:
                 ticker_yf += '.SA'
@@ -1594,7 +1578,7 @@ def verificar_senha(username, senha):
     return False
 
 def verificar_resposta_seguranca(username, resposta):
-    """Verificar resposta de segurança do usuário"""
+  
     usuario = buscar_usuario_por_username(username)
     if not usuario or not usuario['resposta_seguranca_hash']:
         return False
@@ -1604,8 +1588,7 @@ def verificar_resposta_seguranca(username, resposta):
 
 
 def alterar_senha_direta(username, nova_senha):
-    """Alterar senha diretamente (usado após verificação de segurança)"""
-    # Hash da nova senha
+
     nova_senha_hash = bcrypt.hashpw(nova_senha.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
     if _is_postgres():
@@ -1633,7 +1616,7 @@ def alterar_senha_direta(username, nova_senha):
             conn.close()
 
 def atualizar_pergunta_seguranca(username, pergunta, resposta):
-    """Atualizar pergunta de segurança de um usuário"""
+  
     if _is_postgres():
         conn = _get_pg_conn()
         try:
@@ -1663,7 +1646,7 @@ def atualizar_pergunta_seguranca(username, pergunta, resposta):
             conn.close()
 
 def processar_ativos_com_filtros_geral(lista_ativos, tipo_ativo, roe_min, dy_min, pl_min, pl_max, pvp_max):
-    """Função genérica para processar ativos (ações e BDRs) com filtros"""
+
     dados = [obter_informacoes(ticker, tipo_ativo) for ticker in lista_ativos]
     dados = [d for d in dados if d is not None]
     filtrados = [
@@ -1684,10 +1667,12 @@ def processar_ativos_bdrs_com_filtros(roe_min, dy_min, pl_min, pl_max, pvp_max):
     """Processar BDRs com filtros - wrapper para compatibilidade"""
     return processar_ativos_com_filtros_geral(LISTA_BDRS, 'BDR', roe_min, dy_min, pl_min, pl_max, pvp_max)
 
-def processar_ativos_fiis_com_filtros(dy_min, dy_max, liq_min):
+def processar_ativos_fiis_com_filtros(dy_min, dy_max, liq_min, tipo_fii=None, segmento_fii=None):
     fiis = LISTA_FIIS
     dados = [obter_informacoes(ticker, 'FII') for ticker in fiis]
     dados = [d for d in dados if d is not None]
+    
+    # Aplicar filtros básicos
     filtrados = [
         ativo for ativo in dados if (
             ativo['dividend_yield'] >= (dy_min or 0) and
@@ -1695,6 +1680,54 @@ def processar_ativos_fiis_com_filtros(dy_min, dy_max, liq_min):
             ativo.get('liquidez_diaria', 0) > (liq_min or 0)
         )
     ]
+    
+    # Aplicar filtros de tipo e segmento se fornecidos
+    if tipo_fii or segmento_fii:
+        filtrados_final = []
+        for ativo in filtrados:
+            ticker = ativo.get('ticker', '')
+            
+            # Buscar metadados do FII
+            try:
+                from fii_scraper import obter_dados_fii_fundsexplorer
+                metadata = obter_dados_fii_fundsexplorer(ticker)
+                
+                if metadata:
+                    ativo_tipo = metadata.get('tipo')
+                    ativo_segmento = metadata.get('segmento')
+                    
+                    # Verificar filtro de tipo
+                    if tipo_fii and ativo_tipo != tipo_fii:
+                        continue
+                        
+                    # Verificar filtro de segmento
+                    if segmento_fii and ativo_segmento != segmento_fii:
+                        continue
+                        
+                    # Adicionar metadados ao ativo
+                    ativo['tipo_fii'] = ativo_tipo
+                    ativo['segmento_fii'] = ativo_segmento
+                    
+                else:
+                    # Se não conseguiu obter metadados, incluir apenas se não há filtros específicos
+                    if not tipo_fii and not segmento_fii:
+                        ativo['tipo_fii'] = None
+                        ativo['segmento_fii'] = None
+                    else:
+                        continue
+                        
+            except Exception:
+                # Em caso de erro, incluir apenas se não há filtros específicos
+                if not tipo_fii and not segmento_fii:
+                    ativo['tipo_fii'] = None
+                    ativo['segmento_fii'] = None
+                else:
+                    continue
+            
+            filtrados_final.append(ativo)
+        
+        filtrados = filtrados_final
+    
     return sorted(filtrados, key=lambda x: x['dividend_yield'], reverse=True)[:10]
 
 # ==================== FUNÇÕES DE CARTEIRA ====================
@@ -1746,6 +1779,13 @@ def init_carteira_db(usuario=None):
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes(data)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_ticker ON movimentacoes(ticker)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_valor_total ON carteira(valor_total)")
+                
+                # Índices críticos para performance
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_ticker ON carteira(ticker)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_tipo ON carteira(tipo)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_data_adicao ON carteira(data_adicao)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_indexador ON carteira(indexador)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_vencimento ON carteira(vencimento)")
                 # Configuração de rebalanceamento (uma linha por usuário)
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS rebalance_config (
@@ -1817,6 +1857,13 @@ def init_carteira_db(usuario=None):
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_data ON movimentacoes(data)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_movimentacoes_ticker ON movimentacoes(ticker)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_valor_total ON carteira(valor_total)")
+        
+        # Índices críticos para performance SQLite
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_ticker ON carteira(ticker)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_tipo ON carteira(tipo)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_data_adicao ON carteira(data_adicao)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_indexador ON carteira(indexador)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_carteira_vencimento ON carteira(vencimento)")
         # Configuração de rebalanceamento (uma linha por usuário)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS rebalance_config (
@@ -1862,6 +1909,7 @@ def _normalize_ticker_for_yf(ticker: str) -> str:
     except Exception:
         return (ticker or "").upper()
 
+@cache.memoize(timeout=300)  # Cache de 5 minutos para preços individuais
 def obter_informacoes_ativo(ticker):
 
     try:
@@ -2239,6 +2287,144 @@ def calcular_preco_com_indexador(preco_inicial, indexador, indexador_pct, data_a
         print(f"Erro ao calcular preço com indexador: {e}")
         return preco_inicial
 
+@cache.memoize(timeout=300)  # Cache de 5 minutos para taxa USD/BRL
+def obter_taxa_usd_brl():
+    """
+    Obtém a taxa de câmbio USD/BRL em tempo real
+    Retorna o valor de 1 USD em BRL
+    """
+    try:
+        print("🔄 Buscando taxa USD/BRL...")
+        
+        # Buscar taxa USD/BRL usando yfinance
+        usd_brl = yf.Ticker("BRL=X")
+        info = usd_brl.info
+        
+        if info and 'currentPrice' in info and info['currentPrice']:
+            taxa = float(info['currentPrice'])
+            print(f"✅ Taxa USD/BRL obtida: {taxa:.4f}")
+            return taxa
+        else:
+            # Fallback: usar histórico mais recente
+            hist = usd_brl.history(period="1d")
+            if not hist.empty:
+                taxa = float(hist['Close'].iloc[-1])
+                print(f"✅ Taxa USD/BRL (histórico): {taxa:.4f}")
+                return taxa
+            else:
+                print("⚠️ Não foi possível obter taxa USD/BRL, usando taxa padrão")
+                return 5.20  # Taxa padrão de fallback
+                
+    except Exception as e:
+        print(f"❌ Erro ao obter taxa USD/BRL: {e}")
+        return 5.20  # Taxa padrão de fallback
+
+def is_crypto_ticker(ticker):
+    """
+    Identifica se um ticker é uma criptomoeda
+    """
+    crypto_tickers = [
+        'BTC', 'ETH', 'ADA', 'DOT', 'LINK', 'UNI', 'AAVE', 'COMP', 'MKR', 'SNX',
+        'YFI', 'SUSHI', 'CRV', '1INCH', 'BAL', 'LRC', 'BAT', 'ZRX', 'REP', 'KNC',
+        'BTC-USD', 'ETH-USD', 'ADA-USD', 'DOT-USD', 'LINK-USD', 'UNI-USD',
+        'AAVE-USD', 'COMP-USD', 'MKR-USD', 'SNX-USD', 'YFI-USD', 'SUSHI-USD',"USDC-USD"
+    ]
+    
+    ticker_upper = ticker.upper()
+    return any(crypto in ticker_upper for crypto in crypto_tickers)
+
+def converter_crypto_usd_para_brl(preco_usd, taxa_usd_brl=None):
+    """
+    Converte preço de criptomoeda de USD para BRL
+    """
+    if taxa_usd_brl is None:
+        taxa_usd_brl = obter_taxa_usd_brl()
+    
+    return preco_usd * taxa_usd_brl
+
+def obter_precos_batch(tickers):
+    """
+    Obtém preços de múltiplos tickers em uma única requisição
+    Muito mais eficiente que fazer 1 requisição por ticker
+    """
+    if not tickers:
+        return {}
+    
+    try:
+        print(f"🔄 Buscando preços em batch para {len(tickers)} tickers...")
+        
+        # Obter taxa USD/BRL uma vez para todas as criptomoedas
+        taxa_usd_brl = None
+        tem_crypto = any(is_crypto_ticker(ticker) for ticker in tickers)
+        if tem_crypto:
+            taxa_usd_brl = obter_taxa_usd_brl()
+        
+        # Rate limiting: processar em lotes de 20 tickers para evitar rate limits
+        batch_size = 20
+        precos_totais = {}
+        
+        for i in range(0, len(tickers), batch_size):
+            batch_tickers = tickers[i:i + batch_size]
+            print(f"🔄 Processando lote {i//batch_size + 1}/{(len(tickers) + batch_size - 1)//batch_size} ({len(batch_tickers)} tickers)")
+            
+            # Normalizar tickers para o formato do Yahoo Finance
+            normalized_tickers = [_normalize_ticker_for_yf(ticker) for ticker in batch_tickers]
+            
+            # Buscar todos os preços de uma vez usando yfinance
+            ticker_objects = yf.Tickers(' '.join(normalized_tickers))
+            
+            # Processar cada ticker do lote atual
+            for i, ticker in enumerate(batch_tickers):
+                try:
+                    normalized = normalized_tickers[i]
+                    ticker_obj = ticker_objects.tickers[normalized]
+                
+                    # Obter informações do ticker
+                    info = ticker_obj.info
+                    preco_usd = None
+                    
+                    if info and 'currentPrice' in info and info['currentPrice']:
+                        preco_usd = float(info['currentPrice'])
+                    else:
+                        # Fallback: tentar obter preço do histórico
+                        hist = ticker_obj.history(period="1d")
+                        if not hist.empty:
+                            preco_usd = float(hist['Close'].iloc[-1])
+                    
+                    if preco_usd is not None:
+                        # Verificar se é criptomoeda e converter USD → BRL
+                        if is_crypto_ticker(ticker) and taxa_usd_brl:
+                            preco_brl = converter_crypto_usd_para_brl(preco_usd, taxa_usd_brl)
+                            print(f"🪙 {ticker}: ${preco_usd:.2f} USD → R$ {preco_brl:.2f} BRL (taxa: {taxa_usd_brl:.4f})")
+                            preco_final = preco_brl
+                        else:
+                            preco_final = preco_usd
+                        
+                        precos_totais[ticker] = {
+                            'preco_atual': preco_final,
+                            'dy': info.get('dividendYield', None) if info else None,
+                            'pl': info.get('trailingPE', None) if info else None,
+                            'pvp': info.get('priceToBook', None) if info else None,
+                            'roe': info.get('returnOnEquity', None) if info else None
+                        }
+                    else:
+                        print(f"⚠️ Não foi possível obter preço para {ticker}")
+                            
+                except Exception as e:
+                    print(f"⚠️ Erro ao obter preço para {ticker}: {e}")
+                    continue
+            
+            # Pequena pausa entre lotes para evitar rate limits
+            if i + batch_size < len(tickers):
+                time.sleep(0.5)  # 500ms de pausa entre lotes
+        
+        print(f"✅ Batch concluído: {len(precos_totais)} preços obtidos de {len(tickers)} tickers")
+        return precos_totais
+        
+    except Exception as e:
+        print(f"❌ Erro no batch de preços: {e}")
+        return {}
+
 def atualizar_precos_indicadores_carteira():
   
     try:
@@ -2250,12 +2436,27 @@ def atualizar_precos_indicadores_carteira():
         _ensure_indexador_schema()
         atualizados = 0
         erros = []
+        
+        # NOVA ABORDAGEM: Batch de preços
+        tickers_para_buscar = []
         if _is_postgres():
             conn = _pg_conn_for_user(usuario)
             try:
                 with conn.cursor() as c:
                     c.execute('SELECT id, ticker, quantidade, preco_atual, data_adicao, indexador, indexador_pct, indexador_base_preco, indexador_base_data FROM carteira')
                     rows = c.fetchall()
+                    
+                    # Coletar todos os tickers únicos
+                    for row in rows:
+                        _ticker = str(row[1] or '')
+                        if _ticker and _ticker not in tickers_para_buscar:
+                            tickers_para_buscar.append(_ticker)
+                    
+                    # Buscar todos os preços de uma vez
+                    print(f"🔄 Buscando preços em batch para {len(tickers_para_buscar)} tickers...")
+                    precos_batch = obter_precos_batch(tickers_para_buscar)
+                    
+                    # Processar cada ativo com os preços já obtidos
                     for row in rows:
                         _id, _ticker, _qtd = row[0], str(row[1] or ''), float(row[2] or 0)
                         _preco_atual = float(row[3] or 0)
@@ -2268,9 +2469,13 @@ def atualizar_precos_indicadores_carteira():
                         if not _ticker:
                             continue
                         
-                        # Se tem indexador configurado, calcular preço baseado no indexador
-                        if _indexador and _indexador_pct:
-                            print(f"DEBUG: Ativo {_ticker} tem indexador {_indexador} com {_indexador_pct}%")
+                        # Usar preços já obtidos em batch
+                        if _ticker in precos_batch:
+                            dados_preco = precos_batch[_ticker]
+                            
+                            # Se tem indexador configurado, calcular preço baseado no indexador
+                            if _indexador and _indexador_pct:
+                                print(f"DEBUG: Ativo {_ticker} tem indexador {_indexador} com {_indexador_pct}%")
                             
                             # Preço base: se houve edição manual (indexador_base_preco), usa como base
                             if base_preco is not None and base_data:
@@ -2292,16 +2497,20 @@ def atualizar_precos_indicadores_carteira():
                             pvp = None
                             roe = None
                         else:
-
-                            info = obter_informacoes_ativo(_ticker)
-                            if not info:
-                                erros.append(_ticker)
-                                continue
-                            preco_atual = float(info.get('preco_atual') or 0.0)
-                            dy = info.get('dy')
-                            pl = info.get('pl')
-                            pvp = info.get('pvp')
-                            roe = info.get('roe')
+                            # Usar preços obtidos em batch
+                            preco_atual = dados_preco.get('preco_atual', _preco_atual)
+                            dy = dados_preco.get('dy')
+                            pl = dados_preco.get('pl')
+                            pvp = dados_preco.get('pvp')
+                            roe = dados_preco.get('roe')
+                    else:
+                        # Fallback: se não conseguiu obter em batch, usar preço atual
+                        print(f"⚠️ Preço não encontrado em batch para {_ticker}, mantendo preço atual")
+                        preco_atual = _preco_atual
+                        dy = None
+                        pl = None
+                        pvp = None
+                        roe = None
                         
                         valor_total = preco_atual * _qtd
                         c.execute(
@@ -2319,6 +2528,18 @@ def atualizar_precos_indicadores_carteira():
                 cur = conn.cursor()
                 cur.execute('SELECT id, ticker, quantidade, preco_atual, data_adicao, indexador, indexador_pct, indexador_base_preco, indexador_base_data FROM carteira')
                 rows = cur.fetchall()
+                
+                # Coletar todos os tickers únicos para SQLite também
+                tickers_para_buscar = []
+                for row in rows:
+                    _ticker = str(row[1] or '')
+                    if _ticker and _ticker not in tickers_para_buscar:
+                        tickers_para_buscar.append(_ticker)
+                
+                # Buscar todos os preços de uma vez
+                print(f"🔄 Buscando preços em batch para {len(tickers_para_buscar)} tickers (SQLite)...")
+                precos_batch = obter_precos_batch(tickers_para_buscar)
+                
                 for row in rows:
                     _id, _ticker, _qtd = row[0], str(row[1] or ''), float(row[2] or 0)
                     _preco_atual = float(row[3] or 0)
@@ -2331,38 +2552,46 @@ def atualizar_precos_indicadores_carteira():
                     if not _ticker:
                         continue
                     
-                                        # Se tem indexador configurado, calcular preço baseado no indexador
-                    if _indexador and _indexador_pct:
-                        print(f"DEBUG: Ativo {_ticker} tem indexador {_indexador} com {_indexador_pct}%")
+                    # Usar preços já obtidos em batch (SQLite)
+                    if _ticker in precos_batch:
+                        dados_preco = precos_batch[_ticker]
                         
-                        if base_preco is not None and base_data:
-                            preco_inicial = base_preco
-                            _data_adicao = base_data
+                        # Se tem indexador configurado, calcular preço baseado no indexador
+                        if _indexador and _indexador_pct:
+                            print(f"DEBUG: Ativo {_ticker} tem indexador {_indexador} com {_indexador_pct}%")
+                        
+                            if base_preco is not None and base_data:
+                                preco_inicial = base_preco
+                                _data_adicao = base_data
+                            else:
+                                cur.execute('SELECT preco FROM movimentacoes WHERE ticker = ? ORDER BY data ASC LIMIT 1', (_ticker,))
+                                mov_row = cur.fetchone()
+                                preco_inicial = float(mov_row[0]) if mov_row else _preco_atual
+                            
+                            print(f"DEBUG: Preço inicial encontrado: {preco_inicial}")
+                            
+                            preco_atual = calcular_preco_com_indexador(preco_inicial, _indexador, _indexador_pct, _data_adicao)
+                            print(f"DEBUG: Preço calculado com indexador: {preco_atual}")
+                            
+                            dy = None
+                            pl = None
+                            pvp = None
+                            roe = None
                         else:
-                            cur.execute('SELECT preco FROM movimentacoes WHERE ticker = ? ORDER BY data ASC LIMIT 1', (_ticker,))
-                            mov_row = cur.fetchone()
-                            preco_inicial = float(mov_row[0]) if mov_row else _preco_atual
-                        
-                        print(f"DEBUG: Preço inicial encontrado: {preco_inicial}")
-                        
-                        preco_atual = calcular_preco_com_indexador(preco_inicial, _indexador, _indexador_pct, _data_adicao)
-                        print(f"DEBUG: Preço calculado com indexador: {preco_atual}")
-                        
+                            # Usar preços obtidos em batch
+                            preco_atual = dados_preco.get('preco_atual', _preco_atual)
+                            dy = dados_preco.get('dy')
+                            pl = dados_preco.get('pl')
+                            pvp = dados_preco.get('pvp')
+                            roe = dados_preco.get('roe')
+                    else:
+                        # Fallback: se não conseguiu obter em batch, usar preço atual
+                        print(f"⚠️ Preço não encontrado em batch para {_ticker}, mantendo preço atual")
+                        preco_atual = _preco_atual
                         dy = None
                         pl = None
                         pvp = None
                         roe = None
-                    else:
-                        # Buscar informações via yfinance
-                        info = obter_informacoes_ativo(_ticker)
-                        if not info:
-                            erros.append(_ticker)
-                            continue
-                        preco_atual = float(info.get('preco_atual') or 0.0)
-                        dy = info.get('dy')
-                        pl = info.get('pl')
-                        pvp = info.get('pvp')
-                        roe = info.get('roe')
                     
                     valor_total = preco_atual * _qtd
                     cur.execute(
@@ -3075,6 +3304,137 @@ def migrar_preco_compra_existente():
         print(f"Erro na migração de preco_compra: {e}")
         return {"success": False, "message": str(e)}
 
+def _enriquecer_dados_fii(ativo):
+    """Enriquece dados de FII com metadados do fii_scraper"""
+    if not ativo.get('tipo') or 'fii' not in ativo.get('tipo', '').lower():
+        return ativo
+    
+    try:
+        from fii_scraper import obter_dados_fii_fundsexplorer
+        ticker = ativo.get('ticker', '')
+        metadata = obter_dados_fii_fundsexplorer(ticker)
+        
+        if metadata:
+            ativo['tipo_fii'] = metadata.get('tipo')
+            ativo['segmento_fii'] = metadata.get('segmento')
+        else:
+            ativo['tipo_fii'] = None
+            ativo['segmento_fii'] = None
+    except Exception as e:
+        print(f"Erro ao enriquecer dados do FII {ativo.get('ticker')}: {e}")
+        ativo['tipo_fii'] = None
+        ativo['segmento_fii'] = None
+    
+    return ativo
+
+def obter_carteira_com_metadados_fii():
+    """Obtém carteira com metadados de FIIs (usado apenas quando necessário)"""
+    try:
+        usuario = get_usuario_atual()
+        if not usuario:
+            return {"success": False, "message": "Usuário não autenticado"}
+
+        try:
+            _ensure_indexador_schema()
+        except Exception:
+            pass
+
+        if _is_postgres():
+            conn = _pg_conn_for_user(usuario)
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute('''
+                        SELECT id, ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total,
+                               data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria
+                        FROM carteira
+                        ORDER BY valor_total DESC
+                    ''')
+                    rows = cursor.fetchall()
+            finally:
+                conn.close()
+            ativos = []
+            for row in rows:
+                preco_compra = float(row[5]) if row[5] is not None else None
+                vencimento = row[16] if len(row) > 16 else None
+                tipo = row[8] if len(row) > 8 else "Desconhecido"
+                
+                status_vencimento = None
+                if tipo and "renda fixa" in tipo.lower() and vencimento:
+                    status_vencimento = _calcular_status_vencimento(vencimento)
+                
+                ativo = {
+                    "id": row[0],
+                    "ticker": row[1],
+                    "nome_completo": row[2],
+                    "quantidade": float(row[3]) if row[3] is not None else 0,
+                    "preco_atual": float(row[4]) if row[4] is not None else 0,
+                    "preco_compra": preco_compra,
+                    "valor_total": float(row[6]) if row[6] is not None else 0,
+                    "data_adicao": row[7],
+                    "tipo": tipo,
+                    "dy": float(row[9]) if row[9] is not None else None,
+                    "pl": float(row[10]) if row[10] is not None else None,
+                    "pvp": float(row[11]) if row[11] is not None else None,
+                    "roe": float(row[12]) if row[12] is not None else None,
+                    "indexador": row[13],
+                    "indexador_pct": float(row[14]) if (len(row) > 14 and row[14] is not None) else None,
+                    "vencimento": vencimento,
+                    "status_vencimento": status_vencimento,
+                }
+                
+                ativos.append(ativo)
+            return ativos
+        db_path = get_db_path(usuario, "carteira")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, ticker, nome_completo, quantidade, preco_atual, preco_compra, valor_total,
+                   data_adicao, tipo, dy, pl, pvp, roe, indexador, indexador_pct, data_aplicacao, vencimento, isento_ir, liquidez_diaria
+            FROM carteira
+            ORDER BY valor_total DESC
+        ''')
+        
+        ativos = []
+        for row in cursor.fetchall():
+            row_len = len(row)
+            preco_compra = row[5] if row_len > 5 else None
+            vencimento = row[16] if row_len > 16 else None
+            tipo = row[8] if row_len > 8 else "Desconhecido"
+            
+            status_vencimento = None
+            if tipo and "renda fixa" in tipo.lower() and vencimento:
+                status_vencimento = _calcular_status_vencimento(vencimento)
+            
+            ativo = {
+                "id": row[0],
+                "ticker": row[1],
+                "nome_completo": row[2],
+                "quantidade": row[3],
+                "preco_atual": row[4],
+                "preco_compra": preco_compra,
+                "valor_total": row[6] if row_len > 6 else row[5],
+                "data_adicao": row[7] if row_len > 7 else row[6],
+                "tipo": tipo,
+                "dy": row[9] if row_len > 9 else row[8],
+                "pl": row[10] if row_len > 10 else row[9],
+                "pvp": row[11] if row_len > 11 else row[10],
+                "roe": row[12] if row_len > 12 else row[11],
+                "indexador": row[13] if row_len > 13 else row[12],
+                "indexador_pct": row[14] if row_len > 14 else row[13],
+                "vencimento": vencimento,
+                "status_vencimento": status_vencimento,
+            }
+            
+            # Enriquecer dados de FIIs com metadados
+            ativo = _enriquecer_dados_fii(ativo)
+            ativos.append(ativo)
+        
+        conn.close()
+        return ativos
+    except Exception as e:
+        print(f"Erro ao obter carteira com metadados: {e}")
+        return []
+
 def obter_carteira():
 
     try:
@@ -3113,7 +3473,7 @@ def obter_carteira():
                 if tipo and "renda fixa" in tipo.lower() and vencimento:
                     status_vencimento = _calcular_status_vencimento(vencimento)
                 
-                ativos.append({
+                ativo = {
                     "id": row[0],
                     "ticker": row[1],
                     "nome_completo": row[2],
@@ -3131,7 +3491,9 @@ def obter_carteira():
                     "indexador_pct": float(row[14]) if (len(row) > 14 and row[14] is not None) else None,
                     "vencimento": vencimento,
                     "status_vencimento": status_vencimento,
-                })
+                }
+                
+                ativos.append(ativo)
             return ativos
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -3155,7 +3517,7 @@ def obter_carteira():
             if tipo and "renda fixa" in tipo.lower() and vencimento:
                 status_vencimento = _calcular_status_vencimento(vencimento)
             
-            ativos.append({
+            ativo = {
                 "id": row[0],
                 "ticker": row[1],
                 "nome_completo": row[2],
@@ -3173,7 +3535,11 @@ def obter_carteira():
                 "indexador_pct": row[14] if row_len > 14 else row[13],
                 "vencimento": vencimento,
                 "status_vencimento": status_vencimento,
-            })
+            }
+            
+            # Enriquecer dados de FIIs com metadados
+            ativo = _enriquecer_dados_fii(ativo)
+            ativos.append(ativo)
         
         conn.close()
         return ativos
@@ -4051,10 +4417,16 @@ def init_controle_db(usuario=None):
                         observacao TEXT
                     )
                 ''')
+                
+                # Índices críticos para performance - Controle PostgreSQL
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_receitas_data ON receitas(data)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_receitas_categoria ON receitas(categoria)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_data ON cartoes(data)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_outros_gastos_data ON outros_gastos(data)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_pago ON cartoes(pago)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_outros_data ON outros_gastos(data)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_outros_categoria ON outros_gastos(categoria)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_id ON compras_cartao(cartao_id)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_data ON compras_cartao(data)")
                 # Adicionar colunas de pagamento se não existirem
                 try:
                     cursor.execute("ALTER TABLE cartoes_cadastrados ADD COLUMN pago BOOLEAN DEFAULT FALSE")
@@ -4172,10 +4544,13 @@ def init_controle_db(usuario=None):
         cursor.execute("PRAGMA temp_store=MEMORY;")
     except Exception:
         pass
+    # Índices críticos para performance - Controle SQLite
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_receitas_data ON receitas(data)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_receitas_categoria ON receitas(categoria)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_data ON cartoes(data)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_outros_gastos_data ON outros_gastos(data)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_pago ON cartoes(pago)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_outros_data ON outros_gastos(data)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_outros_categoria ON outros_gastos(categoria)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cartoes_cadastrados_ativo ON cartoes_cadastrados(ativo)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_cartao_id ON compras_cartao(cartao_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_compras_cartao_data ON compras_cartao(data)")
@@ -4784,6 +5159,7 @@ def init_marmitas_db(usuario=None):
                     )
                 ''')
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_marmitas_data ON marmitas(data)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_marmitas_comprou ON marmitas(comprou)")
         finally:
             conn.close()
         return
@@ -4805,6 +5181,7 @@ def init_marmitas_db(usuario=None):
     except Exception:
         pass
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_marmitas_data ON marmitas(data)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_marmitas_comprou ON marmitas(comprou)")
     conn.commit()
     conn.close()
 

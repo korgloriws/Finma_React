@@ -496,7 +496,9 @@ def api_analise_ativos():
             dados = processar_ativos_fiis_com_filtros(
                 filtros.get('dy_min', 0),
                 filtros.get('dy_max', float('inf')),
-                filtros.get('liq_min', 0)
+                filtros.get('liq_min', 0),
+                filtros.get('tipo_fii'),
+                filtros.get('segmento_fii')
             )
         else:
             return jsonify({"error": "Tipo inválido"}), 400
@@ -972,11 +974,21 @@ def api_get_carteira():
         carteira = obter_carteira()
         if cache_key and cache:
             try:
-                cache.set(cache_key, carteira, timeout=30)
+                cache.set(cache_key, carteira, timeout=600)  # 10 minutos
             except Exception:
                 pass
         return jsonify(carteira)
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@server.route("/api/carteira/com-metadados-fii", methods=["GET"])
+def api_carteira_com_metadados_fii():
+    """API para obter carteira com metadados de FIIs (usado apenas quando necessário)"""
+    try:
+        carteira = obter_carteira_com_metadados_fii()
+        return jsonify(carteira)
+    except Exception as e:
+        print(f"Erro na API carteira com metadados FII: {e}")
         return jsonify({"error": str(e)}), 500
 
 @server.route("/api/carteira/migrar-precos", methods=["POST"])
@@ -1178,7 +1190,7 @@ def api_carteira_insights():
 
         if cache:
             try:
-                cache.set(cache_key, payload, timeout=30)
+                cache.set(cache_key, payload, timeout=900)  # 15 minutos
             except Exception:
                 pass
         return jsonify(payload)
@@ -1587,7 +1599,7 @@ def api_get_movimentacoes():
         movimentacoes = obter_movimentacoes(mes, ano)
         if cache and cache_key:
             try:
-                cache.set(cache_key, movimentacoes, timeout=30)
+                cache.set(cache_key, movimentacoes, timeout=600)  # 10 minutos
             except Exception:
                 pass
         return jsonify(movimentacoes)

@@ -3,7 +3,7 @@
 services:
   # Backend Flask
   - type: web
-    name: finma-backend
+    name: finmas-backend
     env: python
     plan: starter
     buildCommand: |
@@ -17,19 +17,19 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: finma-db
+          name: finmas-db
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
-          name: finma-redis
+          name: finmas-redis
           property: connectionString
     healthCheckPath: /health
     autoDeploy: true
     
   # Frontend React
   - type: web
-    name: finma-frontend
+    name: finmas-frontend
     env: static
     buildCommand: |
       cd frontend
@@ -43,10 +43,10 @@ services:
     autoDeploy: true
 
 databases:
-  - name: finma-db
+  - name: finmas-db
     plan: starter
-    databaseName: finma
-    user: finma_user
+    databaseName: finmas
+    user: finmas_user
 
 # ==================== OTIMIZAÇÕES DE PERFORMANCE ====================
 
@@ -86,7 +86,7 @@ envVars:
   - key: NODE_ENV
     value: production
   - key: REACT_APP_API_URL
-    value: https://finma-backend.onrender.com
+    value: https://finmas-backend.onrender.com
   
   # Database
   - key: DB_POOL_SIZE

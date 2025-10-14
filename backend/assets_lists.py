@@ -1,4 +1,4 @@
-# Lista de ativos para análise do sistema FINMA
+# Lista de ativos para análise do sistema FINMAS
 # Este arquivo contém as listas de ações, FIIs e BDRs utilizadas pelo sistema
 
 # ==================== LISTA DE AÇÕES ====================

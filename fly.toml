@@ -1,5 +1,5 @@
-# fly.toml app configuration file generated for finma-backend on 2025-01-01
-app = "finma-backend"
+# fly.toml app configuration file generated for finmas-backend on 2025-01-01
+app = "finmas-backend"
 primary_region = "gru"
 
 [build]
