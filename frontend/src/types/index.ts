@@ -47,6 +47,8 @@ export interface AtivoCarteira {
   nome_completo: string
   quantidade: number
   preco_atual: number
+  preco_compra?: number | null
+  preco_medio?: number | null
   valor_total: number
   data_adicao: string
   tipo: string

@@ -120,13 +120,12 @@ function TabelaAtivosPorTipo({
                 const qtd = lots.reduce((s, l) => s + l.qty, 0)
                 const val = lots.reduce((s, l) => s + l.qty * l.price, 0)
                 const precoMed = qtd > 0 ? (val / qtd) : null
-                
-                // Usar preco_compra se disponível, senão usar preço médio das movimentações
-                const precoBase = a?.preco_compra || precoMed
+               
+                const precoBase = (a as any)?.preco_medio ?? a?.preco_compra ?? precoMed
                 
                 if (precoBase != null) {
-                  somaValoresInvestidos += precoBase * (a?.quantidade || 0)
-                  somaValoresAtuais += (a?.preco_atual || 0) * (a?.quantidade || 0)
+                    somaValoresInvestidos += precoBase * (a?.quantidade || 0)
+                    somaValoresAtuais += (a?.preco_atual || 0) * (a?.quantidade || 0)
                 }
               }
               const rendTipo = (somaValoresInvestidos > 0) ? ((somaValoresAtuais - somaValoresInvestidos) / somaValoresInvestidos) * 100 : null
@@ -224,10 +223,9 @@ function TabelaAtivosPorTipo({
                     }
                     const totalQtd = lots.reduce((s, l) => s + l.qty, 0)
                     const totalValor = lots.reduce((s, l) => s + l.qty * l.price, 0)
-                    const precoMedio = totalQtd > 0 ? (totalValor / totalQtd) : null
-                    
-                    // Usar preco_compra se disponível, senão usar preço médio das movimentações
-                    const precoBase = ativo?.preco_compra || precoMedio
+                    const precoMedioLocal = totalQtd > 0 ? (totalValor / totalQtd) : null
+                    // Preferir preco_medio persistido; fallback para preco_compra; senão média local
+                    const precoBase = (ativo as any)?.preco_medio ?? ativo?.preco_compra ?? precoMedioLocal
                     
                     const rendimentoPct = (precoBase != null && ativo?.preco_atual)
                       ? ((ativo.preco_atual - precoBase) / precoBase) * 100
@@ -394,12 +392,13 @@ function TabelaAtivosPorTipo({
                   }
                   const totalQtd = lots.reduce((s, l) => s + l.qty, 0)
                   const totalValor = lots.reduce((s, l) => s + l.qty * l.price, 0)
-                  const precoMedio = totalQtd > 0 ? (totalValor / totalQtd) : null
-                  const rendimentoPct = (precoMedio != null && ativo?.preco_atual)
-                    ? ((ativo.preco_atual - precoMedio) / precoMedio) * 100
+                  const precoMedioLocal = totalQtd > 0 ? (totalValor / totalQtd) : null
+                  const precoMedioMostrar = (ativo as any)?.preco_medio ?? ativo?.preco_compra ?? precoMedioLocal
+                  const rendimentoPct = (precoMedioMostrar != null && ativo?.preco_atual)
+                    ? ((ativo.preco_atual - precoMedioMostrar) / (precoMedioMostrar as number)) * 100
                     : null
-                  const valorizacaoAbs = (precoMedio != null && ativo?.preco_atual && totalQtd > 0)
-                    ? (ativo.preco_atual - precoMedio) * totalQtd
+                  const valorizacaoAbs = (precoMedioMostrar != null && ativo?.preco_atual && totalQtd > 0)
+                    ? (ativo.preco_atual - (precoMedioMostrar as number)) * totalQtd
                     : null
                   const porcentagemAtivo = valorTotal > 0 ? ((ativo?.valor_total || 0) / valorTotal * 100).toFixed(1) : '0.0'
                   
@@ -524,7 +523,7 @@ function TabelaAtivosPorTipo({
                       )}
 
                       {/* Informações Adicionais (se houver) */}
-                      {(ativo?.indexador || precoMedio != null || valorizacaoAbs != null || rendimentoPct != null) && (
+                      {(ativo?.indexador || precoMedioLocal != null || valorizacaoAbs != null || rendimentoPct != null) && (
                         <div className="pt-2 sm:pt-3 border-t border-border">
                           <div className="grid grid-cols-1 gap-1.5 sm:gap-2 text-xs">
                             {ativo?.indexador && (
@@ -533,10 +532,10 @@ function TabelaAtivosPorTipo({
                                 <span className="text-xs">{ativo.indexador} {ativo.indexador_pct ? `${ativo.indexador_pct}%` : ''}</span>
                               </div>
                             )}
-                            {precoMedio != null && (
+                            {precoMedioLocal != null && (
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Preço Médio</span>
-                                <span className="text-xs">{formatCurrency(precoMedio)}</span>
+                                <span className="text-xs">{formatCurrency(precoMedioLocal as number)}</span>
                               </div>
                             )}
                             {valorizacaoAbs != null && (
