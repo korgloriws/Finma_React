@@ -2493,8 +2493,8 @@ def atualizar_precos_indicadores_carteira():
                                 pvp = dados_preco.get('pvp')
                                 roe = dados_preco.get('roe')
                         else:
-                            # Fallback quando não veio no batch
-                            print(f"⚠️ Preço não encontrado em batch para {_ticker}, mantendo preço atual")
+        
+
                             preco_atual = _preco_atual
                             dy = None; pl = None; pvp = None; roe = None
 
@@ -2561,7 +2561,7 @@ def atualizar_precos_indicadores_carteira():
                             print(f"DEBUG: Preço calculado com indexador: {preco_atual}")
                             
                             dy = None
-                            pl = None
+                            pl = None 
                             pvp = None
                             roe = None
                         else:
@@ -2596,10 +2596,7 @@ def atualizar_precos_indicadores_carteira():
         return {"success": False, "message": f"Erro ao atualizar carteira: {str(e)}"}
 
 def _calcular_status_vencimento(vencimento):
-    """
-    Calcula o status de vencimento para títulos de renda fixa
-    Retorna: {'status': 'vence_em_X_dias' ou 'vencido', 'dias': X}
-    """
+
     if not vencimento:
         return {'status': 'sem_vencimento', 'dias': None}
     
