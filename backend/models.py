@@ -2469,49 +2469,36 @@ def atualizar_precos_indicadores_carteira():
                         if not _ticker:
                             continue
                         
-                        # Usar preços já obtidos em batch
+                        # Determinar novo preco_atual e métricas
                         if _ticker in precos_batch:
                             dados_preco = precos_batch[_ticker]
-                            
-                            # Se tem indexador configurado, calcular preço baseado no indexador
                             if _indexador and _indexador_pct:
                                 print(f"DEBUG: Ativo {_ticker} tem indexador {_indexador} com {_indexador_pct}%")
-                            
-                            # Preço base: se houve edição manual (indexador_base_preco), usa como base
-                            if base_preco is not None and base_data:
-                                preco_inicial = base_preco
-                                _data_adicao = base_data
+                                # Preço base
+                                if base_preco is not None and base_data:
+                                    preco_inicial = base_preco
+                                    _data_adicao = base_data
+                                else:
+                                    c.execute('SELECT preco FROM movimentacoes WHERE ticker = %s ORDER BY data ASC LIMIT 1', (_ticker,))
+                                    mov_row = c.fetchone()
+                                    preco_inicial = float(mov_row[0]) if mov_row else _preco_atual
+                                print(f"DEBUG: Preço inicial encontrado: {preco_inicial}")
+                                preco_atual = calcular_preco_com_indexador(preco_inicial, _indexador, _indexador_pct, _data_adicao)
+                                print(f"DEBUG: Preço calculado com indexador: {preco_atual}")
+                                dy = None; pl = None; pvp = None; roe = None
                             else:
-                                # Caso contrário, base das movimentações
-                                c.execute('SELECT preco FROM movimentacoes WHERE ticker = %s ORDER BY data ASC LIMIT 1', (_ticker,))
-                                mov_row = c.fetchone()
-                                preco_inicial = float(mov_row[0]) if mov_row else _preco_atual
-                            
-                            print(f"DEBUG: Preço inicial encontrado: {preco_inicial}")
-                            
-                            preco_atual = calcular_preco_com_indexador(preco_inicial, _indexador, _indexador_pct, _data_adicao)
-                            print(f"DEBUG: Preço calculado com indexador: {preco_atual}")
-                            
-                            dy = None
-                            pl = None
-                            pvp = None
-                            roe = None
+                                preco_atual = dados_preco.get('preco_atual', _preco_atual)
+                                dy = dados_preco.get('dy')
+                                pl = dados_preco.get('pl')
+                                pvp = dados_preco.get('pvp')
+                                roe = dados_preco.get('roe')
                         else:
-                            # Usar preços obtidos em batch
-                            preco_atual = dados_preco.get('preco_atual', _preco_atual)
-                            dy = dados_preco.get('dy')
-                            pl = dados_preco.get('pl')
-                            pvp = dados_preco.get('pvp')
-                            roe = dados_preco.get('roe')
-                    else:
-                        # Fallback: se não conseguiu obter em batch, usar preço atual
-                        print(f"⚠️ Preço não encontrado em batch para {_ticker}, mantendo preço atual")
-                        preco_atual = _preco_atual
-                        dy = None
-                        pl = None
-                        pvp = None
-                        roe = None
-                        
+                            # Fallback quando não veio no batch
+                            print(f"⚠️ Preço não encontrado em batch para {_ticker}, mantendo preço atual")
+                            preco_atual = _preco_atual
+                            dy = None; pl = None; pvp = None; roe = None
+
+                        # Persistir atualização
                         valor_total = preco_atual * _qtd
                         c.execute(
                             'UPDATE carteira SET preco_atual=%s, valor_total=%s, dy=%s, pl=%s, pvp=%s, roe=%s WHERE id=%s',
