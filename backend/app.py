@@ -529,22 +529,42 @@ def api_listas_ativos():
 @server.route('/api/rf/catalog', methods=['GET','POST','PUT','DELETE'])
 def api_rf_catalog():
     try:
+        print(f"DEBUG: API rf/catalog chamada - método: {request.method}")
+        
         if request.method == 'GET':
-            return jsonify({ 'items': rf_catalog_list() })
+            print("DEBUG: Listando catálogo de renda fixa")
+            items = rf_catalog_list()
+            print(f"DEBUG: Encontrados {len(items)} itens no catálogo")
+            return jsonify({ 'items': items })
+        
         data = request.get_json() or {}
+        print(f"DEBUG: Dados recebidos: {data}")
+        
         if request.method == 'POST':
+            print("DEBUG: Criando item no catálogo de renda fixa")
             res = rf_catalog_create(data)
+            print(f"DEBUG: Resultado da criação: {res}")
             return jsonify(res)
+        
         if request.method == 'PUT':
             id_ = int(data.get('id'))
+            print(f"DEBUG: Atualizando item {id_} no catálogo")
             res = rf_catalog_update(id_, data)
+            print(f"DEBUG: Resultado da atualização: {res}")
             return jsonify(res)
+        
         if request.method == 'DELETE':
             id_ = int(data.get('id'))
+            print(f"DEBUG: Removendo item {id_} do catálogo")
             res = rf_catalog_delete(id_)
+            print(f"DEBUG: Resultado da remoção: {res}")
             return jsonify(res)
+        
         return jsonify({"error":"Método não suportado"}), 405
     except Exception as e:
+        print(f"DEBUG: Erro na API rf/catalog: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @server.route("/api/analise/resumo", methods=["GET"])

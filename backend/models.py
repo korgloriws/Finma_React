@@ -413,14 +413,19 @@ def rename_asset_type(old: str, new: str):
         conn.close()
 
 def _validate_rf_catalog_item(item: dict):
+    print(f"DEBUG: _validate_rf_catalog_item: Validando item: {item}")
 
     if not item.get('nome') or not str(item.get('nome')).strip():
+        print("DEBUG: Nome é obrigatório")
         return { 'valid': False, 'message': 'Nome é obrigatório' }
     if not item.get('emissor') or not str(item.get('emissor')).strip():
+        print("DEBUG: Emissor é obrigatório")
         return { 'valid': False, 'message': 'Emissor é obrigatório' }
     if not item.get('tipo') or not str(item.get('tipo')).strip():
+        print("DEBUG: Tipo é obrigatório")
         return { 'valid': False, 'message': 'Tipo é obrigatório' }
     if not item.get('indexador') or not str(item.get('indexador')).strip():
+        print("DEBUG: Indexador é obrigatório")
         return { 'valid': False, 'message': 'Indexador é obrigatório' }
     
 
@@ -429,16 +434,22 @@ def _validate_rf_catalog_item(item: dict):
         preco_val = float(item.get('preco', 0)) if item.get('preco') else 0
         taxa_percentual_val = float(item.get('taxa_percentual', 100)) if item.get('taxa_percentual') else 100
         taxa_fixa_val = float(item.get('taxa_fixa', 0)) if item.get('taxa_fixa') else 0
-    except (ValueError, TypeError):
+        print(f"DEBUG: Valores convertidos - quantidade: {quantidade_val}, preco: {preco_val}, taxa_percentual: {taxa_percentual_val}, taxa_fixa: {taxa_fixa_val}")
+    except (ValueError, TypeError) as e:
+        print(f"DEBUG: Erro na conversão de valores: {e}")
         return { 'valid': False, 'message': 'Quantidade, preço e taxas devem ser números válidos' }
     
     if quantidade_val <= 0:
+        print("DEBUG: Quantidade deve ser maior que zero")
         return { 'valid': False, 'message': 'Quantidade deve ser maior que zero' }
     if preco_val <= 0:
+        print("DEBUG: Preço deve ser maior que zero")
         return { 'valid': False, 'message': 'Preço deve ser maior que zero' }
     if taxa_percentual_val < 0 or taxa_percentual_val > 1000:
+        print("DEBUG: Taxa percentual deve estar entre 0 e 1000")
         return { 'valid': False, 'message': 'Taxa percentual deve estar entre 0 e 1000' }
     if taxa_fixa_val < 0 or taxa_fixa_val > 50:
+        print("DEBUG: Taxa fixa deve estar entre 0 e 50%")
         return { 'valid': False, 'message': 'Taxa fixa deve estar entre 0 e 50%' }
     
 
@@ -462,6 +473,7 @@ def _validate_rf_catalog_item(item: dict):
         'observacao': str(item.get('observacao', '')).strip() or None
     }
     
+    print(f"DEBUG: Dados validados: {data}")
     return { 'valid': True, 'data': data }
 
 def _ensure_rf_catalog_schema():
@@ -501,17 +513,17 @@ def _ensure_rf_catalog_schema():
                             emissor TEXT,
                             tipo TEXT,
                             indexador TEXT,
-                            taxa_percentual NUMERIC(10,4),
-                            taxa_fixa NUMERIC(10,4),
-                            quantidade NUMERIC(15,2),
-                            preco NUMERIC(15,2),
-                            data_inicio DATE,
-                            vencimento DATE,
-                            liquidez_diaria BOOLEAN DEFAULT FALSE,
-                            isento_ir BOOLEAN DEFAULT FALSE,
+                            taxa_percentual NUMERIC,
+                            taxa_fixa NUMERIC,
+                            quantidade NUMERIC,
+                            preco NUMERIC,
+                            data_inicio TEXT,
+                            vencimento TEXT,
+                            liquidez_diaria INTEGER DEFAULT 0,
+                            isento_ir INTEGER DEFAULT 0,
                             observacao TEXT,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            created_at TEXT,
+                            updated_at TEXT
                         )
                     ''')
                         print(f"_ensure_rf_catalog_schema: Tabela PostgreSQL criada com sucesso")
@@ -630,8 +642,8 @@ def rf_catalog_list():
                             'preco': safe_convert(r[8], float),
                             'data_inicio': str(r[9]) if r[9] else None,
                             'vencimento': str(r[10]) if r[10] else None,
-                            'liquidez_diaria': bool(r[11]) if r[11] is not None else False,
-                            'isento_ir': bool(r[12]) if r[12] is not None else False,
+                            'liquidez_diaria': bool(r[11]) if r[11] else False,
+                            'isento_ir': bool(r[12]) if r[12] else False,
                             'observacao': r[13]
                         } for r in rows
                     ]
@@ -745,17 +757,18 @@ def rf_catalog_create(item: dict):
                         print(f"rf_catalog_create: Tabela não existe, criando...")
                         _ensure_rf_catalog_schema()
 
+                    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     c.execute('''
                         INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, 
                                                quantidade, preco, data_inicio, vencimento, liquidez_diaria, 
-                                               isento_ir, observacao)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                               isento_ir, observacao, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id
                     ''', (
                         data['nome'], data['emissor'], data['tipo'], data['indexador'],
                         data['taxa_percentual'], data['taxa_fixa'], data['quantidade'], data['preco'],
                         data['data_inicio'], data['vencimento'], data['liquidez_diaria'], 
-                        data['isento_ir'], data['observacao']
+                        data['isento_ir'], data['observacao'], now, now
                     ))
                     new_id = c.fetchone()[0]
                     print(f"rf_catalog_create: Item PostgreSQL criado com ID {new_id}")
@@ -828,16 +841,17 @@ def rf_catalog_update(id_: int, item: dict):
                 try:
                     print(f"rf_catalog_update: Atualizando item {id_} PostgreSQL para usuário {usuario}")
 
+                    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     c.execute('''
                         UPDATE rf_catalog SET nome=%s, emissor=%s, tipo=%s, indexador=%s, taxa_percentual=%s, 
                                              taxa_fixa=%s, quantidade=%s, preco=%s, data_inicio=%s, vencimento=%s, 
-                                             liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=CURRENT_TIMESTAMP
+                                             liquidez_diaria=%s, isento_ir=%s, observacao=%s, updated_at=%s
                         WHERE id=%s
                     ''', (
                         data['nome'], data['emissor'], data['tipo'], data['indexador'],
                         data['taxa_percentual'], data['taxa_fixa'], data['quantidade'], data['preco'],
                         data['data_inicio'], data['vencimento'], data['liquidez_diaria'], 
-                        data['isento_ir'], data['observacao'], id_
+                        data['isento_ir'], data['observacao'], now, id_
                     ))
                     print(f"rf_catalog_update: Item {id_} PostgreSQL atualizado com sucesso")
                     return { 'success': True }
