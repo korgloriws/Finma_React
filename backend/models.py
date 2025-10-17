@@ -426,11 +426,14 @@ def _validate_rf_catalog_item(item: dict):
     return { 'valid': True, 'data': data }
 
 def _ensure_rf_catalog_schema():
+    print("DEBUG: _ensure_rf_catalog_schema chamada")
 
     usuario = get_usuario_atual()
     if not usuario:
         print("_ensure_rf_catalog_schema: Usuário não autenticado")
         return False
+    
+    print(f"DEBUG: _ensure_rf_catalog_schema: Usuário {usuario} autenticado")
     
 
     if _is_postgres():
@@ -630,22 +633,31 @@ def rf_catalog_list():
             conn.close()
 
 def rf_catalog_create(item: dict):
+    print(f"DEBUG: rf_catalog_create chamada com item: {item}")
 
     usuario = get_usuario_atual()
     if not usuario:
+        print("DEBUG: Usuário não autenticado")
         return { 'success': False, 'message': 'Não autenticado' }
+    
+    print(f"DEBUG: Usuário autenticado: {usuario}")
     
     schema_created = _ensure_rf_catalog_schema()
     if not schema_created:
+        print("DEBUG: Falha ao criar/verificar schema")
         return { 'success': False, 'message': 'Falha ao criar/verificar schema' }
     
+    print("DEBUG: Schema verificado com sucesso")
 
     validation_result = _validate_rf_catalog_item(item)
     if not validation_result['valid']:
+        print(f"DEBUG: Validação falhou: {validation_result['message']}")
         return { 'success': False, 'message': validation_result['message'] }
     
+    print("DEBUG: Validação passou")
 
     data = validation_result['data']
+    print(f"DEBUG: Dados validados: {data}")
     
     if _is_postgres():
         conn = _pg_conn_for_user(usuario)
@@ -941,6 +953,7 @@ def invalidar_todas_sessoes() -> None:
         except Exception:
             pass
 def get_usuario_atual():
+    print("DEBUG: get_usuario_atual chamada")
    
     try:
         from flask import request, g
@@ -951,12 +964,15 @@ def get_usuario_atual():
     if g is not None:
         try:
             cached_user = getattr(g, "_usuario_atual_cached")
+            print(f"DEBUG: get_usuario_atual: Usuário em cache: {cached_user}")
             return cached_user
         except Exception:
             pass
     try:
         token = request.cookies.get('session_token') if request else None
+        print(f"DEBUG: get_usuario_atual: Token encontrado: {bool(token)}")
         if not token:
+            print("DEBUG: get_usuario_atual: Nenhum token encontrado")
             if g is not None:
                 try:
                     setattr(g, "_usuario_atual_cached", None)
@@ -971,6 +987,7 @@ def get_usuario_atual():
                     c.execute('SELECT username, expira_em FROM public.sessoes WHERE token = %s', (token,))
                     row = c.fetchone()
                     if not row:
+                        print("DEBUG: get_usuario_atual: Token não encontrado no banco")
                         if g is not None:
                             try:
                                 setattr(g, "_usuario_atual_cached", None)
@@ -978,7 +995,9 @@ def get_usuario_atual():
                                 pass
                         return None
                     username, expira_em = row
+                    print(f"DEBUG: get_usuario_atual: Token encontrado para usuário {username}, expira em {expira_em}")
                     if int(expira_em) < int(time.time()):
+                        print("DEBUG: get_usuario_atual: Token expirado")
                         try:
                             c.execute('DELETE FROM public.sessoes WHERE token = %s', (token,))
                         except Exception:
@@ -994,6 +1013,7 @@ def get_usuario_atual():
                             setattr(g, "_usuario_atual_cached", username)
                         except Exception:
                             pass
+                    print(f"DEBUG: get_usuario_atual: Retornando usuário {username}")
                     return username
             finally:
                 try:
@@ -1007,6 +1027,7 @@ def get_usuario_atual():
                 c.execute('SELECT username, expira_em FROM sessoes WHERE token = ?', (token,))
                 row = c.fetchone()
                 if not row:
+                    print("DEBUG: get_usuario_atual: Token não encontrado no banco SQLite")
                     if g is not None:
                         try:
                             setattr(g, "_usuario_atual_cached", None)
@@ -1014,8 +1035,9 @@ def get_usuario_atual():
                             pass
                     return None
                 username, expira_em = row
+                print(f"DEBUG: get_usuario_atual: Token encontrado para usuário {username}, expira em {expira_em}")
                 if expira_em < int(time.time()):
-
+                    print("DEBUG: get_usuario_atual: Token expirado")
                     try:
                         c.execute('DELETE FROM sessoes WHERE token = ?', (token,))
                         conn.commit()
@@ -1032,10 +1054,12 @@ def get_usuario_atual():
                         setattr(g, "_usuario_atual_cached", username)
                     except Exception:
                         pass
+                print(f"DEBUG: get_usuario_atual: Retornando usuário {username}")
                 return username
             finally:
                 conn.close()
-    except Exception:
+    except Exception as e:
+        print(f"DEBUG: get_usuario_atual: Exceção: {e}")
         return None
 
 def limpar_sessoes_expiradas():
@@ -2632,7 +2656,16 @@ def _determinar_preco_compra(ticker, preco_inicial, data_aplicacao, tipo):
         print(f"DEBUG: Usando preço manual para {ticker}: {preco_inicial}")
         return float(preco_inicial)
     
-    # 2. Se data de aplicação fornecida, buscar preço histórico
+    # Verificar se é renda fixa - para renda fixa, sempre usar preço manual ou 1.0 como fallback
+    tipo_lc = (tipo or '').strip().lower()
+    is_renda_fixa = any(k in tipo_lc for k in ['renda fixa', 'tesouro', 'cdb', 'lci', 'lca', 'debênture', 'debture'])
+    
+    if is_renda_fixa:
+        # Para renda fixa, se não há preço manual, usar 1.0 como valor unitário
+        print(f"DEBUG: Ativo de renda fixa {ticker} - usando valor unitário 1.0")
+        return 1.0
+    
+    # 2. Se data de aplicação fornecida, buscar preço histórico (apenas para RV)
     if data_aplicacao:
         try:
             from datetime import datetime, timedelta
@@ -2658,7 +2691,7 @@ def _determinar_preco_compra(ticker, preco_inicial, data_aplicacao, tipo):
         except Exception as e:
             print(f"DEBUG: Erro ao buscar preço histórico para {ticker}: {e}")
     
-    # 3. Buscar preço atual do yfinance
+    # 3. Buscar preço atual do yfinance (apenas para RV)
     try:
         info = obter_informacoes_ativo(ticker)
         if info and info.get('preco_atual'):
@@ -2679,9 +2712,17 @@ def adicionar_ativo_carteira(ticker, quantidade, tipo=None, preco_inicial=None, 
         # Determinar preço de compra usando a nova lógica
         preco_compra_definitivo = _determinar_preco_compra(ticker, preco_inicial, data_aplicacao, tipo)
         
-        # Se não conseguiu determinar preço, retornar erro
-        if preco_compra_definitivo <= 0:
+        # Se não conseguiu determinar preço, retornar erro (exceto para renda fixa)
+        tipo_lc = (tipo or '').strip().lower()
+        is_renda_fixa = any(k in tipo_lc for k in ['renda fixa', 'tesouro', 'cdb', 'lci', 'lca', 'debênture', 'debture'])
+        
+        if preco_compra_definitivo <= 0 and not is_renda_fixa:
             return {"success": False, "message": f"Não foi possível determinar o preço de compra para {ticker}. Verifique se o ticker existe ou forneça um preço manual."}
+        
+        # Para renda fixa, se não há preço, usar 1.0 como valor unitário
+        if preco_compra_definitivo <= 0 and is_renda_fixa:
+            preco_compra_definitivo = 1.0
+            print(f"DEBUG: Usando valor unitário 1.0 para renda fixa {ticker}")
         
         info = obter_informacoes_ativo(ticker)
         if not info:

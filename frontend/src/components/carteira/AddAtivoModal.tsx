@@ -190,8 +190,20 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
       const buscarPrecoAtual = async () => {
         try {
           setCarregandoPreco(true)
-          const resultado = await ativoService.getPrecoAtual(ticker)
-          setPrecoAtual(resultado)
+          
+          // Verificar se é renda fixa - não buscar preço via yfinance
+          const tickerUpper = ticker.toUpperCase()
+          const isRendaFixa = tickerUpper.includes('TD-') || tickerUpper.includes('CDB') || tickerUpper.includes('LCI') || tickerUpper.includes('LCA') || 
+                             tickerUpper.includes('DEB') || tickerUpper.includes('TESOURO') || tipoNorm.includes('renda fixa')
+          
+          if (isRendaFixa) {
+            // Para renda fixa, não buscar preço via yfinance
+            console.log('DEBUG: Ativo de renda fixa detectado, pulando busca de preço via yfinance')
+            setCarregandoPreco(false)
+          } else {
+            const resultado = await ativoService.getPrecoAtual(ticker)
+            setPrecoAtual(resultado)
+          }
         } catch (error) {
           console.error('Erro ao buscar preço atual:', error)
         } finally {
@@ -209,8 +221,20 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
         try {
           setCarregandoPreco(true)
           setErroPrecoHistorico('')
-          const resultado = await ativoService.getPrecoHistorico(ticker, dataCompra)
-          setPrecoHistorico(resultado)
+          
+          // Verificar se é renda fixa - não buscar preço via yfinance
+          const tickerUpper = ticker.toUpperCase()
+          const isRendaFixa = tickerUpper.includes('TD-') || tickerUpper.includes('CDB') || tickerUpper.includes('LCI') || tickerUpper.includes('LCA') || 
+                             tickerUpper.includes('DEB') || tickerUpper.includes('TESOURO') || tipoNorm.includes('renda fixa')
+          
+          if (isRendaFixa) {
+            // Para renda fixa, não buscar preço via yfinance
+            console.log('DEBUG: Ativo de renda fixa detectado, pulando busca de preço histórico via yfinance')
+            setCarregandoPreco(false)
+          } else {
+            const resultado = await ativoService.getPrecoHistorico(ticker, dataCompra)
+            setPrecoHistorico(resultado)
+          }
         } catch (error: any) {
           setErroPrecoHistorico(error.response?.data?.error || 'Erro ao buscar preço histórico')
           setPrecoHistorico(null)
@@ -250,9 +274,19 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
         precoFinal = parseFloat(preco.replace(',', '.'))
         dataCompraFinal = undefined // Não usar data_aplicacao para preço manual
         console.log('DEBUG: Usando preço manual:', precoFinal)
+      } else if (isTesouro && !precoFinal) {
+        // Para renda fixa, se não há preço determinado, usar 1.0 como valor unitário
+        precoFinal = 1.0
+        console.log('DEBUG: Renda fixa sem preço, usando valor unitário 1.0')
       }
       
       console.log('DEBUG: Preço final determinado:', precoFinal)
+      
+      // Para renda fixa, garantir que há um preço válido
+      if (isTesouro && (!precoFinal || precoFinal <= 0)) {
+        precoFinal = 1.0
+        console.log('DEBUG: Renda fixa sem preço válido, usando valor unitário 1.0')
+      }
       
       const idxPct = indexadorPct ? parseFloat(indexadorPct.replace(',', '.')) : undefined
       
@@ -284,8 +318,16 @@ export default function AddAtivoModal({ open, onClose }: AddAtivoModalProps) {
     if (step === 3) return !!quantidade
     if (step === 4) {
       // Validação específica para preço
-      if (tipoPreco === 'atual') return precoAtual !== null
-      if (tipoPreco === 'historico') return precoHistorico !== null && !erroPrecoHistorico
+      if (tipoPreco === 'atual') {
+        // Para renda fixa, não exigir preço atual
+        if (isTesouro) return true
+        return precoAtual !== null
+      }
+      if (tipoPreco === 'historico') {
+        // Para renda fixa, não exigir preço histórico
+        if (isTesouro) return true
+        return precoHistorico !== null && !erroPrecoHistorico
+      }
       if (tipoPreco === 'manual') return !!preco && parseFloat(preco.replace(',', '.')) > 0
       return false
     }

@@ -51,10 +51,31 @@ export default function EditAtivoModal({ open, onClose, ativo }: EditAtivoModalP
       const buscarPrecoAtual = async () => {
         try {
           setCarregandoPreco(true)
-          const resultado = await ativoService.getPrecoAtual(ativo.ticker)
-          setPrecoAtual(resultado)
+          
+          // Verificar se é renda fixa - não buscar preço via yfinance
+          const ticker = ativo.ticker.toUpperCase()
+          const isRendaFixa = ticker.includes('TD-') || ticker.includes('CDB') || ticker.includes('LCI') || ticker.includes('LCA') || 
+                             ticker.includes('DEB') || ticker.includes('TESOURO') || ativo.ticker.includes('renda fixa')
+          
+          if (isRendaFixa) {
+            // Para renda fixa, usar preço atual do ativo como fallback
+            setPrecoAtual({
+              preco: ativo.preco_atual,
+              data: new Date().toISOString().split('T')[0],
+              ticker: ativo.ticker
+            })
+          } else {
+            const resultado = await ativoService.getPrecoAtual(ativo.ticker)
+            setPrecoAtual(resultado)
+          }
         } catch (error) {
           console.error('Erro ao buscar preço atual:', error)
+          // Fallback: usar preço atual do ativo
+          setPrecoAtual({
+            preco: ativo.preco_atual,
+            data: new Date().toISOString().split('T')[0],
+            ticker: ativo.ticker
+          })
         } finally {
           setCarregandoPreco(false)
         }
@@ -70,8 +91,24 @@ export default function EditAtivoModal({ open, onClose, ativo }: EditAtivoModalP
         try {
           setCarregandoPreco(true)
           setErroPrecoHistorico('')
-          const resultado = await ativoService.getPrecoHistorico(ativo.ticker, dataOperacao)
-          setPrecoHistorico(resultado)
+          
+          // Verificar se é renda fixa - não buscar preço via yfinance
+          const ticker = ativo.ticker.toUpperCase()
+          const isRendaFixa = ticker.includes('TD-') || ticker.includes('CDB') || ticker.includes('LCI') || ticker.includes('LCA') || 
+                             ticker.includes('DEB') || ticker.includes('TESOURO') || ativo.ticker.includes('renda fixa')
+          
+          if (isRendaFixa) {
+            // Para renda fixa, usar preço atual do ativo como fallback
+            setPrecoHistorico({
+              preco: ativo.preco_atual,
+              data_historico: dataOperacao,
+              data_solicitada: dataOperacao,
+              ticker: ativo.ticker
+            })
+          } else {
+            const resultado = await ativoService.getPrecoHistorico(ativo.ticker, dataOperacao)
+            setPrecoHistorico(resultado)
+          }
         } catch (error: any) {
           setErroPrecoHistorico(error.response?.data?.error || 'Erro ao buscar preço histórico')
           setPrecoHistorico(null)
