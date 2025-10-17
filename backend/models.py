@@ -50,14 +50,18 @@ def _is_postgres() -> bool:
 
 def _get_pg_conn():
     print(f"_get_pg_conn: Conectando ao PostgreSQL")
-    conn = psycopg.connect(DATABASE_URL)
     try:
-        conn.autocommit = True
-        print(f"_get_pg_conn: Conexão estabelecida com autocommit")
+        conn = psycopg.connect(DATABASE_URL)
+        print(f"_get_pg_conn: Conexão estabelecida")
+        try:
+            conn.autocommit = True
+            print(f"_get_pg_conn: Autocommit configurado")
+        except Exception as e:
+            print(f"_get_pg_conn: Erro ao configurar autocommit: {e}")
+        return conn
     except Exception as e:
-        print(f"_get_pg_conn: Erro ao configurar autocommit: {e}")
-        pass
-    return conn
+        print(f"_get_pg_conn: Erro ao conectar ao PostgreSQL: {e}")
+        raise
 
 def _pg_schema_for_user(username: str) -> str:
     base = re.sub(r"[^a-zA-Z0-9_]", "_", (username or "anon").lower())
@@ -65,23 +69,58 @@ def _pg_schema_for_user(username: str) -> str:
         base = "anon"
     schema = f"u_{base}"
     print(f"_pg_schema_for_user: Schema gerado para usuário {username}: {schema}")
+    
+    # Verificar se o schema é válido para PostgreSQL
+    if len(schema) > 63:  # Limite do PostgreSQL para identificadores
+        schema = schema[:63]
+        print(f"_pg_schema_for_user: Schema truncado para {schema}")
+    
     return schema
 
 def _pg_use_schema(conn, username: str):
     schema = _pg_schema_for_user(username)
     print(f"_pg_use_schema: Usando schema {schema} para usuário {username}")
     with conn.cursor() as cur:
-        cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
-        cur.execute(f"SET search_path TO {schema}")
+        try:
+            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+            print(f"_pg_use_schema: Schema {schema} criado/verificado")
+        except Exception as e:
+            print(f"_pg_use_schema: Erro ao criar schema {schema}: {e}")
+            raise
+        
+        try:
+            cur.execute(f"SET search_path TO {schema}")
+            print(f"_pg_use_schema: Search path configurado para {schema}")
+        except Exception as e:
+            print(f"_pg_use_schema: Erro ao configurar search_path: {e}")
+            raise
+            
+        # Verificar se o schema foi criado corretamente
+        try:
+            cur.execute("SELECT current_schema()")
+            current_schema = cur.fetchone()[0]
+            print(f"_pg_use_schema: Schema atual: {current_schema}")
+        except Exception as e:
+            print(f"_pg_use_schema: Erro ao verificar schema atual: {e}")
+            raise
+            
     print(f"_pg_use_schema: Schema {schema} configurado com sucesso")
     return schema
 
 def _pg_conn_for_user(username: str):
     print(f"_pg_conn_for_user: Conectando para usuário {username}")
     conn = _get_pg_conn()
-    _pg_use_schema(conn, username)
-    print(f"_pg_conn_for_user: Conexão estabelecida para usuário {username}")
-    return conn
+    try:
+        _pg_use_schema(conn, username)
+        print(f"_pg_conn_for_user: Conexão estabelecida para usuário {username}")
+        return conn
+    except Exception as e:
+        print(f"_pg_conn_for_user: Erro ao configurar schema para usuário {username}: {e}")
+        try:
+            conn.close()
+        except:
+            pass
+        raise
 
 def _ensure_rebalance_schema():
 
@@ -443,61 +482,53 @@ def _ensure_rf_catalog_schema():
                 try:
                     print(f"_ensure_rf_catalog_schema: Criando tabela para usuário {usuario}")
                    
-                    c.execute('''
-                    CREATE TABLE IF NOT EXISTS rf_catalog (
-                        id SERIAL PRIMARY KEY,
-                        nome TEXT NOT NULL,
-                        emissor TEXT,
-                        tipo TEXT,
-                        indexador TEXT,
-                        taxa_percentual NUMERIC(10,4),
-                        taxa_fixa NUMERIC(10,4),
-                        quantidade NUMERIC(15,2),
-                        preco NUMERIC(15,2),
-                        data_inicio DATE,
-                        vencimento DATE,
-                        liquidez_diaria BOOLEAN DEFAULT FALSE,
-                        isento_ir BOOLEAN DEFAULT FALSE,
-                        observacao TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                    print(f"_ensure_rf_catalog_schema: Tabela PostgreSQL criada/verificada com sucesso")
+                    # Verificar se a tabela já existe
+                    c.execute("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_schema = current_schema() 
+                            AND table_name = 'rf_catalog'
+                        )
+                    """)
+                    table_exists = c.fetchone()[0]
+                    print(f"_ensure_rf_catalog_schema: Tabela existe? {table_exists}")
+                    
+                    if not table_exists:
+                        c.execute('''
+                        CREATE TABLE rf_catalog (
+                            id SERIAL PRIMARY KEY,
+                            nome TEXT NOT NULL,
+                            emissor TEXT,
+                            tipo TEXT,
+                            indexador TEXT,
+                            taxa_percentual NUMERIC(10,4),
+                            taxa_fixa NUMERIC(10,4),
+                            quantidade NUMERIC(15,2),
+                            preco NUMERIC(15,2),
+                            data_inicio DATE,
+                            vencimento DATE,
+                            liquidez_diaria BOOLEAN DEFAULT FALSE,
+                            isento_ir BOOLEAN DEFAULT FALSE,
+                            observacao TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
+                        print(f"_ensure_rf_catalog_schema: Tabela PostgreSQL criada com sucesso")
+                    else:
+                        print(f"_ensure_rf_catalog_schema: Tabela PostgreSQL já existe")
+                    
                     return True
                 except Exception as e:
                     print(f"Erro ao criar tabela rf_catalog PostgreSQL: {e}")
-          
-                    try:
-                        print(f"_ensure_rf_catalog_schema: Tentando recriar tabela PostgreSQL")
-                        c.execute('DROP TABLE IF EXISTS rf_catalog')
-                        c.execute('''
-                            CREATE TABLE rf_catalog (
-                                id SERIAL PRIMARY KEY,
-                                nome TEXT NOT NULL,
-                                emissor TEXT,
-                                tipo TEXT,
-                                indexador TEXT,
-                                taxa_percentual NUMERIC(10,4),
-                                taxa_fixa NUMERIC(10,4),
-                                quantidade NUMERIC(15,2),
-                                preco NUMERIC(15,2),
-                                data_inicio DATE,
-                                vencimento DATE,
-                                liquidez_diaria BOOLEAN DEFAULT FALSE,
-                                isento_ir BOOLEAN DEFAULT FALSE,
-                                observacao TEXT,
-                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                            )
-                        ''')
-                        print(f"_ensure_rf_catalog_schema: Tabela PostgreSQL recriada com sucesso")
-                        return True
-                    except Exception as e2:
-                        print(f"Erro ao recriar tabela rf_catalog PostgreSQL: {e2}")
-                        return False
+                    import traceback
+                    traceback.print_exc()
+                    return False
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
     else:
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -527,8 +558,16 @@ def _ensure_rf_catalog_schema():
             conn.commit()
             print(f"_ensure_rf_catalog_schema: Tabela SQLite criada/verificada com sucesso")
             return True
+        except Exception as e:
+            print(f"Erro ao criar tabela rf_catalog SQLite: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
 
 def rf_catalog_list():
 
@@ -547,7 +586,21 @@ def rf_catalog_list():
         try:
             with conn.cursor() as c:
                 try:
-                 
+                    # Verificar se a tabela existe
+                    c.execute("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_schema = current_schema() 
+                            AND table_name = 'rf_catalog'
+                        )
+                    """)
+                    table_exists = c.fetchone()[0]
+                    print(f"rf_catalog_list: Tabela existe? {table_exists}")
+                    
+                    if not table_exists:
+                        print(f"rf_catalog_list: Tabela não existe, criando...")
+                        _ensure_rf_catalog_schema()
+                    
                     c.execute('''
                         SELECT id, nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, 
                                quantidade, preco, data_inicio, vencimento, liquidez_diaria, 
@@ -586,9 +639,14 @@ def rf_catalog_list():
                     return result
                 except Exception as e:
                     print(f"Erro ao listar rf_catalog PostgreSQL: {e}")
+                    import traceback
+                    traceback.print_exc()
                     return []
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
     else:
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -629,8 +687,16 @@ def rf_catalog_list():
             ]
             print(f"rf_catalog_list: Retornando {len(result)} itens SQLite")
             return result
+        except Exception as e:
+            print(f"Erro ao listar rf_catalog SQLite: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
 
 def rf_catalog_create(item: dict):
     print(f"DEBUG: rf_catalog_create chamada com item: {item}")
@@ -664,6 +730,20 @@ def rf_catalog_create(item: dict):
         try:
             with conn.cursor() as c:
                 try:
+                    # Verificar se a tabela existe
+                    c.execute("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_schema = current_schema() 
+                            AND table_name = 'rf_catalog'
+                        )
+                    """)
+                    table_exists = c.fetchone()[0]
+                    print(f"rf_catalog_create: Tabela existe? {table_exists}")
+                    
+                    if not table_exists:
+                        print(f"rf_catalog_create: Tabela não existe, criando...")
+                        _ensure_rf_catalog_schema()
 
                     c.execute('''
                         INSERT INTO rf_catalog (nome, emissor, tipo, indexador, taxa_percentual, taxa_fixa, 
@@ -682,9 +762,14 @@ def rf_catalog_create(item: dict):
                     return { 'success': True, 'id': new_id }
                 except Exception as e:
                     print(f"Erro ao inserir em rf_catalog PostgreSQL: {e}")
+                    import traceback
+                    traceback.print_exc()
                     return { 'success': False, 'message': f'Erro ao inserir: {str(e)}' }
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
     else:
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -707,8 +792,16 @@ def rf_catalog_create(item: dict):
             new_id = cur.lastrowid
             print(f"rf_catalog_create: Item SQLite criado com ID {new_id}")
             return { 'success': True, 'id': new_id }
+        except Exception as e:
+            print(f"Erro ao inserir em rf_catalog SQLite: {e}")
+            import traceback
+            traceback.print_exc()
+            return { 'success': False, 'message': f'Erro ao inserir: {str(e)}' }
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
 
 def rf_catalog_update(id_: int, item: dict):
 
@@ -750,9 +843,14 @@ def rf_catalog_update(id_: int, item: dict):
                     return { 'success': True }
                 except Exception as e:
                     print(f"Erro ao atualizar rf_catalog PostgreSQL: {e}")
+                    import traceback
+                    traceback.print_exc()
                     return { 'success': False, 'message': f'Erro ao atualizar: {str(e)}' }
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
     else:
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -774,8 +872,16 @@ def rf_catalog_update(id_: int, item: dict):
             conn.commit()
             print(f"rf_catalog_update: Item {id_} SQLite atualizado com sucesso")
             return { 'success': True }
+        except Exception as e:
+            print(f"Erro ao atualizar rf_catalog SQLite: {e}")
+            import traceback
+            traceback.print_exc()
+            return { 'success': False, 'message': f'Erro ao atualizar: {str(e)}' }
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
 
 def rf_catalog_delete(id_: int):
 
@@ -798,9 +904,14 @@ def rf_catalog_delete(id_: int):
                     return { 'success': True }
                 except Exception as e:
                     print(f"Erro ao deletar rf_catalog PostgreSQL: {e}")
+                    import traceback
+                    traceback.print_exc()
                     return { 'success': False, 'message': f'Erro ao deletar: {str(e)}' }
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
     else:
         db_path = get_db_path(usuario, "carteira")
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -811,8 +922,16 @@ def rf_catalog_delete(id_: int):
             conn.commit()
             print(f"rf_catalog_delete: Item {id_} SQLite removido com sucesso")
             return { 'success': True }
+        except Exception as e:
+            print(f"Erro ao deletar rf_catalog SQLite: {e}")
+            import traceback
+            traceback.print_exc()
+            return { 'success': False, 'message': f'Erro ao deletar: {str(e)}' }
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
 def delete_asset_type(nome: str):
     usuario = get_usuario_atual()
     if not usuario:
